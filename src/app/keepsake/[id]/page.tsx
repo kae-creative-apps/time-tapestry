@@ -4,7 +4,6 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { getSession } from '@/lib/session';
-import { demoStory } from '@/lib/mock-data';
 import Link from 'next/link';
 
 export default async function KeepsakePage({
@@ -14,15 +13,27 @@ export default async function KeepsakePage({
 }) {
   const { id } = await params;
   const session = await getSession(id);
-  const story = session?.story ?? {
-    welcomeNote: demoStory.welcomeNote,
-    chapters: demoStory.chapters,
-    causes: demoStory.causes,
-    values: demoStory.values,
-    keyQuotes: demoStory.keyQuotes
-  };
-  const grandparentName = session?.grandparent.name ?? demoStory.grandparent.name;
-  const grandchildName = session?.grandchild.name ?? demoStory.grandchild.name;
+  const story = session?.story;
+  const grandparentName = session?.grandparent.name ?? 'A beloved storyteller';
+  const grandchildName = session?.grandchild.name ?? 'you';
+
+  if (!session || !story || story.chapters.length === 0) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+          <Logo className="mb-8" />
+          <Card className="text-center">
+            <h1 className="mb-4 font-serif text-3xl text-ink">Story not found</h1>
+            <p className="text-ink-500">
+              We couldn&apos;t find a finished story for this link. Please finish the
+              interview and approve your story first.
+            </p>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col">

@@ -4,7 +4,6 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { getSession } from '@/lib/session';
-import { demoStory } from '@/lib/mock-data';
 import Link from 'next/link';
 
 export default async function ReviewPage({
@@ -14,12 +13,24 @@ export default async function ReviewPage({
 }) {
   const { id } = await params;
   const session = await getSession(id);
-  const story = session?.story ?? {
-    welcomeNote: demoStory.welcomeNote,
-    chapters: demoStory.chapters,
-    causes: demoStory.causes,
-    keyQuotes: demoStory.keyQuotes
-  };
+
+  if (!session) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+          <Logo className="mb-8" />
+          <Card className="text-center">
+            <h1 className="mb-4 font-serif text-3xl text-ink">Session not found</h1>
+            <p className="text-ink-500">We couldn&apos;t find this session. Please check your link.</p>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const story = session.story;
+  const hasStory = story && story.chapters.length > 0;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -37,14 +48,23 @@ export default async function ReviewPage({
             </Button>
           </form>
         </Card>
-        <StoryDisplay
-          welcome={story.welcomeNote}
-          chapters={story.chapters}
-          causes={story.causes}
-          grandparentName={session?.grandparent.name ?? demoStory.grandparent.name}
-          grandchildName={session?.grandchild.name ?? demoStory.grandchild.name}
-          quotes={story.keyQuotes}
-        />
+        {hasStory ? (
+          <StoryDisplay
+            welcome={story.welcomeNote}
+            chapters={story.chapters}
+            causes={story.causes}
+            grandparentName={session.grandparent.name}
+            grandchildName={session.grandchild.name}
+            quotes={story.keyQuotes}
+          />
+        ) : (
+          <Card className="text-center">
+            <p className="text-ink-500">
+              Your story hasn&apos;t been generated yet. Finish the interview and come
+              back here to review it.
+            </p>
+          </Card>
+        )}
       </main>
       <Footer />
     </div>

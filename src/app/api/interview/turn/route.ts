@@ -12,7 +12,8 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, questionIndex, audioBase64: rawAudioBase64, mimeType } = await req.json();
+    const body = await req.json();
+    const { sessionId, questionIndex, audioBase64: rawAudioBase64, mimeType, transcript: providedTranscript } = body;
     if (!sessionId || questionIndex === undefined) {
       return NextResponse.json(
         { error: 'Missing sessionId or questionIndex' },
@@ -25,16 +26,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    const audioBase64 = rawAudioBase64 as string | undefined;
-    const audioBlob = audioBase64
-      ? new Blob(
-          [Buffer.from(audioBase64.split(',')[1] ?? audioBase64, 'base64')],
-          { type: mimeType || 'audio/webm' }
-        )
-      : null;
-    const transcript = audioBlob
-      ? await transcribeAudio(audioBlob)
-      : await mockTranscribe();
+    let transcript: string;
+    if (typeof providedTranscript === 'string' && providedTranscript.trim()) {
+      transcript = providedTranscript.trim();
+    } else {
+      const audioBase64 = rawAudioBase64 as string | undefined;
+      const audioBlob = audioBase64
+        ? new Blob(
+            [Buffer.from(audioBase64.split(',')[1] ?? audioBase64, 'base64')],
+            { type: mimeType || 'audio/webm' }
+          )
+        : null;
+      transcript = audioBlob
+        ? await transcribeAudio(audioBlob)
+        : await mockTranscribe();
+    }
 
     if (detectPauseIntent(transcript) || detectStopIntent(transcript)) {
       await updateSession(sessionId, (s) => ({
@@ -93,8 +99,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ transcript, aiResponse, mimeType, mock: isMock });
   } catch (err) {
     console.error('interview/turn error', err);
+    const message = err instanceof Error ? err.message : 'Interview turn failed';
     return NextResponse.json(
-      { error: 'Interview turn failed' },
+      { error: message },
       { status: 500 }
     );
   }

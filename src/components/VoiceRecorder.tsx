@@ -4,7 +4,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from './ui/Button';
 import { formatDuration } from '@/lib/utils';
 
-const MAX_SECONDS = 15;
+const MAX_SECONDS = 90;
 
 export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
   const [phase, setPhase] = useState<'idle' | 'recording' | 'review'>('idle');
@@ -81,7 +81,7 @@ export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
       {phase === 'idle' && (
         <>
           <p className="mb-4 font-serif text-xl text-ink">
-            Tap record, then speak for up to 15 seconds.
+            Tap record, then speak for up to 90 seconds.
           </p>
           <Button onClick={start} aria-label="Start recording">
             Record

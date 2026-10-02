@@ -4,18 +4,20 @@ const apiKey = process.env.ELEVENLABS_API_KEY;
 
 export const elevenlabs = apiKey ? new ElevenLabsClient({ apiKey }) : null;
 
+const DEFAULT_VOICE_ID = 'Xb7hH8MSUJpSbSDYk0k2';
+
 export async function streamTextToSpeech(
   text: string,
-  voiceId: string = process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'
+  voiceId: string = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID
 ): Promise<ReadableStream<Uint8Array> | null> {
   if (!elevenlabs) return null;
   const response = await elevenlabs.textToSpeech.stream(voiceId, {
     text,
-    modelId: 'eleven_flash_v2_5',
+    modelId: process.env.ELEVENLABS_MODEL || 'eleven_turbo_v2_5',
     voiceSettings: {
-      stability: 0.5,
-      similarityBoost: 0.75,
-      speed: 0.85
+      stability: 0.45,
+      similarityBoost: 0.8,
+      speed: 0.9
     }
   });
   return response as unknown as ReadableStream<Uint8Array>;
