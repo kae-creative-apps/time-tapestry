@@ -36,7 +36,7 @@ export default async function KeepsakePage({
             Kept for {grandchildName}, to read and return to.
           </p>
           <p className="mb-6 text-sm text-ink-400">
-            This can be a grandparent, great-aunt, mentor, family friend, or any older person whose story you want to keep.
+            This can be a grandparent, great-aunt, mentor, family friend, or any person whose story you want to keep.
           </p>
           <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
             <Link href={`/act/${id}`} className="w-full sm:w-auto">

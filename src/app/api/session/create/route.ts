@@ -35,25 +35,31 @@ export async function POST(req: NextRequest) {
         : undefined
     });
 
+    // deliberate: email failure must not block session creation
     if (session.initiationPath === 'request' && session.grandparent.email) {
-      const { subject, html } = invitationEmail(
-        session.grandparent.name,
-        session.grandchild.name,
-        `${appUrl}/interview/${session.id}`
-      );
-      const emailResult = await sendEmail({
-        to: session.grandparent.email,
-        subject,
-        html,
-      });
-      console.log('[session/create] invitation email result:', emailResult);
+      try {
+        const { subject, html } = invitationEmail(
+          session.grandparent.name,
+          session.grandchild.name,
+          `${appUrl}/interview/${session.id}`
+        );
+        const emailResult = await sendEmail({
+          to: session.grandparent.email,
+          subject,
+          html,
+        });
+        console.log('[session/create] invitation email result:', emailResult);
+      } catch (emailErr) {
+        console.error('[session/create] invitation email failed, session created anyway:', emailErr);
+      }
     }
 
     return NextResponse.json({ session }, { status: 201 });
   } catch (err) {
     console.error('session/create error', err);
+    const message = err instanceof Error ? err.message : 'Failed to create session';
     return NextResponse.json(
-      { error: 'Failed to create session' },
+      { error: message },
       { status: 500 }
     );
   }

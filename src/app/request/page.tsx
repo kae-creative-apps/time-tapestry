@@ -62,7 +62,7 @@ export default function RequestPage() {
             Send an invitation to someone whose story you want to keep.
           </p>
           <p className="mb-8 text-sm text-ink-400">
-            This can be a grandparent, great-aunt, mentor, or any older person in your life.
+            This can be a grandparent, great-aunt, mentor, or any person in your life.
           </p>
           {submitted ? (
             <div>
