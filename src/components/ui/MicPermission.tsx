@@ -20,7 +20,7 @@ export function MicPermission({ onAllow }: { onAllow: () => void }) {
     return (
       <Card>
         <h3 className="mb-3 font-serif text-xl">Microphone access is needed</h3>
-        <p className="mb-6 text-ink-500">
+        <p className="mb-6 leading-relaxed text-ink-500">
           Please enable microphone access in your browser settings, then refresh
           the page. On a phone, tap the site settings icon in your address bar.
         </p>
@@ -39,7 +39,7 @@ export function MicPermission({ onAllow }: { onAllow: () => void }) {
       <h3 className="mb-3 font-serif text-xl">
         Next, your browser will ask to use your microphone.
       </h3>
-      <p className="mb-6 text-ink-500">Please tap Allow.</p>
+      <p className="mb-6 leading-relaxed text-ink-500">Please tap Allow.</p>
       <p className="mb-6 font-sans text-sm text-warmgray-500">
         Your voice is only used for this interview.
       </p>

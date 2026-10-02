@@ -59,15 +59,15 @@ function ActPageInner({ params }: { params: Promise<{ id: string }> }) {
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card>
-          <h1 className="mb-4 font-serif text-3xl text-ink">
+          <h1 className="mb-3 font-serif text-2xl text-ink">
             What feels like your next step?
           </h1>
-          <p className="mb-8 text-ink-500">
+          <p className="mb-8 leading-relaxed text-ink-500">
             No pressure. Choose what is true for you right now.
           </p>
           {submitted ? (
-            <div>
-              <p className="mb-4 text-ink">Thank you. Your choice has been kept.</p>
+            <div className="text-center">
+              <p className="mb-6 leading-relaxed text-ink">Thank you. Your choice has been kept.</p>
               <Button onClick={() => window.history.back()}>Go back</Button>
             </div>
           ) : (
@@ -75,10 +75,10 @@ function ActPageInner({ params }: { params: Promise<{ id: string }> }) {
               {actions.map((action) => (
                 <label
                   key={action.value}
-                  className={`flex cursor-pointer flex-col rounded-sm border p-4 transition-colors ${
+                  className={`flex cursor-pointer flex-col rounded-md border p-4 transition-all duration-200 ${
                     selected === action.value
-                      ? 'border-oxblood bg-paper-100'
-                      : 'border-warmgray-300 bg-paper-50'
+                      ? 'border-oxblood bg-paper-100 shadow-sm'
+                      : 'border-warmgray-200 bg-paper-50 hover:border-warmgray-300'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -88,13 +88,13 @@ function ActPageInner({ params }: { params: Promise<{ id: string }> }) {
                       value={action.value}
                       checked={selected === action.value}
                       onChange={() => setSelected(action.value)}
-                      className="h-5 w-5 accent-oxblood"
+                      className="h-4 w-4 shrink-0 accent-oxblood"
                     />
                     <span className="font-serif text-lg text-ink">
                       {action.label}
                     </span>
                   </div>
-                  <span className="mt-1 pl-8 font-sans text-sm text-ink-400">
+                  <span className="mt-1 pl-7 font-sans text-sm text-ink-400">
                     {action.description}
                   </span>
                 </label>

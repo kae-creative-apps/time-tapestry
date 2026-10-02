@@ -77,11 +77,14 @@ export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
   }, [onDone]);
 
   return (
-    <div className="rounded-sm border border-warmgray-300 bg-paper-50 p-6 text-center shadow-sm">
+    <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-6 text-center shadow-soft">
       {phase === 'idle' && (
         <>
-          <p className="mb-4 font-serif text-xl text-ink">
+          <p className="mb-1 font-serif text-lg text-ink">
             Tap record, then speak for up to 90 seconds.
+          </p>
+          <p className="mb-5 font-sans text-sm text-warmgray-500">
+            Take your time. There are no wrong answers.
           </p>
           <Button onClick={start} aria-label="Start recording">
             Record
@@ -91,7 +94,7 @@ export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
 
       {phase === 'recording' && (
         <>
-          <p className="mb-2 font-serif text-2xl text-oxblood">
+          <p className="mb-2 font-serif text-xl text-oxblood">
             Recording... {formatDuration(seconds)}
           </p>
           <p className="mb-6 font-sans text-sm text-warmgray-500">
@@ -109,8 +112,8 @@ export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
 
       {phase === 'review' && audioUrl && (
         <>
-          <p className="mb-4 font-serif text-xl text-ink">Here is what you recorded.</p>
-          <audio src={audioUrl} controls className="mx-auto mb-6 w-full" />
+          <p className="mb-4 font-serif text-lg text-ink">Here is what you recorded.</p>
+          <audio src={audioUrl} controls className="mx-auto mb-6 w-full rounded-md" />
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button onClick={reRecord} variant="secondary">
               Re-record

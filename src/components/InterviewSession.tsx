@@ -268,7 +268,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     return (
       <Card className="text-center">
         <h2 className="mb-4 font-serif text-2xl text-ink">Something went wrong</h2>
-        <p className="mb-6 text-ink-500">
+        <p className="mb-6 leading-relaxed text-ink-500">
           {error || 'We could not find your session. Please check your link or ask the person who invited you for help.'}
         </p>
       </Card>
@@ -282,10 +282,10 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   if (phase === 'intro') {
     return (
       <Card className="text-center">
-        <h2 className="mb-4 font-serif text-3xl text-ink">
+        <h2 className="mb-4 font-serif text-2xl text-ink">
           Hello, {session?.grandparent.name ?? 'friend'}.
         </h2>
-        <p className="mb-6 text-ink-500">
+        <p className="mb-6 leading-relaxed text-ink-500">
           {session?.initiationPath === 'request' ? (
             <>
               {session?.grandchild.name ?? 'Someone'} has asked you to share your
@@ -302,8 +302,8 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         </p>
         {session?.voiceIntroUrl && (
           <div className="mb-6">
-            <p className="mb-2 font-sans text-sm text-ink-500">
-              Play {session.grandchild.name}&apos;s voice note first:
+            <p className="mb-2 font-sans text-xs uppercase tracking-[0.1em] text-ink-500">
+              Play {session.grandchild.name}&apos;s voice note first
             </p>
             <audio
               src={session.voiceIntroUrl}
@@ -323,8 +323,8 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   if (phase === 'paused') {
     return (
       <Card className="text-center">
-        <h2 className="mb-4 font-serif text-3xl text-ink">Your place is saved</h2>
-        <p className="mb-8 text-ink-500">
+        <h2 className="mb-4 font-serif text-2xl text-ink">Your place is saved</h2>
+        <p className="mb-8 leading-relaxed text-ink-500">
           Come back whenever you are ready. The link will bring you right back
           here.
         </p>
@@ -336,11 +336,11 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   if (phase === 'finished') {
     return (
       <Card className="text-center">
-        <h2 className="mb-4 font-serif text-3xl text-ink">
+        <h2 className="mb-4 font-serif text-2xl text-ink">
           Thank you, {session?.grandparent.name ?? 'friend'}.
         </h2>
-        <p className="mb-4 text-ink-500">Your story is saved.</p>
-        <p className="mb-8 text-ink-500">
+        <p className="mb-4 leading-relaxed text-ink-500">Your story is saved.</p>
+        <p className="mb-8 leading-relaxed text-ink-500">
           Next, you&apos;ll have a chance to review it before it goes anywhere.
         </p>
         <Button
@@ -357,12 +357,12 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   if (phase === 'continue_prompt') {
     return (
       <Card className="text-center">
-        <h2 className="mb-4 font-serif text-3xl text-ink">A beautiful story</h2>
-        <p className="mb-8 text-ink-500">
+        <h2 className="mb-4 font-serif text-2xl text-ink">A beautiful story</h2>
+        <p className="mb-8 leading-relaxed text-ink-500">
           Would you like to keep going with two more questions, or save what you
           have?
         </p>
-        <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button onClick={advance}>Keep going</Button>
           <Button variant="secondary" onClick={() => setPhase('finished')}>
             Save what I have
@@ -374,14 +374,14 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
 
   return (
     <Card>
-      <div className="mb-4 flex items-start justify-between">
+      <div className="mb-5 flex items-start justify-between">
         <ProgressBar
           current={Math.min(questionIndex + 1, allQuestions.length)}
           total={remainingCount()}
         />
         <button
           onClick={handlePause}
-          className="ml-4 rounded-sm border border-warmgray-300 px-3 py-2 font-sans text-sm text-ink-500 hover:bg-paper-200"
+          className="ml-4 rounded-md border border-warmgray-300 px-3 py-1.5 font-sans text-xs uppercase tracking-[0.08em] text-ink-500 transition hover:border-warmgray-400 hover:bg-paper-200"
         >
           Pause
         </button>
@@ -390,7 +390,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       <VisualCompanion text={aiText} isSpeaking={isSpeaking} />
 
       {error && (
-        <p className="mt-4 rounded-sm bg-red-50 p-3 text-center font-sans text-sm text-red-700">
+        <p className="mt-4 rounded-md bg-red-50 p-3 text-center font-sans text-sm text-red-700">
           {error}
         </p>
       )}
@@ -405,7 +405,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
                   value={textAnswer}
                   onChange={(e) => setTextAnswer(e.target.value)}
                   placeholder="Type your answer here..."
-                  className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button onClick={submitTextAnswer} className="flex-1">
@@ -436,7 +435,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
                 )}
                 <button
                   onClick={() => setTextMode(true)}
-                  className="font-sans text-sm text-ink-400 underline underline-offset-2 hover:text-oxblood"
+                  className="font-sans text-sm text-ink-400 underline underline-offset-[3px] transition hover:text-oxblood"
                 >
                   Type my answer instead
                 </button>

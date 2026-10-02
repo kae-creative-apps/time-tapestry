@@ -21,7 +21,7 @@ export default function InvitePage() {
         <Suspense
           fallback={
             <Card>
-              <h1 className="mb-4 font-serif text-3xl text-ink">Invite someone to add their story</h1>
+              <h1 className="mb-3 font-serif text-2xl text-ink">Invite someone to add their story</h1>
               <p className="text-ink-500">Loading...</p>
             </Card>
           }

@@ -19,21 +19,24 @@ export default async function FamilyPage({
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card className="mb-8 text-center">
-          <h1 className="mb-4 font-serif text-3xl text-ink">{familyName}</h1>
-          <p className="text-ink-500">This family&apos;s legacy</p>
+          <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
+            Family archive
+          </p>
+          <h1 className="mb-2 font-serif text-2xl text-ink">{familyName}</h1>
+          <p className="text-sm text-ink-500">This family&apos;s legacy</p>
         </Card>
 
         {sessions.length === 0 ? (
           <Card>
-            <p className="text-ink-500">
+            <p className="leading-relaxed text-ink-500">
               No stories have been added to this family yet. They will appear here as they are recorded.
             </p>
           </Card>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {sessions.map((session) => (
               <Card key={session.id}>
-                <p className="mb-1 font-serif text-xl text-ink">
+                <p className="mb-1 font-serif text-lg text-ink">
                   A story from {session.grandparent.name}
                 </p>
                 <p className="mb-4 font-sans text-sm text-ink-500">
@@ -41,7 +44,7 @@ export default async function FamilyPage({
                 </p>
                 <Link
                   href={`/keepsake/${session.id}`}
-                  className="font-sans text-sm text-oxblood hover:underline"
+                  className="font-sans text-sm text-oxblood transition hover:text-oxblood-600 hover:underline"
                 >
                   Read the keepsake
                 </Link>

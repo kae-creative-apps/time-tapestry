@@ -40,16 +40,16 @@ export default async function KeepsakePage({
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card className="mb-8 text-center">
-          <h1 className="mb-4 font-serif text-3xl text-ink sm:text-4xl">
+          <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
             A story from {grandparentName}
-          </h1>
-          <p className="mb-3 font-serif text-xl text-ink-500">
-            Kept for {grandchildName}, to read and return to.
           </p>
-          <p className="mb-6 text-sm text-ink-400">
+          <h1 className="mb-4 font-serif text-2xl leading-snug text-ink sm:text-3xl">
+            Kept for {grandchildName}, to read and return to.
+          </h1>
+          <p className="mb-8 text-base leading-relaxed text-ink-500">
             This can be a grandparent, great-aunt, mentor, family friend, or any person whose story you want to keep.
           </p>
-          <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link href={`/act/${id}`} className="w-full sm:w-auto">
               <Button className="w-full">Choose a next step</Button>
             </Link>

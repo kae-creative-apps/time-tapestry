@@ -15,8 +15,10 @@ export function DemoBanner() {
   if (!mock) return null;
 
   return (
-    <div className="w-full bg-oxblood px-4 py-2 text-center text-sm text-paper">
-      Demo mode — some features are simulated. Add API keys to .env.local for full functionality.
+    <div className="w-full bg-oxblood px-4 py-2 text-center">
+      <p className="font-sans text-xs font-medium tracking-[0.06em] text-paper">
+        Demo mode — some features are simulated. Add API keys to .env.local for full functionality.
+      </p>
     </div>
   );
 }

@@ -47,13 +47,13 @@ export function InviteFormContent({ family }: { family: string }) {
 
   return (
     <Card>
-      <h1 className="mb-4 font-serif text-3xl text-ink">Invite someone to add their story</h1>
-      <p className="mb-8 text-ink-500">
+      <h1 className="mb-3 font-serif text-2xl text-ink">Invite someone to add their story</h1>
+      <p className="mb-8 leading-relaxed text-ink-500">
         Every voice in a family adds something. Send a quiet invitation to someone whose story you would like to keep.
       </p>
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="theirName" className="mb-1 block font-sans text-sm text-ink-500">
+          <label htmlFor="theirName" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
             Their name
           </label>
           <input
@@ -61,32 +61,32 @@ export function InviteFormContent({ family }: { family: string }) {
             type="text"
             required
             value={theirName}
+            placeholder="e.g., Uncle Robert"
             onChange={(e) => setTheirName(e.target.value)}
-            className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood"
           />
         </div>
         <div>
-          <label htmlFor="theirEmail" className="mb-1 block font-sans text-sm text-ink-500">
+          <label htmlFor="theirEmail" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
             Their email
           </label>
           <input
             id="theirEmail"
             type="email"
             value={theirEmail}
+            placeholder="them@example.com"
             onChange={(e) => setTheirEmail(e.target.value)}
-            className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood"
           />
         </div>
         <div>
-          <label htmlFor="note" className="mb-1 block font-sans text-sm text-ink-500">
-            A short note (optional, will be included in the invitation)
+          <label htmlFor="note" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+            A short note <span className="font-normal normal-case tracking-normal text-warmgray-500">(optional)</span>
           </label>
           <textarea
             id="note"
             rows={4}
             value={note}
+            placeholder="Add a personal sentence or two..."
             onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood"
           />
         </div>
         <Button type="submit" className="w-full">

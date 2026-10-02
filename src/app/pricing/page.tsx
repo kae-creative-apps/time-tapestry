@@ -35,27 +35,30 @@ const tiers = [
 
 export default function PricingPage() {
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-12">
       <div className="mb-10 text-center">
-        <h1 className="mb-4 font-serif text-4xl leading-tight text-ink sm:text-5xl">
+        <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
+          Pricing
+        </p>
+        <h1 className="mb-4 font-serif text-3xl leading-tight text-ink sm:text-4xl">
           Simple pricing for families.
         </h1>
-        <p className="font-serif text-xl text-ink-500">
+        <p className="font-serif text-lg leading-relaxed text-ink-500">
           Start free. Grow into a Family story.
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
         {tiers.map((tier) => (
           <Card key={tier.name} className="flex flex-col">
             <div className="mb-6 text-center">
-              <h2 className="mb-2 font-serif text-2xl text-ink">{tier.name}</h2>
+              <h2 className="mb-2 font-serif text-xl text-ink">{tier.name}</h2>
               <p className="font-serif text-3xl text-oxblood">{tier.price}</p>
               <p className="mt-2 font-sans text-sm text-ink-400">{tier.description}</p>
             </div>
             <div className="flex-1">
-              <p className="mb-3 font-sans text-sm font-medium text-ink-500">What&apos;s included</p>
-              <ul className="mb-6 space-y-2 text-ink-500">
+              <p className="mb-3 font-sans text-xs font-medium uppercase tracking-[0.1em] text-ink-500">What&apos;s included</p>
+              <ul className="mb-6 space-y-2 text-sm leading-relaxed text-ink-500">
                 {tier.features.map((feature) => (
                   <li key={feature} className="flex gap-2">
                     <span className="text-oxblood">{'//'}</span>

@@ -41,25 +41,25 @@ export function Postcard({
     >
       <div
         className={cn(
-          'rounded-sm border border-warmgray-300 bg-paper-50 p-6 shadow-xl',
+          'rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-lift',
           'postcard-paper'
         )}
       >
         <div className="grid gap-6 md:grid-cols-2">
           <div className="flex flex-col items-center justify-center border-2 border-dashed border-warmgray-300 p-6 text-center">
             {chapterIndex === 0 && (
-              <div className="mb-4 rounded-full bg-oxblood px-3 py-1 font-sans text-xs uppercase tracking-wide text-paper">
+              <div className="mb-4 rounded-full bg-oxblood px-3 py-1 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-paper">
                 Welcome
               </div>
             )}
             {frontTitle && (
-              <h2 className="mb-3 font-serif text-xl text-ink">{frontTitle}</h2>
+              <h2 className="mb-3 font-serif text-lg text-ink">{frontTitle}</h2>
             )}
             <p className="font-serif text-base leading-relaxed text-ink">
               {frontContent}
             </p>
-            <div className="mt-6 h-px w-24 bg-warmgray-400" />
-            <p className="mt-4 font-sans text-xs uppercase tracking-widest text-warmgray-500">
+            <div className="mt-6 h-px w-16 bg-warmgray-400" />
+            <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.18em] text-warmgray-500">
               Time Tapestry
             </p>
           </div>
@@ -67,13 +67,13 @@ export function Postcard({
           <div className="flex flex-col justify-between gap-6 border-l border-dashed border-warmgray-300 p-6 md:pl-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-sans text-xs uppercase tracking-wide text-warmgray-500">
+                <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-warmgray-500">
                   Postmarked
                 </p>
-                <p className="font-serif text-lg text-ink">{sentDate}</p>
+                <p className="font-serif text-base text-ink">{sentDate}</p>
               </div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-oxblood bg-paper text-center shadow-sm">
-                <span className="font-serif text-xs font-semibold leading-none text-oxblood">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-oxblood bg-paper text-center shadow-sm">
+                <span className="font-serif text-[10px] font-semibold leading-none text-oxblood">
                   TT
                   <br />
                   Post
@@ -86,8 +86,8 @@ export function Postcard({
             </p>
 
             <div className="flex flex-col items-center gap-2">
-              <QRCodeSVG value={qrValue} size={80} level="M" />
-              <p className="max-w-[160px] text-center font-sans text-xs text-warmgray-500">
+              <QRCodeSVG value={qrValue} size={72} level="M" />
+              <p className="max-w-[160px] text-center font-sans text-[11px] text-warmgray-500">
                 Scan to read the full keepsake.
               </p>
             </div>
@@ -95,11 +95,11 @@ export function Postcard({
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-dashed border-warmgray-300 pt-4">
-          <p className="font-sans text-xs uppercase tracking-wide text-warmgray-500">
+          <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-warmgray-500">
             Card {chapterIndex + 1} of 5
           </p>
-          <p className="font-sans text-xs text-warmgray-500">
-            Printed on thick matte stock.
+          <p className="font-sans text-[11px] text-warmgray-500">
+            Thick matte stock.
           </p>
         </div>
       </div>

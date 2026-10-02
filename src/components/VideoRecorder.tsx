@@ -100,17 +100,17 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
   }, [onDone]);
 
   return (
-    <div className="rounded-sm border border-warmgray-300 bg-paper-50 p-6 text-center shadow-sm">
+    <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-6 text-center shadow-soft">
       {error && <p className="mb-4 text-oxblood">{error}</p>}
       <video
         ref={videoRef}
-        className="mx-auto mb-4 w-full max-w-md rounded-sm bg-ink-800"
+        className="mx-auto mb-4 w-full max-w-md rounded-md bg-ink-800"
         muted={phase !== 'review'}
         playsInline
       />
       {phase === 'idle' && (
         <>
-          <p className="mb-4 font-serif text-xl text-ink">
+          <p className="mb-4 font-serif text-lg text-ink">
             Tap record to start your video message.
           </p>
           <Button onClick={start} aria-label="Start video recording">
@@ -120,7 +120,7 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
       )}
       {phase === 'recording' && (
         <>
-          <p className="mb-2 font-serif text-2xl text-oxblood">
+          <p className="mb-2 font-serif text-xl text-oxblood">
             Recording... {formatDuration(seconds)}
           </p>
           <p className="mb-6 font-sans text-sm text-warmgray-500">
@@ -133,7 +133,7 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
       )}
       {phase === 'review' && (
         <>
-          <p className="mb-4 font-serif text-xl text-ink">Here is your video.</p>
+          <p className="mb-4 font-serif text-lg text-ink">Here is your video.</p>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button onClick={reRecord} variant="secondary">
               Re-record

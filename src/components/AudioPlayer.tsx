@@ -54,7 +54,7 @@ export function AudioPlayer({ src }: { src?: string }) {
         {playing ? 'Pause' : 'Listen'}
       </Button>
       {isLocalUrl(src) && (
-        <span className="text-sm text-warmgray-500">Local recording</span>
+        <span className="font-sans text-xs uppercase tracking-[0.08em] text-warmgray-500">Local recording</span>
       )}
     </div>
   );

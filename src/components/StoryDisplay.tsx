@@ -29,13 +29,13 @@ export function StoryDisplay({
   videoUrl?: string;
 }) {
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       {videoUrl && (
         <Card>
           <video
             src={videoUrl}
             controls
-            className="w-full rounded-sm"
+            className="w-full rounded-md"
             poster=""
           >
             Your browser does not support video.
@@ -43,24 +43,24 @@ export function StoryDisplay({
         </Card>
       )}
 
-      <Card className="border-oxblood/20">
-        <p className="mb-3 font-sans text-sm uppercase tracking-wide text-oxblood-400">
+      <Card className="border-l-4 border-l-oxblood/20">
+        <p className="mb-3 font-sans text-xs uppercase tracking-[0.12em] text-oxblood-400">
           A note from {grandparentName}
         </p>
-        <p className="font-serif text-xl leading-relaxed text-ink sm:text-story">
+        <p className="font-serif text-lg leading-relaxed text-ink sm:text-story">
           {welcome}
         </p>
       </Card>
 
       {chapters.map((chapter, i) => (
         <Card key={i}>
-          <p className="mb-2 font-sans text-sm uppercase tracking-wide text-warmgray-500">
+          <p className="mb-2 font-sans text-xs uppercase tracking-[0.12em] text-warmgray-500">
             Chapter {i + 1}
           </p>
-          <h2 className="mb-5 font-serif text-2xl text-ink sm:text-3xl">
+          <h2 className="mb-4 font-serif text-xl leading-snug text-ink sm:text-2xl">
             {chapter.title}
           </h2>
-          <p className="mb-6 font-serif text-lg leading-relaxed text-ink sm:text-story">
+          <p className="mb-6 font-serif leading-relaxed text-ink sm:text-story">
             {chapter.content}
           </p>
           {chapter.audioUrl ? (
@@ -69,23 +69,23 @@ export function StoryDisplay({
             <AudioPlayer src={undefined} />
           )}
           {quotes && quotes[i] && (
-            <blockquote className="mt-8 border-l-4 border-oxblood pl-5 font-serif text-quote text-ink">
+            <blockquote className="mt-6 border-l-2 border-oxblood pl-4 font-serif text-quote text-ink">
               &ldquo;{quotes[i]}&rdquo;
             </blockquote>
           )}
         </Card>
       ))}
 
-      <Card className="border-forest/20">
-        <p className="mb-4 font-sans text-sm uppercase tracking-wide text-forest">
+      <Card className="border-l-4 border-l-forest/20">
+        <p className="mb-4 font-sans text-xs uppercase tracking-[0.12em] text-forest">
           What {grandparentName} valued
         </p>
         {values && values.length > 0 ? (
-          <ul className="flex flex-wrap gap-3">
+          <ul className="flex flex-wrap gap-2">
             {values.map((value, i) => (
               <li
                 key={i}
-                className="rounded-sm border border-warmgray-300 bg-paper px-4 py-2 font-serif text-ink"
+                className="rounded-md border border-warmgray-300 bg-paper px-3 py-1.5 font-serif text-sm text-ink"
               >
                 {value}
               </li>
@@ -97,13 +97,13 @@ export function StoryDisplay({
       </Card>
 
       <Card>
-        <p className="mb-4 font-sans text-sm uppercase tracking-wide text-warmgray-500">
+        <p className="mb-4 font-sans text-xs uppercase tracking-[0.12em] text-warmgray-500">
           What {grandparentName} gave to
         </p>
-        <ul className="space-y-3 font-serif text-ink">
+        <ul className="space-y-2 font-serif text-ink">
           {causes.map((cause, i) => (
             <li key={i} className="flex items-start gap-3">
-              <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-oxblood" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-oxblood" />
               <span>{cause}</span>
             </li>
           ))}
@@ -113,11 +113,11 @@ export function StoryDisplay({
         </p>
       </Card>
 
-      <Card className="border-oxblood/10">
-        <p className="mb-4 font-sans text-sm uppercase tracking-wide text-oxblood-400">
+      <Card className="border-l-4 border-l-oxblood/10">
+        <p className="mb-4 font-sans text-xs uppercase tracking-[0.12em] text-oxblood-400">
           What {grandparentName} wanted you to know
         </p>
-        <p className="font-serif text-lg leading-relaxed text-ink sm:text-story">
+        <p className="font-serif leading-relaxed text-ink sm:text-story">
           The life {grandparentName} lived was about more than one thing. It was faith, family, kindness, hard lessons, and small generosities. Most of all, it was about paying attention to the people around you and passing down what mattered. That is the thread {grandparentName} hoped you would carry.
         </p>
       </Card>

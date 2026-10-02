@@ -37,8 +37,8 @@ export default async function ReviewPage({
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card className="mb-8 text-center">
-          <h1 className="mb-4 font-serif text-3xl text-ink">Review your story</h1>
-          <p className="mb-6 text-ink-500">
+          <h1 className="mb-3 font-serif text-2xl text-ink">Review your story</h1>
+          <p className="mb-6 leading-relaxed text-ink-500">
             Read it over. When you are ready, approve it to be handed down.
           </p>
           <form action={`/api/story/generate`} method="POST">

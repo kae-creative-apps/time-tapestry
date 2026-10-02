@@ -81,10 +81,13 @@ export default async function PostcardsPage({
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <div className="mb-12 text-center">
-          <h1 className="mb-4 font-serif text-4xl text-ink sm:text-5xl">
+          <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
+            Time Tapestry Post
+          </p>
+          <h1 className="mb-4 font-serif text-3xl text-ink sm:text-4xl">
             A legacy, in the mail
           </h1>
-          <p className="mx-auto max-w-xl font-serif text-xl text-ink-500">
+          <p className="mx-auto max-w-md font-sans text-base leading-relaxed text-ink-500">
             Five postcards, sent one at a time. Each one carries a piece of the story.
           </p>
         </div>
