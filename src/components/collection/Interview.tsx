@@ -398,11 +398,12 @@ export default function Interview({
   const [busy, setBusy] = useState(false);
   const [recorderBusy, setRecorderBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [deviceVoice, setDeviceVoice] = useState(false);
+  const [voiceUnavailable, setVoiceUnavailable] = useState(false);
   const [notice, setNotice] = useState("");
   const audio = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef("");
   const speechRequest = useRef(0);
+  const speechAbort = useRef<AbortController | null>(null);
   const draftQueue = useRef<Promise<void>>(Promise.resolve());
   const initialLoaded = useRef(false);
   const chapter = CHAPTERS[chapterIndex];
@@ -497,19 +498,34 @@ export default function Interview({
       active = false;
     };
   }, [collectionId, questionId]);
-  useEffect(
-    () => () => {
-      audio.current?.pause();
-      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    },
-    [],
-  );
+  const cancelSpeech = useCallback(() => {
+    // Invalidate asynchronous work before pausing so its callbacks cannot restart audio.
+    speechRequest.current += 1;
+    speechAbort.current?.abort();
+    speechAbort.current = null;
+    if (audio.current) {
+      audio.current.onended = null;
+      audio.current.onerror = null;
+      audio.current.pause();
+      audio.current.removeAttribute("src");
+      audio.current.load();
+      audio.current = null;
+    }
+    if (audioUrl.current) {
+      URL.revokeObjectURL(audioUrl.current);
+      audioUrl.current = "";
+    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
+
+  useEffect(() => () => cancelSpeech(), [cancelSpeech]);
+  useEffect(() => {
+    cancelSpeech();
+    setSpeaking(false);
+  }, [prompt, cancelSpeech]);
 
   function stopSpeaking() {
-    speechRequest.current += 1;
-    audio.current?.pause();
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setSpeaking(false);
   }
 
@@ -553,12 +569,13 @@ export default function Interview({
   }
 
   async function speak(useDevice = false) {
-    const requestId = ++speechRequest.current;
-    setError("");
     if (speaking) {
       stopSpeaking();
       return;
     }
+    cancelSpeech();
+    const requestId = speechRequest.current;
+    setError("");
     if (useDevice) {
       if (!("speechSynthesis" in window)) {
         setError(
@@ -568,53 +585,69 @@ export default function Interview({
       }
       const speech = new SpeechSynthesisUtterance(prompt);
       speech.rate = 0.95;
-      speech.onend = () => setSpeaking(false);
-      speech.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(speech);
+      speech.onend = () => {
+        if (requestId === speechRequest.current) setSpeaking(false);
+      };
+      speech.onerror = () => {
+        if (requestId === speechRequest.current) setSpeaking(false);
+      };
       setSpeaking(true);
+      window.speechSynthesis.speak(speech);
       return;
     }
+    const controller = new AbortController();
+    speechAbort.current = controller;
     setSpeaking(true);
     try {
       const response = await fetch(`${endpoint}/speak${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: prompt }),
+        signal: controller.signal,
       });
       if (!response.ok)
         throw new Error(
-          "The interview voice is unavailable right now. You can read the question or choose the device voice.",
+          "The interview voice is unavailable right now. You can try it again or choose the device voice.",
         );
       const blob = await response.blob();
-      if (requestId !== speechRequest.current) return;
-      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
+      if (controller.signal.aborted || requestId !== speechRequest.current)
+        return;
       audioUrl.current = URL.createObjectURL(blob);
       const player = new Audio(audioUrl.current);
       audio.current = player;
-      player.onended = () => setSpeaking(false);
-      player.onerror = () => setSpeaking(false);
+      player.onended = () => {
+        if (requestId === speechRequest.current) setSpeaking(false);
+      };
+      player.onerror = () => {
+        if (requestId === speechRequest.current) setSpeaking(false);
+      };
       await player.play();
+      if (requestId === speechRequest.current) setVoiceUnavailable(false);
     } catch (error) {
-      if (requestId !== speechRequest.current) return;
+      if (controller.signal.aborted || requestId !== speechRequest.current)
+        return;
       setSpeaking(false);
-      setDeviceVoice(true);
+      setVoiceUnavailable(true);
       setError(
         error instanceof Error
           ? error.message
           : "The question could not be read aloud.",
       );
+    } finally {
+      if (speechAbort.current === controller) speechAbort.current = null;
     }
   }
 
-  const handleRecorderBusy = useCallback((value: boolean) => {
-    setRecorderBusy(value);
-    if (value) {
-      speechRequest.current += 1;
-      audio.current?.pause();
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-      setSpeaking(false);
-    }
-  }, []);
+  const handleRecorderBusy = useCallback(
+    (value: boolean) => {
+      setRecorderBusy(value);
+      if (value) {
+        cancelSpeech();
+        setSpeaking(false);
+      }
+    },
+    [cancelSpeech],
+  );
 
   async function saveText() {
     if (!text.trim()) return;
@@ -895,16 +928,26 @@ export default function Interview({
           type="button"
           disabled={recorderBusy}
           className="mt-3 text-sm font-medium text-oxblood underline underline-offset-4 disabled:opacity-50"
-          onClick={() =>
-            void speak(!collection.capabilities.tts || deviceVoice)
-          }
+          onClick={() => void speak(!collection.capabilities.tts)}
         >
           {speaking
             ? "Stop listening"
-            : !collection.capabilities.tts || deviceVoice
+            : !collection.capabilities.tts
               ? "Listen with device voice"
-              : "Listen to the question"}
+              : voiceUnavailable
+                ? "Retry interview voice"
+                : "Listen to the question"}
         </button>
+        {collection.capabilities.tts && voiceUnavailable && !speaking && (
+          <button
+            type="button"
+            disabled={recorderBusy}
+            className="ml-4 mt-3 text-sm font-medium text-oxblood underline underline-offset-4 disabled:opacity-50"
+            onClick={() => void speak(true)}
+          >
+            Listen with device voice
+          </button>
+        )}
         <p className="mt-3 text-base leading-7 text-ink-400">
           Start with one moment you remember. There is no right answer, and you
           can leave out anything you prefer to keep private.
