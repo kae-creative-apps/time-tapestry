@@ -76,6 +76,12 @@ const SESSION_PREFIX = 'session:';
 // deliberate: in-memory fallback for local dev when Vercel KV env vars are absent
 const memoryStore = new Map<string, Session>();
 
+if (useMemoryFallback()) {
+  console.warn(
+    '[session storage] Vercel KV is not configured; using in-memory store. Sessions will not persist across requests.'
+  );
+}
+
 function sessionKey(id: string): string {
   return `${SESSION_PREFIX}${id}`;
 }
