@@ -1,3 +1,6 @@
+'use client';
+
+import { motion } from 'framer-motion';
 import { Logo } from './Logo';
 import Link from 'next/link';
 
@@ -7,10 +10,22 @@ export function Footer() {
       <div className="mb-4 inline-flex">
         <Logo variant="mark" className="text-warmgray-500" />
       </div>
-      <p className="mb-2 font-sans text-xs uppercase tracking-[0.16em] text-warmgray-500">
+      <motion.p
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6 }}
+        className="mb-2 font-sans text-xs uppercase tracking-[0.16em] text-warmgray-500"
+      >
         Stories woven together
-      </p>
-      <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-sans text-sm text-oxblood">
+      </motion.p>
+      <motion.nav
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-sans text-sm text-oxblood"
+      >
         <Link href="/about" className="transition-colors hover:text-oxblood-700">
           About
         </Link>
@@ -23,9 +38,9 @@ export function Footer() {
         <Link href="/admin" className="transition-colors hover:text-oxblood-700">
           Admin
         </Link>
-      </nav>
+      </motion.nav>
       <p className="mt-5 font-sans text-[11px] tracking-wide text-warmgray-400">
-        &copy; 2026 Time Tapestry
+        &copy; 2026 time tapestry
       </p>
     </footer>
   );

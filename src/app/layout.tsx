@@ -6,7 +6,8 @@ import { DemoBanner } from '@/components/DemoBanner';
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-fraunces',
-  display: 'swap'
+  display: 'swap',
+  axes: ['opsz']
 });
 
 const inter = Inter({
@@ -17,7 +18,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://timetapestry.app'),
-  title: 'Time Tapestry — Stories woven together',
+  title: 'time tapestry — Stories woven together',
   description: 'A quiet, guided interview that turns your memories into a keepsake for the people you love.',
   robots: {
     index: true,
