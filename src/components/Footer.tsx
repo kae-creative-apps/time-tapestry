@@ -20,6 +20,9 @@ export function Footer() {
         <Link href="/privacy" className="transition-colors hover:text-oxblood-700">
           Privacy
         </Link>
+        <Link href="/admin" className="transition-colors hover:text-oxblood-700">
+          Admin
+        </Link>
       </nav>
       <p className="mt-5 font-sans text-[11px] tracking-wide text-warmgray-400">
         &copy; 2026 Time Tapestry
