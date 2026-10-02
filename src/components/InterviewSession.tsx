@@ -7,6 +7,7 @@ import { ProgressBar } from './ui/ProgressBar';
 import { MicPermission } from './ui/MicPermission';
 import { VisualCompanion } from './VisualCompanion';
 import { VoiceRecorder } from './VoiceRecorder';
+import { VideoRecorder } from './VideoRecorder';
 import { Session } from '@/lib/session';
 import { CORE_QUESTIONS, OPTIONAL_QUESTIONS } from '@/lib/interview-state';
 
@@ -17,7 +18,7 @@ const MOCK_TRANSCRIPT =
 
 export function InterviewSession({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [phase, setPhase] = useState<'loading' | 'error' | 'mic_permission' | 'intro' | 'interview' | 'continue_prompt' | 'paused' | 'finished'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'error' | 'expectations' | 'mic_permission' | 'intro' | 'interview' | 'continue_prompt' | 'paused' | 'video_prompt' | 'recording_video' | 'finished'>('loading');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [aiText, setAiText] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -55,7 +56,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         if (!cancelled) {
           setSession(sessionJson.session ?? null);
           setIsMockMode(Boolean(configJson.mock));
-          setPhase(sessionJson.session ? 'mic_permission' : 'error');
+          setPhase(sessionJson.session ? 'expectations' : 'error');
           if (!sessionJson.session) {
             setError('We could not find your session. Please check your link.');
           }
@@ -219,6 +220,37 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     }
   }, [sessionId, questionIndex, handleTurnResponse]);
 
+  const handleVideoDone = useCallback(async (blob: Blob) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onerror = () => reject(new Error('Could not read video'));
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      });
+      const res = await fetch('/api/video/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, videoBase64: base64 })
+      });
+      if (!res.ok) throw new Error(`Video upload failed: ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      setSession((prev) => (prev ? { ...prev, videoUrl: data.videoUrl } : prev));
+      setPhase('finished');
+    } catch (err) {
+      console.error('Video upload failed:', err);
+      setError('Something went wrong saving your video. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }, [sessionId]);
+
+  const continueToReview = useCallback(() => {
+    window.location.href = `/review/${sessionId}`;
+  }, [sessionId]);
+
   const advance = useCallback(() => {
     stopSpeaking();
     if (questionIndex === CORE_QUESTIONS.length - 1) {
@@ -229,7 +261,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       return;
     }
     if (questionIndex >= allQuestions.length - 1) {
-      setPhase('finished');
+      setPhase('video_prompt');
       setAiText('');
       return;
     }
@@ -277,6 +309,58 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
 
   if (phase === 'mic_permission') {
     return <MicPermission onAllow={handleMicAllowed} />;
+  }
+
+  if (phase === 'expectations') {
+    return (
+      <Card className="text-center">
+        <h2 className="mb-2 font-serif text-2xl text-ink">
+          Here&apos;s what we&apos;ll make together, {session?.grandparent.name ?? 'friend'}.
+        </h2>
+        <p className="mb-8 leading-relaxed text-ink-500">
+          Time Tapestry weaves your story into keepsakes your family can hold onto.
+        </p>
+        <div className="mb-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <h3 className="mb-1 font-serif text-lg text-ink">A page just for them</h3>
+            <p className="font-sans text-sm leading-relaxed text-ink-500">
+              Your story, woven into a keepsake page with audio narration across four chapters.
+            </p>
+          </div>
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            </div>
+            <h3 className="mb-1 font-serif text-lg text-ink">A video of your final word</h3>
+            <p className="font-sans text-sm leading-relaxed text-ink-500">
+              Record a short message at the end... your face, your voice, your advice.
+            </p>
+          </div>
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <h3 className="mb-1 font-serif text-lg text-ink">Five postcards in the mail</h3>
+            <p className="font-sans text-sm leading-relaxed text-ink-500">
+              Sent one at a time over five weeks, each one carrying a piece of the story.
+            </p>
+          </div>
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <h3 className="mb-1 font-serif text-lg text-ink">An email to your grandchild</h3>
+            <p className="font-sans text-sm leading-relaxed text-ink-500">
+              They&apos;ll receive a link to the full keepsake when you&apos;re ready.
+            </p>
+          </div>
+        </div>
+        <Button onClick={() => setPhase('mic_permission')}>I&apos;m ready to begin</Button>
+      </Card>
+    );
   }
 
   if (phase === 'intro') {
@@ -364,10 +448,53 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button onClick={advance}>Keep going</Button>
-          <Button variant="secondary" onClick={() => setPhase('finished')}>
+          <Button variant="secondary" onClick={() => setPhase('video_prompt')}>
             Save what I have
           </Button>
         </div>
+      </Card>
+    );
+  }
+
+  if (phase === 'video_prompt') {
+    return (
+      <Card className="text-center">
+        <h2 className="mb-4 font-serif text-2xl text-ink">One last keepsake</h2>
+        <p className="mb-8 leading-relaxed text-ink-500">
+          Would you like to record a short video message for your family? You can
+          share a word of encouragement, a blessing, or anything you&apos;d like them
+          to see.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Button onClick={() => setPhase('recording_video')}>
+            Yes, record a video
+          </Button>
+          <Button variant="secondary" onClick={continueToReview}>
+            Skip for now
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (phase === 'recording_video') {
+    return (
+      <Card className="text-center">
+        <h2 className="mb-4 font-serif text-2xl text-ink">A word from you</h2>
+        {error && (
+          <p className="mb-4 rounded-md bg-red-50 p-3 text-center font-sans text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        {uploading ? (
+          <p className="font-sans text-ink-400">Saving your video...</p>
+        ) : (
+          <VideoRecorder
+            onDone={(blob) => {
+              void handleVideoDone(blob);
+            }}
+          />
+        )}
       </Card>
     );
   }

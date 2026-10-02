@@ -69,6 +69,7 @@ export default async function KeepsakePage({
           grandparentName={grandparentName}
           grandchildName={grandchildName}
           quotes={story.keyQuotes}
+          videoUrl={session.videoUrl}
         />
 
         <footer className="mt-12 border-t border-warmgray-300 py-6 text-center">

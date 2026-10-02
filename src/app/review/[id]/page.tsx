@@ -56,6 +56,7 @@ export default async function ReviewPage({
             grandparentName={session.grandparent.name}
             grandchildName={session.grandchild.name}
             quotes={story.keyQuotes}
+            videoUrl={session.videoUrl}
           />
         ) : (
           <Card className="text-center">
