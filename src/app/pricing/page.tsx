@@ -36,8 +36,8 @@ const tiers = [
     price: 'Custom',
     description: 'For nonprofits and donor programs.',
     audience: 'Nonprofits stewarding major donors through legacy storytelling.',
-    cta: 'Talk to us',
-    href: '/contact',
+    cta: 'See the org view',
+    href: '/org',
     features: [
       'Nonprofit-branded experience',
       'Aggregated engagement dashboard',

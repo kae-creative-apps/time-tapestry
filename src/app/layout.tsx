@@ -16,11 +16,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Time Tapestry',
-  description: 'Your story, woven together.',
+  metadataBase: new URL('https://timetapestry.app'),
+  title: 'Time Tapestry — Tell your story. Leave it for someone you love.',
+  description: 'A guided interview that turns your memories into a keepsake for the next generation.',
   robots: {
-    index: false,
-    follow: false
+    index: true,
+    follow: true
   }
 };
 
