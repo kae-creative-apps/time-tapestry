@@ -95,7 +95,6 @@ export default function SharePage() {
                 title="Before we begin..."
                 inputId="olderPersonName"
                 label="Your name"
-                placeholder="What do they call you? (your name)"
                 helper="So we know what to call you."
                 value={data.olderPersonName}
                 onChange={(value) => setData((d) => ({ ...d, olderPersonName: value }))}
@@ -111,7 +110,6 @@ export default function SharePage() {
                 headline="And who are you sharing this with?"
                 inputId="recipientName"
                 label="Their name"
-                placeholder="Their name — your grandchild, a child, a niece, a mentor"
                 helper="We'll weave this story for them."
                 value={data.recipientName}
                 onChange={(value) => setData((d) => ({ ...d, recipientName: value }))}
@@ -128,7 +126,6 @@ export default function SharePage() {
                   {
                     id: 'olderPersonEmail',
                     label: 'Your email',
-                    placeholder: 'Where can we reach you?',
                     value: data.olderPersonEmail,
                     type: 'email',
                     onChange: (value) => setData((d) => ({ ...d, olderPersonEmail: value }))
@@ -136,7 +133,6 @@ export default function SharePage() {
                   {
                     id: 'recipientEmail',
                     label: 'Their email',
-                    placeholder: 'And where should we send their invitation?',
                     value: data.recipientEmail,
                     type: 'email',
                     onChange: (value) => setData((d) => ({ ...d, recipientEmail: value }))
@@ -168,7 +164,6 @@ export default function SharePage() {
 interface SingleField {
   id: string;
   label: string;
-  placeholder: string;
   value: string;
   type?: string;
   onChange: (value: string) => void;
@@ -179,7 +174,6 @@ interface StepProps {
   headline?: string;
   inputId?: string;
   label?: string;
-  placeholder?: string;
   helper?: string;
   value?: string;
   type?: string;
@@ -194,7 +188,6 @@ function Step({
   headline,
   inputId,
   label,
-  placeholder,
   helper,
   value,
   type = 'text',
@@ -229,32 +222,30 @@ function Step({
       )}
 
       <div className="space-y-5">
-        {fields ? (
-          fields.map((field, index) => (
+          {fields ? (
+            fields.map((field, index) => (
+              <FloatingInput
+                key={field.id}
+                id={field.id}
+                label={field.label}
+                type={field.type || 'text'}
+                value={field.value}
+                onChange={(e) => field.onChange(e.target.value)}
+                inputRef={index === 0 ? inputRef : undefined}
+                autoComplete={field.type === 'email' ? 'email' : 'off'}
+              />
+            ))
+          ) : (
             <FloatingInput
-              key={field.id}
-              id={field.id}
-              label={field.label}
-              type={field.type || 'text'}
-              placeholder={field.placeholder}
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              inputRef={index === 0 ? inputRef : undefined}
-              autoComplete={field.type === 'email' ? 'email' : 'off'}
+              id={inputId!}
+              label={label!}
+              type={type}
+              value={value || ''}
+              onChange={(e) => onChange?.(e.target.value)}
+              inputRef={inputRef}
+              autoComplete={type === 'email' ? 'email' : 'name'}
             />
-          ))
-        ) : (
-          <FloatingInput
-            id={inputId!}
-            label={label!}
-            type={type}
-            placeholder={placeholder!}
-            value={value || ''}
-            onChange={(e) => onChange?.(e.target.value)}
-            inputRef={inputRef}
-            autoComplete={type === 'email' ? 'email' : 'name'}
-          />
-        )}
+          )}
 
         <motion.div
           initial={{ opacity: 0 }}

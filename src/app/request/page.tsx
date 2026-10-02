@@ -127,7 +127,6 @@ export default function RequestPage() {
                 title="What's your name?"
                 inputId="requesterName"
                 label="Your name"
-                placeholder="Your name"
                 helper="So we can sign the invitation from you."
                 value={data.requesterName}
                 onChange={(value) => setData((d) => ({ ...d, requesterName: value }))}
@@ -142,7 +141,6 @@ export default function RequestPage() {
                 title="Who are you asking?"
                 inputId="olderPersonName"
                 label="Their name"
-                placeholder="Their name — your grandparent, a parent, a mentor"
                 helper="The person whose story you'd like to keep."
                 value={data.olderPersonName}
                 onChange={(value) => setData((d) => ({ ...d, olderPersonName: value }))}
@@ -158,7 +156,6 @@ export default function RequestPage() {
                 inputId="olderPersonEmail"
                 label="Their email"
                 type="email"
-                placeholder="Their email address"
                 helper="We'll send them a quiet invitation."
                 value={data.olderPersonEmail}
                 onChange={(value) => setData((d) => ({ ...d, olderPersonEmail: value }))}
@@ -198,7 +195,6 @@ interface StepProps {
   title: string;
   inputId: string;
   label: string;
-  placeholder: string;
   helper?: string;
   value: string;
   type?: string;
@@ -211,7 +207,6 @@ function Step({
   title,
   inputId,
   label,
-  placeholder,
   helper,
   value,
   type = 'text',
@@ -243,7 +238,6 @@ function Step({
         id={inputId}
         label={label}
         type={type}
-        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         inputRef={inputRef}

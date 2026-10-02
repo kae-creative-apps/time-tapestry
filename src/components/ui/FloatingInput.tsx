@@ -11,9 +11,13 @@ interface FloatingInputProps extends React.InputHTMLAttributes<HTMLInputElement>
 }
 
 export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
-  ({ id, label, className, inputRef, value, defaultValue, onFocus, onBlur, ...props }, ref) => {
+  ({ id, label, className, inputRef, value, defaultValue, placeholder, onFocus, onBlur, ...props }, ref) => {
     const [isFocused, setIsFocused] = useState(false);
     const hasValue = String(value ?? defaultValue ?? '').length > 0;
+
+    // deliberate: placeholder is intentionally discarded; the label acts as the
+    // placeholder when the input is empty and unfocused, then floats above on focus/value.
+    void placeholder;
 
     return (
       <div className={cn('relative', className)}>
