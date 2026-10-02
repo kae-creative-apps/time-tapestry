@@ -23,8 +23,6 @@ export default async function KeepsakePage({
   };
   const grandparentName = session?.grandparent.name ?? demoStory.grandparent.name;
   const grandchildName = session?.grandchild.name ?? demoStory.grandchild.name;
-  const familyId = session?.familyId;
-  const familyName = session?.familyName;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -52,20 +50,6 @@ export default async function KeepsakePage({
           </div>
         </Card>
 
-        {familyId && (
-          <Card className="mb-8 text-center">
-            <p className="mb-3 font-sans text-sm uppercase tracking-wide text-warmgray-500">
-              Family legacy
-            </p>
-            <p className="mb-4 font-serif text-xl text-ink">
-              Part of the <Link href={`/family/${familyId}`} className="text-oxblood hover:underline">{familyName || familyId}</Link> legacy
-            </p>
-            <Link href={`/invite?family=${familyId}`} className="font-sans text-sm text-oxblood hover:underline">
-              Invite family
-            </Link>
-          </Card>
-        )}
-
         <StoryDisplay
           welcome={story.welcomeNote}
           chapters={story.chapters}
@@ -78,7 +62,7 @@ export default async function KeepsakePage({
 
         <footer className="mt-12 border-t border-warmgray-300 py-6 text-center">
           <p className="font-sans text-sm text-warmgray-500">
-            We don&apos;t sell data. We don&apos;t show your stories to sponsors. Your family&apos;s stories belong to your family.
+            We don&apos;t sell data. Your family&apos;s stories belong to your family.
           </p>
         </footer>
       </main>

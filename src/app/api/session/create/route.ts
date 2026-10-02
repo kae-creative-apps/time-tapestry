@@ -5,7 +5,7 @@ import { appUrl, invitationEmail, sendEmail } from '@/lib/resend-client';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { initiationPath, grandchild, grandparent, orgId, familyId, familyName, invite } = body;
+    const { initiationPath, grandchild, grandparent, familyId, familyName, invite } = body;
 
     if (!initiationPath || !grandchild?.name || !grandparent?.name) {
       return NextResponse.json(
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
         name: grandparent.name,
         email: grandparent.email || ''
       },
-      orgId: orgId || undefined,
       familyId: familyId || undefined,
       familyName: familyName || undefined,
       invite: invite

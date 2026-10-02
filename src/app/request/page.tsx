@@ -62,7 +62,7 @@ export default function RequestPage() {
             Send an invitation to someone whose story you want to keep.
           </p>
           <p className="mb-8 text-sm text-ink-400">
-            We start with generosity because it is at the heart of a life well-lived, but their story can go wherever they would like.
+            This can be a grandparent, great-aunt, mentor, or any older person in your life.
           </p>
           {submitted ? (
             <div>
@@ -116,7 +116,7 @@ export default function RequestPage() {
               </div>
               <div>
                 <label htmlFor="olderPersonName" className="mb-1 block font-sans text-sm text-ink-500">
-                  The older person&apos;s name
+                  Whose story would you like to ask for?
                 </label>
                 <input
                   id="olderPersonName"
@@ -143,7 +143,7 @@ export default function RequestPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Sending invitation...' : 'Send invitation'}
+                {isSubmitting ? 'Sending invitation...' : 'Send the invitation'}
               </Button>
             </form>
           )}

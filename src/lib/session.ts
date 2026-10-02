@@ -71,7 +71,6 @@ export type Session = {
     sendDate: string;
     chapterIndex: number;
   }>;
-  orgId?: string;
 };
 
 const sessionsDir = path.join(process.cwd(), 'src', 'data', 'sessions');

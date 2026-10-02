@@ -30,20 +30,6 @@ const tiers = [
       'Private share links',
       'Reply and action prompts'
     ]
-  },
-  {
-    name: 'Sponsor',
-    price: 'Custom',
-    description: 'For nonprofits and donor programs.',
-    audience: 'Nonprofits stewarding major donors through legacy storytelling.',
-    cta: 'See the org view',
-    href: '/org',
-    features: [
-      'Nonprofit-branded experience',
-      'Aggregated engagement dashboard',
-      'No access to personal story content',
-      'Pilot pricing available'
-    ]
   }
 ];
 
@@ -52,10 +38,10 @@ export default function PricingPage() {
     <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
       <div className="mb-10 text-center">
         <h1 className="mb-4 font-serif text-4xl leading-tight text-ink sm:text-5xl">
-          Simple pricing for families and the nonprofits who serve them.
+          Simple pricing for families.
         </h1>
         <p className="font-serif text-xl text-ink-500">
-          Start free. Grow into a Family story. Partner with us as a Sponsor.
+          Start free. Grow into a Family story.
         </p>
       </div>
 
@@ -86,11 +72,6 @@ export default function PricingPage() {
         ))}
       </div>
 
-      <div className="mt-10 text-center">
-        <Link href="/org" className="font-sans text-sm text-oxblood hover:underline">
-          Learn more about nonprofit sponsorships
-        </Link>
-      </div>
     </main>
   );
 }

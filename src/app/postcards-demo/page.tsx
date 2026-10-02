@@ -42,14 +42,14 @@ export default function PostcardsDemoPage() {
     {
       frontTitle: chapters[1]?.title ?? 'Chapter Two',
       frontExcerpt: chapters[1]?.content ?? '',
-      backMessage: `This is when I learned that giving mattered, long before I had words for it.`,
+      backMessage: `This is when I learned what I value most began before I had words for it.`,
       chapterIndex: 2,
       rotation: 'rotate-2' as const
     },
     {
       frontTitle: chapters[2]?.title ?? 'Chapter Three',
       frontExcerpt: chapters[2]?.content ?? '',
-      backMessage: `These are the causes I hold close. They are people I have prayed for by name.`,
+      backMessage: `These are the people and places I have given to. They are people I have prayed for by name.`,
       chapterIndex: 3,
       rotation: '-rotate-2' as const
     },

@@ -9,7 +9,7 @@ export default function PrivacyPage() {
           Your family&apos;s stories belong to your family.
         </h1>
         <p className="text-ink-500">
-          We built Time Tapestry around one promise: the stories you record here are yours. Not ours. Not a sponsor&apos;s. Not a data broker&apos;s.
+          We built Time Tapestry around one promise: the stories you record here are yours. Not ours. Not a data broker&apos;s.
         </p>
       </Card>
 
@@ -25,19 +25,9 @@ export default function PrivacyPage() {
           <h2 className="mb-3 font-serif text-xl text-ink">What we don&apos;t do</h2>
           <ul className="list-disc space-y-2 pl-5 text-ink-500">
             <li>We never sell your data.</li>
-            <li>We never show your stories to sponsors.</li>
+            <li>We never share your stories with third parties.</li>
             <li>We never use your stories to train AI models.</li>
           </ul>
-        </Card>
-
-        <Card>
-          <h2 className="mb-3 font-serif text-xl text-ink">The nonprofit model</h2>
-          <p className="mb-4 text-ink-500">
-            When a nonprofit sponsors an experience, they see aggregate counts: how many families completed a story, how many grandchildren read it, how many chose an action.
-          </p>
-          <p className="text-ink-500">
-            They never see names, emails, or story content. Sponsors are credited on the story page only with the family&apos;s consent.
-          </p>
         </Card>
 
         <Card>

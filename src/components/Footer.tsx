@@ -17,9 +17,6 @@ export function Footer() {
         <Link href="/privacy" className="hover:underline">
           Privacy
         </Link>
-        <Link href="/org" className="hover:underline">
-          Nonprofits
-        </Link>
       </nav>
       <p className="mt-4 font-sans text-xs text-warmgray-400">
         &copy; 2026 Time Tapestry

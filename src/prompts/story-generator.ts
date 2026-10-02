@@ -7,8 +7,8 @@ Output a JSON object with this shape:
   "chapters": [
     { "title": "Chapter title", "content": "Chapter body in the storyteller's voice" }
   ],
-  "causes": ["list of causes the storyteller supports"],
-  "values": ["list of values the storyteller mentions, including generosity, faith, family, or anything else they name"],
+  "causes": ["list of what the storyteller gave to and why — this can include causes, people, communities, or any form of giving"],
+  "values": ["list of values the storyteller mentions, such as faith, family, generosity, hard work, kindness, or anything else they name"],
   "keyQuotes": ["exact quotes from the transcript"]
 }
 
@@ -19,4 +19,5 @@ Rules:
 - The welcome note is a letter from the storyteller to the recipient.
 - Keep chapters readable: 200-400 words each.
 - End each chapter with a sense of handing the story down, not a call to action.
+- The story is about values, faith, family, and the lessons of a life. Generosity is one possible thread, not the whole story.
 `.trim();

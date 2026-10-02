@@ -1,30 +1,30 @@
 export const CORE_QUESTIONS = [
   {
     id: 'q1',
-    text: 'What is a story from your life you find yourself thinking about often?'
+    text: 'What is a story from your life you find yourself thinking about often? Something that shaped who you became.'
   },
   {
     id: 'q2',
-    text: 'When did you first learn that giving mattered?'
+    text: 'When you think about the values you try to live by — faith, family, generosity, hard work — what comes to mind first?'
   },
   {
     id: 'q3',
-    text: 'What causes do you believe in enough to keep supporting?'
+    text: 'Can you tell me about a time someone showed you one of those values? A specific moment that stuck with you?'
   },
   {
     id: 'q4',
-    text: 'Is there something you hope the person who receives this understands about the way you have lived?'
+    text: 'If you could pass on one piece of wisdom to the next generation, what would it be?'
   }
 ];
 
 export const OPTIONAL_QUESTIONS = [
   {
     id: 'q5',
-    text: 'What is a small, ordinary generosity that has stayed with you?'
+    text: 'What is a small, ordinary moment of kindness or generosity that has stayed with you?'
   },
   {
     id: 'q6',
-    text: 'What would it mean to you to see them carry this forward in their own way?'
+    text: 'What would it mean to you to see the people coming after you carry these values forward in their own way?'
   }
 ];
 
