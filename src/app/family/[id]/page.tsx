@@ -1,18 +1,21 @@
-import Link from 'next/link';
-import { Logo } from '@/components/Logo';
-import { Footer } from '@/components/Footer';
-import { Card } from '@/components/ui/Card';
-import { getSession, listSessionsByFamilyId } from '@/lib/session';
+import { legacyPageAllowed } from "@/lib/legacy-access";
+import LegacyAccessNotice from "@/components/LegacyAccessNotice";
+import Link from "next/link";
+import { Logo } from "@/components/Logo";
+import { Footer } from "@/components/Footer";
+import { Card } from "@/components/ui/Card";
+import { getSession, listSessionsByFamilyId } from "@/lib/session";
 
 export default async function FamilyPage({
-  params
+  params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await legacyPageAllowed())) return <LegacyAccessNotice />;
   const { id } = await params;
   const sessions = await listSessionsByFamilyId(id);
   const primary = sessions.find((s) => s.familyId === id) || sessions[0];
-  const familyName = primary?.familyName || 'This family';
+  const familyName = primary?.familyName || "This family";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -29,7 +32,8 @@ export default async function FamilyPage({
         {sessions.length === 0 ? (
           <Card>
             <p className="leading-relaxed text-ink-500">
-              No stories have been added to this family yet. They will appear here as they are recorded.
+              No stories have been added to this family yet. They will appear
+              here as they are recorded.
             </p>
           </Card>
         ) : (

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function AdminLoginPage() {
   return (
@@ -14,28 +14,30 @@ export default function AdminLoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [secret, setSecret] = useState('');
-  const [error, setError] = useState('');
+  const [secret, setSecret] = useState("");
+  const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setError('');
+    setError("");
 
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret })
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret }),
     });
 
     if (res.ok) {
-      const redirect = searchParams.get('redirect') ?? '/admin';
-      router.push(redirect);
+      const redirect = searchParams.get("redirect") ?? "/admin";
+      router.push(
+        /^\/admin(?:\/[a-zA-Z0-9_/-]*)?$/.test(redirect) ? redirect : "/admin",
+      );
       return;
     }
 
-    setError('Invalid admin secret.');
+    setError("Invalid admin secret.");
     setSubmitting(false);
   }
 
@@ -72,7 +74,7 @@ function LoginForm() {
             disabled={submitting || !secret}
             className="inline-flex min-h-[48px] items-center justify-center rounded-md bg-oxblood px-6 py-2.5 font-sans text-sm font-medium tracking-wide text-paper transition-all hover:bg-oxblood-600 disabled:opacity-50"
           >
-            {submitting ? 'Checking...' : 'Sign in'}
+            {submitting ? "Checking..." : "Sign in"}
           </button>
         </form>
       </div>

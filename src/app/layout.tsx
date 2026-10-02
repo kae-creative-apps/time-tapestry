@@ -1,33 +1,35 @@
-import type { Metadata } from 'next';
-import { Fraunces, Inter } from 'next/font/google';
-import './globals.css';
-import { DemoBanner } from '@/components/DemoBanner';
+import type { Metadata } from "next";
+import { Fraunces, Inter } from "next/font/google";
+import "./globals.css";
+import { DemoBanner } from "@/components/DemoBanner";
 
 const fraunces = Fraunces({
-  subsets: ['latin'],
-  variable: '--font-fraunces',
-  display: 'swap',
-  axes: ['opsz']
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  display: "swap",
+  axes: ["opsz"],
 });
 
 const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap'
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://timetapestry.app'),
-  title: 'time tapestry — Stories woven together',
-  description: 'A quiet, guided interview that turns your memories into a keepsake for the people you love.',
+  metadataBase: new URL("https://timetapestry.app"),
+  title: "Time Tapestry | Stories woven together",
+  description:
+    "Share the stories, faith and values behind your life through a personal collection and four postcards.",
+  referrer: "no-referrer",
   robots: {
     index: true,
-    follow: true
-  }
+    follow: true,
+  },
 };
 
 export default function RootLayout({
-  children
+  children,
 }: {
   children: React.ReactNode;
 }) {

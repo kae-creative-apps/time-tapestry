@@ -1,17 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { sendEmail } from '@/lib/resend-client';
+import { withLegacyAdmin } from "@/lib/legacy-access";
+import { NextRequest, NextResponse } from "next/server";
+import { sendEmail } from "@/lib/resend-client";
 
-export async function POST(request: NextRequest) {
+async function legacyPOST(request: NextRequest) {
   try {
     const { email } = await request.json();
 
     if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
     const result = await sendEmail({
       to: email,
-      subject: 'Hello from Time Tapestry',
+      subject: "Hello from Time Tapestry",
       html: `
         <!DOCTYPE html>
         <html>
@@ -38,7 +39,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('[TEST EMAIL ERROR]', error);
-    return NextResponse.json({ error: 'Failed to send test email' }, { status: 500 });
+    console.error("[TEST EMAIL ERROR]", error);
+    return NextResponse.json(
+      { error: "Failed to send test email" },
+      { status: 500 },
+    );
   }
 }
+
+export const POST = withLegacyAdmin(legacyPOST);

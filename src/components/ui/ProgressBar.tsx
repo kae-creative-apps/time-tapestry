@@ -1,10 +1,16 @@
 export function ProgressBar({
   current,
-  total
+  total,
 }: {
   current: number;
   total: number;
 }) {
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
+  current = Math.max(
+    0,
+    Math.min(safeTotal, Number.isFinite(current) ? current : 0),
+  );
+  total = safeTotal;
   const percent = Math.min(100, Math.round((current / total) * 100));
   return (
     <div

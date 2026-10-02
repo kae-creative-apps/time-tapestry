@@ -6,11 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts scripts/render-chapter.test.ts",
+    "video:collection": "node --import tsx scripts/export-collection-video.ts",
+    "video:render": "node --import tsx scripts/render-chapter.ts",
+    "video:audio": "node --import tsx scripts/render-chapter-audio.ts"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.70.0",
     "@lob/lob-typescript-sdk": "^1.4.2",
+    "@remotion/bundler": "4.0.532",
+    "@remotion/captions": "4.0.532",
+    "@remotion/cli": "4.0.532",
+    "@remotion/media": "4.0.532",
+    "@remotion/renderer": "4.0.532",
     "@vercel/blob": "^2.8.0",
     "@vercel/kv": "^3.0.0",
     "clsx": "^2.1.1",
@@ -19,19 +28,28 @@
     "nanoid": "^5.1.16",
     "next": "^15.5.26",
     "openai": "^7.25.0",
+    "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "remotion": "4.0.532",
     "resend": "^6.31.0",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.6.1",
+    "fake-indexeddb": "^6.2.5",
     "postcss": "^8.5.28",
+    "prettier": "^3.9.9",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }

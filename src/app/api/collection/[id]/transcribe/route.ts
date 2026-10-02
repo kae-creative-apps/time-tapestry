@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from "next/server";
+import OpenAI, { toFile } from "openai";
+import { getCollection, getMedia } from "@/lib/collection/store";
+import { roleFor } from "@/lib/collection/access";
+import { mediaBytes } from "@/lib/collection/media";
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const c = await getCollection(id);
+    if (!c || roleFor(c, req.nextUrl.searchParams.get("key") || "") !== "owner")
+      return NextResponse.json(
+        { error: "Storyteller access required" },
+        { status: 403 },
+      );
+    if (!process.env.OPENAI_API_KEY)
+      return NextResponse.json(
+        {
+          error:
+            "Transcription is not configured yet. Your recording is saved. You can type or paste its words below.",
+        },
+        { status: 503 },
+      );
+    const b = await req.json();
+    const m = await getMedia(b.mediaId);
+    if (!m || m.collectionId !== id || m.role !== "owner")
+      throw new Error("Recording not found");
+    const bytes = await mediaBytes(m);
+    if (bytes.byteLength > 25 * 1024 * 1024)
+      throw new Error(
+        "This video needs audio extraction in the editing worker before transcription. Your original is saved. Add its words manually for now.",
+      );
+    const extension = m.mimeType.includes("mp4")
+      ? "mp4"
+      : m.mimeType.includes("ogg")
+        ? "ogg"
+        : m.mimeType.includes("mpeg")
+          ? "mp3"
+          : m.mimeType.includes("wav")
+            ? "wav"
+            : "webm";
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const result = await client.audio.transcriptions.create({
+      model: "whisper-1",
+      file: await toFile(bytes, `answer.${extension}`, { type: m.mimeType }),
+    });
+    return NextResponse.json(
+      { text: result.text },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error:
+          e instanceof Error
+            ? e.message
+            : "Transcription failed. Your recording remains saved.",
+      },
+      { status: 400 },
+    );
+  }
+}

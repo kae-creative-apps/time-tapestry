@@ -1,23 +1,38 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
+/** Sample routes are explicitly identified; personal collections never claim simulated work. */
 export function DemoBanner() {
-  const [mock, setMock] = useState<boolean | null>(null);
+  const pathname = usePathname();
+  const [mock, setMock] = useState(false);
+  const personalFlow = /^\/(?:record|collection|share|request)(?:\/|$)/.test(
+    pathname ?? "",
+  );
 
   useEffect(() => {
-    fetch('/api/config')
-      .then((res) => res.json())
-      .then((data) => setMock(Boolean(data.mock)))
-      .catch(() => setMock(false));
-  }, []);
+    if (personalFlow) return;
+    let mounted = true;
+    fetch("/api/config")
+      .then((response) => response.json())
+      .then((data) => {
+        if (mounted) setMock(Boolean(data.mock));
+      })
+      .catch(() => {
+        if (mounted) setMock(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [personalFlow]);
 
-  if (!mock) return null;
-
+  if (personalFlow || !mock) return null;
   return (
-    <div className="w-full bg-oxblood px-4 py-2 text-center">
-      <p className="font-sans text-xs font-medium tracking-[0.06em] text-paper">
-        Demo mode — some features are simulated. Add API keys to .env.local for full functionality.
+    <div className="w-full bg-oxblood px-4 py-3 text-center">
+      <p className="font-sans text-sm font-medium text-paper">
+        You are viewing a demonstration. Sample stories and delivery previews
+        are illustrative.
       </p>
     </div>
   );
