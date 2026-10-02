@@ -220,32 +220,16 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     }
   }, [sessionId, questionIndex, handleTurnResponse]);
 
-  const handleVideoDone = useCallback(async (blob: Blob) => {
+  const handleVideoDone = useCallback(async (videoUrl: string) => {
+    setSession((prev) => (prev ? { ...prev, videoUrl } : prev));
+    setPhase('finished');
+    setUploading(false);
+  }, []);
+
+  const startVideoUpload = useCallback(() => {
     setUploading(true);
     setError(null);
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onerror = () => reject(new Error('Could not read video'));
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      });
-      const res = await fetch('/api/video/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, videoBase64: base64 })
-      });
-      if (!res.ok) throw new Error(`Video upload failed: ${res.status}`);
-      const data = await res.json().catch(() => ({}));
-      setSession((prev) => (prev ? { ...prev, videoUrl: data.videoUrl } : prev));
-      setPhase('finished');
-    } catch (err) {
-      console.error('Video upload failed:', err);
-      setError('Something went wrong saving your video. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  }, [sessionId]);
+  }, []);
 
   const continueToReview = useCallback(() => {
     window.location.href = `/review/${sessionId}`;
@@ -490,9 +474,11 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
           <p className="font-sans text-ink-400">Saving your video...</p>
         ) : (
           <VideoRecorder
-            onDone={(blob) => {
-              void handleVideoDone(blob);
+            sessionId={sessionId}
+            onDone={(videoUrl) => {
+              void handleVideoDone(videoUrl);
             }}
+            onStartUpload={startVideoUpload}
           />
         )}
       </Card>

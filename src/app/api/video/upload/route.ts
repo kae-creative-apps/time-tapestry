@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 import { getSession, updateSession } from '@/lib/session';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json().catch(async () => {
-      const form = await req.formData();
-      return Object.fromEntries(form.entries());
-    });
-    const { sessionId, videoBase64 } = body;
-    if (!sessionId) {
-      return NextResponse.json(
-        { error: 'Missing sessionId' },
-        { status: 400 }
-      );
+    const { sessionId, videoBase64, contentType, filename } = await request.json();
+
+    if (!sessionId || !videoBase64) {
+      return NextResponse.json({ error: 'Missing sessionId or videoBase64' }, { status: 400 });
     }
 
     const session = await getSession(sessionId);
@@ -20,18 +15,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    const videoUrl = videoBase64
-      ? `data:video/webm;base64,${videoBase64}`
-      : 'mock:video-url';
+    // deliberate: legacy fallback for small videos when direct browser upload is unavailable
+    const base64Data = videoBase64.replace(/^data:video\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const blob = new Blob([buffer], { type: contentType || 'video/webm' });
 
-    await updateSession(sessionId, (s) => ({
-      ...s,
-      videoUrl
-    }));
+    const blobResult = await put(
+      `videos/${sessionId}-${Date.now()}.webm`,
+      blob,
+      {
+        access: 'public',
+        contentType: contentType || 'video/webm',
+        token: process.env.BLOB_READ_WRITE_TOKEN
+      }
+    );
 
-    return NextResponse.json({ videoUrl });
-  } catch (err) {
-    console.error('video/upload error', err);
-    return NextResponse.json({ error: 'Video upload failed' }, { status: 500 });
+    await updateSession(sessionId, (s) => ({ ...s, videoUrl: blobResult.url }));
+
+    return NextResponse.json({
+      success: true,
+      videoUrl: blobResult.url,
+      size: blob.size
+    });
+  } catch (error) {
+    console.error('[video/upload] error:', error);
+    return NextResponse.json(
+      { error: 'Video upload failed', details: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
 }

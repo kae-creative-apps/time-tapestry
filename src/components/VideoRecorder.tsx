@@ -1,13 +1,34 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { upload } from '@vercel/blob/client';
 import { Button } from './ui/Button';
 import { formatDuration } from '@/lib/utils';
 
-const MAX_SECONDS = 120;
+const MAX_SECONDS = 60;
 
-export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
-  const [phase, setPhase] = useState<'idle' | 'recording' | 'review'>('idle');
+function getSupportedMimeType(): string {
+  const candidates = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) return candidate;
+  }
+  return 'video/webm';
+}
+
+export function VideoRecorder({
+  sessionId,
+  onDone,
+  onStartUpload
+}: {
+  sessionId: string;
+  onDone: (videoUrl: string) => void;
+  onStartUpload?: () => void;
+}) {
+  const [phase, setPhase] = useState<'idle' | 'recording' | 'review' | 'uploading'>('idle');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -33,8 +54,16 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
     setError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: {
+          width: { ideal: 1280, max: 1280 },
+          height: { ideal: 720, max: 720 },
+          frameRate: { ideal: 24, max: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
       });
       streamRef.current = stream;
       if (videoRef.current) {
@@ -42,7 +71,12 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
         videoRef.current.play();
       }
 
-      const recorder = new MediaRecorder(stream);
+      const mimeType = getSupportedMimeType();
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 800_000,
+        audioBitsPerSecond: 64_000
+      });
       mediaRef.current = recorder;
       chunksRef.current = [];
       blobRef.current = null;
@@ -52,7 +86,7 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const blob = new Blob(chunksRef.current, { type: mimeType });
         blobRef.current = blob;
         if (videoRef.current) {
           videoRef.current.srcObject = null;
@@ -93,11 +127,25 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
     setPhase('idle');
   }, []);
 
-  const useRecording = useCallback(() => {
-    if (blobRef.current) {
-      onDone(blobRef.current);
+  const useRecording = useCallback(async () => {
+    if (!blobRef.current) return;
+
+    onStartUpload?.();
+    setPhase('uploading');
+    setError('');
+    try {
+      const result = await upload(`videos/${sessionId}-${Date.now()}.webm`, blobRef.current, {
+        access: 'public',
+        handleUploadUrl: '/api/video/upload-url',
+        clientPayload: JSON.stringify({ sessionId })
+      });
+      onDone(result.url);
+    } catch (err) {
+      console.error('Video upload failed:', err);
+      setError('Something went wrong saving your video. Please try again.');
+      setPhase('review');
     }
-  }, [onDone]);
+  }, [sessionId, onDone, onStartUpload]);
 
   return (
     <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-6 text-center shadow-soft">
@@ -138,9 +186,12 @@ export function VideoRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
             <Button onClick={reRecord} variant="secondary">
               Re-record
             </Button>
-            <Button onClick={useRecording}>Use this video</Button>
+            <Button onClick={() => void useRecording()}>Use this video</Button>
           </div>
         </>
+      )}
+      {phase === 'uploading' && (
+        <p className="font-sans text-ink-400">Saving your video...</p>
       )}
     </div>
   );
