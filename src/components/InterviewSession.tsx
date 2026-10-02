@@ -80,6 +80,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.85;
+    utterance.pitch = 1.02;
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
@@ -117,13 +118,17 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   }, []);
 
   const handleTurnResponse = useCallback(
-    (data: { aiResponse?: string; mock?: boolean }) => {
+    (data: { aiResponse?: string; mock?: boolean; paused?: boolean }) => {
       if (data.mock) setIsMockMode(true);
       const responseText =
         data.aiResponse ||
         'Thank you for sharing that. Take your time. I am listening.';
       setAiText(responseText);
-      speak(responseText);
+      if (data.paused) {
+        setPhase('paused');
+      } else {
+        speak(responseText);
+      }
     },
     [speak]
   );
@@ -159,8 +164,9 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
           const data = await res.json().catch(() => ({}));
           handleTurnResponse(data);
         } catch (err) {
-          console.error('Recording submission failed:', err);
-          setError('Something went wrong saving your answer. Please try again.');
+          const serverMessage = err instanceof Error ? err.message : 'Unknown error';
+          console.error('Recording submission failed:', serverMessage, err);
+          setError(`Something went wrong saving your answer. ${serverMessage}`);
         } finally {
           setUploading(false);
         }
@@ -188,8 +194,9 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       handleTurnResponse(data);
       setTextAnswer('');
     } catch (err) {
-      console.error('Text answer submission failed:', err);
-      setError('Something went wrong saving your answer. Please try again.');
+      const serverMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Text answer submission failed:', serverMessage, err);
+      setError(`Something went wrong saving your answer. ${serverMessage}`);
     } finally {
       setUploading(false);
     }
@@ -213,8 +220,9 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       setIsMockMode(true);
       handleTurnResponse(data);
     } catch (err) {
-      console.error('Mock answer submission failed:', err);
-      setError('Something went wrong with the sample answer. Please try again.');
+      const serverMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Mock answer submission failed:', serverMessage, err);
+      setError(`Something went wrong with the sample answer. ${serverMessage}`);
     } finally {
       setUploading(false);
     }
@@ -512,21 +520,23 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         {!recording && !uploading && (
           <div className="text-center">
             {textMode ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <textarea
                   rows={4}
                   value={textAnswer}
                   onChange={(e) => setTextAnswer(e.target.value)}
                   placeholder="Type your answer here..."
+                  className="w-full rounded-md border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink shadow-inner placeholder:text-warmgray-500 focus:border-oxblood focus:outline-none focus:ring-2 focus:ring-oxblood/20"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  <Button onClick={submitTextAnswer} className="flex-1">
-                    Share answer
+                  <Button onClick={submitTextAnswer} className="w-full sm:flex-1" loading={uploading}>
+                    Submit answer
                   </Button>
                   <Button
                     variant="secondary"
                     onClick={() => setTextMode(false)}
-                    className="flex-1"
+                    className="w-full sm:flex-1"
+                    disabled={uploading}
                   >
                     Use voice instead
                   </Button>

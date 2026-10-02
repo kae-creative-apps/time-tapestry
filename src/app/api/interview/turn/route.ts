@@ -13,7 +13,13 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sessionId, questionIndex, audioBase64: rawAudioBase64, mimeType, transcript: providedTranscript } = body;
+    const {
+      sessionId,
+      questionIndex,
+      audioBase64: rawAudioBase64,
+      mimeType,
+      transcript: providedTranscript
+    } = body;
     if (!sessionId || questionIndex === undefined) {
       return NextResponse.json(
         { error: 'Missing sessionId or questionIndex' },
@@ -31,11 +37,13 @@ export async function POST(req: NextRequest) {
       transcript = providedTranscript.trim();
     } else {
       const audioBase64 = rawAudioBase64 as string | undefined;
-      const audioBlob = audioBase64
-        ? new Blob(
-            [Buffer.from(audioBase64.split(',')[1] ?? audioBase64, 'base64')],
-            { type: mimeType || 'audio/webm' }
-          )
+      const base64Payload = audioBase64?.includes(',')
+        ? audioBase64.split(',')[1]
+        : audioBase64;
+      const audioBlob = base64Payload
+        ? new Blob([Buffer.from(base64Payload, 'base64')], {
+            type: mimeType || 'audio/webm'
+          })
         : null;
       transcript = audioBlob
         ? await transcribeAudio(audioBlob)
@@ -43,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (detectPauseIntent(transcript) || detectStopIntent(transcript)) {
-      await updateSession(sessionId, (s) => ({
+      const pausedSession = await updateSession(sessionId, (s) => ({
         ...s,
         interview: {
           ...s.interview,
@@ -54,6 +62,14 @@ export async function POST(req: NextRequest) {
           ]
         }
       }));
+
+      if (!pausedSession) {
+        return NextResponse.json(
+          { error: 'Failed to save your place. Please try again.' },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
         transcript,
         aiResponse: 'I have saved your place. Come back whenever you are ready.',
@@ -74,17 +90,17 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: transcript }
     ];
 
-    const response: any = await chat(messages);
+      const response: any = await chat(messages);
     const aiResponse =
       response?.choices?.[0]?.message?.content ||
       'Thank you for sharing that. Take your time. I am listening.';
 
-    await updateSession(sessionId, (s) => ({
+    const updatedSession = await updateSession(sessionId, (s) => ({
       ...s,
       status: 'interview_started',
       interview: {
         ...s.interview,
-        currentQuestion: questionIndex,
+        currentQuestion: questionIndex + 1,
         startedAt: s.interview.startedAt || new Date().toISOString(),
         transcript: [
           ...s.interview.transcript,
@@ -94,6 +110,13 @@ export async function POST(req: NextRequest) {
         ]
       }
     }));
+
+    if (!updatedSession) {
+      return NextResponse.json(
+        { error: 'Failed to save answer. Please try again.' },
+        { status: 500 }
+      );
+    }
 
     const isMock = !process.env.GLOO_API_KEY || !process.env.OPENAI_API_KEY;
     return NextResponse.json({ transcript, aiResponse, mimeType, mock: isMock });
