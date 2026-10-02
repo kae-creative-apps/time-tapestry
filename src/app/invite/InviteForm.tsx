@@ -8,11 +8,11 @@ import { Card } from '@/components/ui/Card';
 export function InviteSuccess() {
   return (
     <Card className="text-center">
-      <h1 className="mb-4 font-serif text-3xl text-ink">Invitation ready</h1>
-      <p className="mb-6 text-ink-500">
+      <h1 className="mb-3 font-serif text-2xl text-ink">Invitation ready</h1>
+      <p className="mb-6 leading-relaxed text-ink-500">
         When we are live, this will send an email invitation. For now, it has been recorded.
       </p>
-      <Link href="/" className="font-sans text-sm text-oxblood hover:underline">
+      <Link href="/" className="font-sans text-sm text-oxblood transition hover:text-oxblood-600 hover:underline">
         Return home
       </Link>
     </Card>
