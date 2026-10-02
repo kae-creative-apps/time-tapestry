@@ -1,6 +1,4 @@
-import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { kv } from '@vercel/kv';
 import { nanoid } from 'nanoid';
 
 export type SessionStatus =
@@ -73,10 +71,17 @@ export type Session = {
   }>;
 };
 
-const sessionsDir = path.join(process.cwd(), 'src', 'data', 'sessions');
+const SESSION_PREFIX = 'session:';
 
-function sessionFilePath(id: string) {
-  return path.join(sessionsDir, `${id}.json`);
+// deliberate: in-memory fallback for local dev when Vercel KV env vars are absent
+const memoryStore = new Map<string, Session>();
+
+function sessionKey(id: string): string {
+  return `${SESSION_PREFIX}${id}`;
+}
+
+function useMemoryFallback(): boolean {
+  return !process.env.KV_URL || !process.env.KV_REST_API_TOKEN;
 }
 
 function slugify(input: string): string {
@@ -104,9 +109,7 @@ function familyNameFromGrandparentName(name?: string): string {
 }
 
 export async function ensureSessionsDir(): Promise<void> {
-  if (!existsSync(sessionsDir)) {
-    await mkdir(sessionsDir, { recursive: true });
-  }
+  // deliberate: KV and the in-memory Map do not need a filesystem directory
 }
 
 export async function createSession(
@@ -115,7 +118,6 @@ export async function createSession(
     'id' | 'createdAt' | 'updatedAt' | 'status' | 'interview' | 'story'
   >
 ): Promise<Session> {
-  await ensureSessionsDir();
   const now = new Date().toISOString();
   const familyId = partial.familyId || familyIdFromGrandparentName(partial.grandparent?.name);
   const familyName = partial.familyName || familyNameFromGrandparentName(partial.grandparent?.name);
@@ -139,17 +141,26 @@ export async function createSession(
     createdAt: now,
     updatedAt: now
   };
-  await writeFile(sessionFilePath(session.id), JSON.stringify(session, null, 2));
+
+  const key = sessionKey(session.id);
+
+  if (useMemoryFallback()) {
+    memoryStore.set(key, session);
+    return session;
+  }
+
+  await kv.set(key, session);
   return session;
 }
 
 export async function getSession(id: string): Promise<Session | null> {
-  try {
-    const raw = await readFile(sessionFilePath(id), 'utf-8');
-    return JSON.parse(raw) as Session;
-  } catch {
-    return null;
+  const key = sessionKey(id);
+
+  if (useMemoryFallback()) {
+    return memoryStore.get(key) || null;
   }
+
+  return kv.get<Session>(key);
 }
 
 export async function updateSession(
@@ -160,20 +171,29 @@ export async function updateSession(
   if (!session) return null;
   const updated = updater(session);
   updated.updatedAt = new Date().toISOString();
-  await writeFile(sessionFilePath(id), JSON.stringify(updated, null, 2));
+
+  const key = sessionKey(id);
+
+  if (useMemoryFallback()) {
+    memoryStore.set(key, updated);
+    return updated;
+  }
+
+  await kv.set(key, updated);
   return updated;
 }
 
 export async function listSessions(): Promise<Session[]> {
-  await ensureSessionsDir();
-  const entries = await readdir(sessionsDir);
-  const files = entries.filter((f) => f.endsWith('.json'));
-  const sessions: Session[] = [];
-  for (const file of files) {
-    const session = await getSession(file.replace('.json', ''));
-    if (session) sessions.push(session);
+  if (useMemoryFallback()) {
+    return Array.from(memoryStore.values());
   }
-  return sessions;
+
+  // deliberate: linear scan of session keys; acceptable until session volume is large
+  const keys = await kv.keys(`${SESSION_PREFIX}*`);
+  const sessions = await Promise.all(
+    keys.map((key) => kv.get<Session>(key))
+  );
+  return sessions.filter((s): s is Session => s !== null);
 }
 
 export async function listSessionsByFamilyId(familyId: string): Promise<Session[]> {
@@ -182,11 +202,12 @@ export async function listSessionsByFamilyId(familyId: string): Promise<Session[
 }
 
 export async function deleteSession(id: string): Promise<boolean> {
-  try {
-    const { unlink } = await import('fs/promises');
-    await unlink(sessionFilePath(id));
-    return true;
-  } catch {
-    return false;
+  const key = sessionKey(id);
+
+  if (useMemoryFallback()) {
+    return memoryStore.delete(key);
   }
+
+  await kv.del(key);
+  return true;
 }
