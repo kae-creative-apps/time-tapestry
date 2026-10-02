@@ -57,12 +57,9 @@ export default function RequestPage() {
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card>
-          <h1 className="mb-4 font-serif text-3xl text-ink">Request a story</h1>
-          <p className="mb-2 text-ink-500">
-            Send an invitation to someone whose story you want to keep.
-          </p>
-          <p className="mb-8 text-sm text-ink-400">
-            This can be a grandparent, great-aunt, mentor, or any person in your life.
+          <h1 className="mb-3 font-serif text-2xl text-ink">Request a story</h1>
+          <p className="mb-8 text-base leading-relaxed text-ink-500">
+            Send a quiet invitation to someone whose story you want to keep.
           </p>
           {submitted ? (
             <div>
@@ -70,7 +67,7 @@ export default function RequestPage() {
                 The invitation has been prepared. Share this link with{' '}
                 {olderPersonName}:
               </p>
-              <p className="mb-6 break-all rounded-sm bg-paper-200 p-4 font-sans text-sm text-ink">
+              <p className="mb-6 break-all rounded-md bg-paper-200 p-4 font-sans text-sm text-ink">
                 {typeof window !== 'undefined'
                   ? `${window.location.origin}/interview/${sessionId}`
                   : `/interview/${sessionId}`}
@@ -80,72 +77,72 @@ export default function RequestPage() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {error && (
-                <p className="rounded-sm bg-red-50 p-4 text-sm text-red-700" role="alert">
-                  {error}
-                </p>
-              )}
-              <div>
-                <label htmlFor="requesterName" className="mb-1 block font-sans text-sm text-ink-500">
-                  Your name
-                </label>
-                <input
-                  id="requesterName"
-                  type="text"
-                  required
-                  value={requesterName}
-                  disabled={isSubmitting}
-                  onChange={(e) => setRequesterName(e.target.value)}
-                  className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label htmlFor="requesterEmail" className="mb-1 block font-sans text-sm text-ink-500">
-                  Your email
-                </label>
-                <input
-                  id="requesterEmail"
-                  type="email"
-                  required
-                  value={requesterEmail}
-                  disabled={isSubmitting}
-                  onChange={(e) => setRequesterEmail(e.target.value)}
-                  className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label htmlFor="olderPersonName" className="mb-1 block font-sans text-sm text-ink-500">
-                  Whose story would you like to ask for?
-                </label>
-                <input
-                  id="olderPersonName"
-                  type="text"
-                  required
-                  value={olderPersonName}
-                  disabled={isSubmitting}
-                  onChange={(e) => setOlderPersonName(e.target.value)}
-                  className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label htmlFor="olderPersonEmail" className="mb-1 block font-sans text-sm text-ink-500">
-                  Their email
-                </label>
-                <input
-                  id="olderPersonEmail"
-                  type="email"
-                  required
-                  value={olderPersonEmail}
-                  disabled={isSubmitting}
-                  onChange={(e) => setOlderPersonEmail(e.target.value)}
-                  className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Sending invitation...' : 'Send the invitation'}
-              </Button>
-            </form>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <p className="rounded-md bg-red-50 p-4 text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            )}
+            <div>
+              <label htmlFor="requesterName" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Your name
+              </label>
+              <input
+                id="requesterName"
+                type="text"
+                required
+                value={requesterName}
+                disabled={isSubmitting}
+                placeholder="e.g., David Miller"
+                onChange={(e) => setRequesterName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="requesterEmail" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Your email
+              </label>
+              <input
+                id="requesterEmail"
+                type="email"
+                required
+                value={requesterEmail}
+                disabled={isSubmitting}
+                placeholder="you@example.com"
+                onChange={(e) => setRequesterEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="olderPersonName" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Whose story do you want?
+              </label>
+              <input
+                id="olderPersonName"
+                type="text"
+                required
+                value={olderPersonName}
+                disabled={isSubmitting}
+                placeholder="e.g., Your grandmother"
+                onChange={(e) => setOlderPersonName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="olderPersonEmail" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Their email
+              </label>
+              <input
+                id="olderPersonEmail"
+                type="email"
+                required
+                value={olderPersonEmail}
+                disabled={isSubmitting}
+                placeholder="them@example.com"
+                onChange={(e) => setOlderPersonEmail(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Sending invitation...' : 'Send the invitation'}
+            </Button>
+          </form>
           )}
         </Card>
       </main>

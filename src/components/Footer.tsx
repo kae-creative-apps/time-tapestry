@@ -1,24 +1,27 @@
+import { Logo } from './Logo';
 import Link from 'next/link';
 
 export function Footer() {
   return (
-    <footer className="border-t border-warmgray-300 py-10 text-center">
-      <p className="font-serif text-lg text-ink">Time Tapestry</p>
-      <p className="mb-4 font-sans text-sm text-warmgray-500">
-        Weaving the stories that matter.
+    <footer className="mt-auto border-t border-warmgray-200 py-10 text-center">
+      <div className="mb-4 inline-flex">
+        <Logo variant="mark" className="text-warmgray-500" />
+      </div>
+      <p className="mb-2 font-sans text-xs uppercase tracking-[0.16em] text-warmgray-500">
+        Stories woven together
       </p>
       <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-sans text-sm text-oxblood">
-        <Link href="/about" className="hover:underline">
+        <Link href="/about" className="transition-colors hover:text-oxblood-700">
           About
         </Link>
-        <Link href="/pricing" className="hover:underline">
+        <Link href="/pricing" className="transition-colors hover:text-oxblood-700">
           Pricing
         </Link>
-        <Link href="/privacy" className="hover:underline">
+        <Link href="/privacy" className="transition-colors hover:text-oxblood-700">
           Privacy
         </Link>
       </nav>
-      <p className="mt-4 font-sans text-xs text-warmgray-400">
+      <p className="mt-5 font-sans text-[11px] tracking-wide text-warmgray-400">
         &copy; 2026 Time Tapestry
       </p>
     </footer>

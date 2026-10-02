@@ -54,22 +54,19 @@ export default function SharePage() {
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <Logo className="mb-8" />
         <Card>
-          <h1 className="mb-4 font-serif text-3xl text-ink">Share my story</h1>
-          <p className="mb-2 text-ink-500">
+          <h1 className="mb-3 font-serif text-2xl text-ink">Share my story</h1>
+          <p className="mb-8 text-base leading-relaxed text-ink-500">
             Begin your Legacy Season and hand it down to someone you love.
           </p>
-          <p className="mb-8 text-sm text-ink-400">
-            Your grandchild, a child, a niece, a mentee — anyone who&apos;d want to hear your story.
-          </p>
           {error && (
-            <p className="mb-5 rounded-sm bg-red-50 p-4 text-sm text-red-700" role="alert">
+            <p className="mb-5 rounded-md bg-red-50 p-4 text-sm text-red-700" role="alert">
               {error}
             </p>
           )}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="olderPersonName" className="mb-1 block font-sans text-sm text-ink-500">
-                What&apos;s your name?
+              <label htmlFor="olderPersonName" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Your name
               </label>
               <input
                 id="olderPersonName"
@@ -77,12 +74,12 @@ export default function SharePage() {
                 required
                 disabled={isSubmitting}
                 value={olderPersonName}
+                placeholder="e.g., Margaret Thompson"
                 onChange={(e) => setOlderPersonName(e.target.value)}
-                className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
               />
             </div>
             <div>
-              <label htmlFor="olderPersonEmail" className="mb-1 block font-sans text-sm text-ink-500">
+              <label htmlFor="olderPersonEmail" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
                 Your email
               </label>
               <input
@@ -91,13 +88,13 @@ export default function SharePage() {
                 required
                 disabled={isSubmitting}
                 value={olderPersonEmail}
+                placeholder="you@example.com"
                 onChange={(e) => setOlderPersonEmail(e.target.value)}
-                className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
               />
             </div>
             <div>
-              <label htmlFor="recipientName" className="mb-1 block font-sans text-sm text-ink-500">
-                Whom would you like to share this with?
+              <label htmlFor="recipientName" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
+                Share this with
               </label>
               <input
                 id="recipientName"
@@ -105,12 +102,12 @@ export default function SharePage() {
                 required
                 disabled={isSubmitting}
                 value={recipientName}
+                placeholder="e.g., Your granddaughter"
                 onChange={(e) => setRecipientName(e.target.value)}
-                className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
               />
             </div>
             <div>
-              <label htmlFor="recipientEmail" className="mb-1 block font-sans text-sm text-ink-500">
+              <label htmlFor="recipientEmail" className="mb-2 block font-sans text-xs font-medium uppercase tracking-[0.12em] text-ink-500">
                 Their email
               </label>
               <input
@@ -119,8 +116,8 @@ export default function SharePage() {
                 required
                 disabled={isSubmitting}
                 value={recipientEmail}
+                placeholder="them@example.com"
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                className="w-full rounded-sm border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood disabled:opacity-50"
               />
             </div>
             <Button type="submit" className="w-full" disabled={isSubmitting}>

@@ -17,8 +17,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://timetapestry.app'),
-  title: 'Time Tapestry — Tell your story. Leave it for someone you love.',
-  description: 'A guided interview that turns your memories into a keepsake for the next generation.',
+  title: 'Time Tapestry — Stories woven together',
+  description: 'A quiet, guided interview that turns your memories into a keepsake for the people you love.',
   robots: {
     index: true,
     follow: true
@@ -32,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="min-h-screen bg-paper font-sans text-ink antialiased">
+      <body className="min-h-screen bg-paper-texture font-sans text-ink antialiased">
         <DemoBanner />
         {children}
       </body>
