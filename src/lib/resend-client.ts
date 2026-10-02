@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 
 const apiKey = process.env.RESEND_API_KEY;
 export const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@timetapestry.app';
-export const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+export const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://timetapestry.app';
 
 export const resend = apiKey ? new Resend(apiKey) : null;
 

@@ -29,7 +29,7 @@ export function Postcard({
   sessionId,
   rotation = 'rotate-1'
 }: PostcardProps) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://timetapestry.app';
   const qrValue = `${appUrl}/keepsake/${sessionId}`;
 
   return (
