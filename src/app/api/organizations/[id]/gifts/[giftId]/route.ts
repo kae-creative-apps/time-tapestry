@@ -1,3 +1,4 @@
+import { guardRequest } from "@/lib/security/request";
 import { NextRequest, NextResponse } from "next/server";
 import { getGiftView, redeemGift } from "@/lib/organizations/service";
 import {
@@ -24,11 +25,17 @@ export async function POST(req: NextRequest, { params }: Context) {
   try {
     const { id, giftId } = await params;
     const key = req.nextUrl.searchParams.get("key") || "";
-    await getGiftView(id, giftId, key);
-    return NextResponse.json(
-      await redeemGift(id, giftId, key, await organizationBody(req)),
-      { headers: privateHeaders },
-    );
+    const gift = await getGiftView(id, giftId, key);
+    const body = await organizationBody(req);
+    await guardRequest(req, {
+      action: "claim_gift",
+      resourceId: `${id}:${giftId}`,
+      requireHuman: gift.status === "issued",
+      humanToken: body.humanToken,
+    });
+    return NextResponse.json(await redeemGift(id, giftId, key, body), {
+      headers: privateHeaders,
+    });
   } catch (error) {
     return organizationFailure(error);
   }

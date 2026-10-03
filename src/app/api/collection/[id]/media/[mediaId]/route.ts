@@ -4,7 +4,11 @@ import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { getCollection, getMedia } from "@/lib/collection/store";
 import { roleFor } from "@/lib/collection/access";
-import { mediaAllowed } from "@/lib/collection/media";
+import {
+  mediaAllowed,
+  assertPrivateBlobUrl,
+  assertLocalMediaPath,
+} from "@/lib/collection/media";
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; mediaId: string }> },
@@ -25,12 +29,14 @@ export async function GET(
       "Accept-Ranges": "bytes",
     };
     if (m.url) {
+      assertPrivateBlobUrl(m.url);
       const upstream = await fetch(m.url, {
         headers: {
           Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
           ...(range ? { Range: range } : {}),
         },
         cache: "no-store",
+        redirect: "error",
       });
       if (!upstream.ok)
         return new NextResponse("Recording unavailable", {
@@ -46,7 +52,8 @@ export async function GET(
       });
     }
     if (!m.localPath) throw new Error("Missing media");
-    const { size } = await stat(m.localPath);
+    const location = await assertLocalMediaPath(m.localPath);
+    const { size } = await stat(location);
     let start = 0,
       end = size - 1,
       status = 200;
@@ -65,7 +72,7 @@ export async function GET(
     }
     headers["Content-Length"] = String(end - start + 1);
     const stream = Readable.toWeb(
-      createReadStream(m.localPath, { start, end }),
+      createReadStream(location, { start, end }),
     ) as ReadableStream<Uint8Array>;
     return new NextResponse(stream, { status, headers });
   } catch {

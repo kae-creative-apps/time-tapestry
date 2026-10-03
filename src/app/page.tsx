@@ -6,30 +6,31 @@ import { AppIcon, type AppIconName } from "@/components/icons";
 import { Footer } from "@/components/Footer";
 import { SiriOrb } from "@/components/ui/siri-orb";
 import { PostcardPreview } from "@/components/marketing/PostcardPreview";
+import { InterviewPreview } from "@/components/marketing/InterviewPreview";
 import { StoryMorphVisual } from "@/components/marketing/StoryMorphHero";
 
 const storyThemes = [
   {
-    title: "The kindness I received",
+    title: "Kindness received",
     note: "The people who helped shape you.",
     color: "bg-sage-100",
     icon: "heart",
   },
   {
-    title: "My walk with Jesus",
-    note: "The faith you lived along the way.",
+    title: "A life of faith",
+    note: "The choices behind what you believe.",
     color: "bg-clay-50",
     icon: "sprout",
   },
   {
-    title: "What I sowed",
-    note: "The time and money you gave, and why.",
+    title: "What you sowed",
+    note: "The ways you gave to others.",
     color: "bg-paper-200",
     icon: "handHeart",
   },
   {
     title: "What I hope you carry",
-    note: "Your words for the life ahead of them.",
+    note: "Words for someone you love.",
     color: "bg-[#eee4dc]",
     icon: "collection",
   },
@@ -38,21 +39,27 @@ const storyThemes = [
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <header className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-5 px-5 py-6 sm:px-10 lg:px-14">
+      <header className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-4 px-5 py-5 sm:px-10 sm:py-6 lg:px-14">
         <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
         <nav
           aria-label="Main navigation"
-          className="flex items-center gap-7 text-sm font-medium"
+          className="flex items-center gap-2 text-base font-medium lg:gap-3"
         >
-          <Link href="#how-it-works" className="hidden lg:inline-flex">
+          <Link
+            href="#how-it-works"
+            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 lg:inline-flex"
+          >
             How it works
           </Link>
-          <Link href="/for-organizations" className="hidden md:inline-flex">
+          <Link
+            href="/for-organizations"
+            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 md:inline-flex"
+          >
             For churches & organizations
           </Link>
           <Link
             href="#begin"
-            className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-espresso/25 px-4 py-2 transition-colors hover:bg-sage-100 sm:px-6"
+            className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-full border border-espresso/25 px-5 py-3 transition-colors hover:bg-sage-100 sm:ml-2 sm:px-6"
           >
             Start a story{" "}
             <AppIcon
@@ -77,14 +84,14 @@ export default function Home() {
                 id="hero-heading"
                 className="max-w-xl font-display text-[40px] font-medium leading-[1.07] tracking-[-.045em] text-white sm:text-[64px] xl:text-[76px]"
               >
-                What you gave
+                A life is made
                 <br />
-                lives on.
+                of many threads.
               </h1>
               <p className="mt-6 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
-                The stories behind your faith. The ways you sowed into others.
-                Gather the life you’ve lived into a gift your family can keep
-                coming back to.
+                The kindness you received. The faith you lived. The time and
+                money you sowed into others. Gather those stories into a gift
+                for someone you love.
               </p>
               <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-3">
                 <Link
@@ -93,12 +100,7 @@ export default function Home() {
                 >
                   See how it works <AppIcon name="arrowRight" size={20} />
                 </Link>
-                <Link
-                  href="#begin"
-                  className="inline-flex min-h-12 items-center text-sm text-white underline decoration-white/45 underline-offset-8"
-                >
-                  Find your way to begin
-                </Link>
+                <InterviewPreview />
               </div>
               <p className="mt-7 text-xs leading-relaxed text-white/70">
                 A hackathon pilot. You review everything before sharing.
@@ -390,13 +392,14 @@ export default function Home() {
                 href="/for-organizations"
                 className="brand-button-secondary mt-auto justify-between gap-3"
               >
-                Start a free group gift <AppIcon name="arrowUpRight" size={18} />
+                Start a free group gift{" "}
+                <AppIcon name="arrowUpRight" size={18} />
               </Link>
             </article>
           </div>
           <p className="mt-6 text-sm leading-relaxed text-ink-500">
-            Free during the pilot. No payment details required. Physical postcard
-            delivery is still being tested.{" "}
+            Free during the pilot. No payment details required. Physical
+            postcard delivery is still being tested.{" "}
             <Link href="/pricing" className="underline underline-offset-4">
               Read the pilot details.
             </Link>

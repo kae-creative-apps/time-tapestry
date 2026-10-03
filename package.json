@@ -7,10 +7,14 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts scripts/render-chapter.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts src/components/collection/*.test.ts scripts/render-chapter.test.ts",
     "video:collection": "node --import tsx scripts/export-collection-video.ts",
     "video:render": "node --import tsx scripts/render-chapter.ts",
-    "video:audio": "node --import tsx scripts/render-chapter-audio.ts"
+    "video:audio": "node --import tsx scripts/render-chapter-audio.ts",
+    "video:films": "node --import tsx scripts/render-story-films.ts",
+    "video:worker": "node --import tsx scripts/run-story-film-worker.ts",
+    "backup:collections": "node --import tsx scripts/backup-collections.ts",
+    "preview:voice": "node --import tsx scripts/generate-interview-preview.ts"
   },
   "dependencies": {
     "@elevenlabs/client": "^1.26.0",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { HumanVerification } from "@/components/security/HumanVerification";
 import { AppIcon } from "@/components/icons";
 import { BrandPattern } from "@/components/BrandPattern";
 import {
@@ -31,6 +32,9 @@ export function GiftClaim({
   giftId: string;
   accessKey: string;
 }) {
+  const [humanToken, setHumanToken] = useState("");
+  const [humanReady, setHumanReady] = useState(false);
+  const [humanRevision, setHumanRevision] = useState(0);
   const [gift, setGift] = useState<GiftView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -86,7 +90,7 @@ export function GiftClaim({
   }
 
   async function redeem(payload: Record<string, unknown>) {
-    if (busy) return;
+    if (busy || (gift?.status === "issued" && !humanReady)) return;
     setBusy(true);
     setError("");
     try {
@@ -94,12 +98,13 @@ export function GiftClaim({
       const result = await requestJson<{ nextUrl: string }>(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, claimToken: token }),
+        body: JSON.stringify({ ...payload, claimToken: token, humanToken }),
       });
       navigateTo(result.nextUrl);
     } catch (cause) {
       setError(errorMessage(cause));
       setBusy(false);
+      setHumanRevision((value) => value + 1);
     }
   }
 
@@ -342,9 +347,15 @@ export function GiftClaim({
                       />
                     </label>
                   </fieldset>
+                  <HumanVerification
+                    action="claim_gift"
+                    onToken={setHumanToken}
+                    onReady={setHumanReady}
+                    resetKey={humanRevision}
+                  />
                   <button
                     type="submit"
-                    disabled={busy}
+                    disabled={busy || !humanReady}
                     className={`${primaryClass} w-full`}
                   >
                     {busy

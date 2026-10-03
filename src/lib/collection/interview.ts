@@ -212,9 +212,16 @@ export async function applyInterviewAction(
         409,
       );
     if (session) return c;
-    if (c.interviews.length >= 20)
+    const configuredLimit = Number(
+      process.env.COLLECTION_CONVERSATION_LIMIT || 100,
+    );
+    const conversationLimit =
+      Number.isSafeInteger(configuredLimit) && configuredLimit > 0
+        ? configuredLimit
+        : 100;
+    if (c.interviews.length >= conversationLimit)
       return fail(
-        "This gift has reached its saved conversation limit. Your existing recordings are safe.",
+        "This gift has reached its pilot conversation allowance. Your existing recordings are saved. Contact the Time Tapestry team to request more space.",
       );
     if (c.interviews.some((item) => item.status === "active"))
       return fail(

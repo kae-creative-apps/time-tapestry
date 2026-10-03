@@ -1,3 +1,4 @@
+import { createAdminSession } from "../src/lib/admin-auth";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -14,6 +15,11 @@ let store: typeof import("../src/lib/collection/store");
 let withLegacyAdmin: typeof import("../src/lib/legacy-access").withLegacyAdmin;
 
 before(async () => {
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+  });
   for (const key of [
     "GLOO_API_KEY",
     "OPENAI_API_KEY",
@@ -112,7 +118,7 @@ test("legacy guard delegates an authenticated request once and preserves its arg
   const request = new NextRequest("http://localhost/api/archived-tool", {
     method: "POST",
     headers: {
-      cookie: `admin_token=${adminSecret}`,
+      cookie: `admin_token=${createAdminSession()}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({ message: "An authenticated archived operation" }),

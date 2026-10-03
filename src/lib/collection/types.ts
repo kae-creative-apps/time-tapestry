@@ -1,3 +1,5 @@
+import type { CollectionUsage } from "./usage";
+import type { StoryFilmArtifact } from "./films/types";
 export type Contact = { name: string; email: string; phone?: string };
 export type PostalAddress = {
   name: string;
@@ -76,6 +78,8 @@ export type ChapterPackage = {
   sourceTakeIds: string[];
   videoMediaId?: string;
   videoStatus: "not_requested" | "awaiting_edit" | "ready";
+  film?: StoryFilmArtifact;
+  reviewedFilmSha256?: string;
   captions?: string;
   editorialReviewed: boolean;
   generatedWith: "source_text" | "gloo";
@@ -183,6 +187,7 @@ export type CollectionView = Omit<
   "ownerKey" | "recipientKey" | "requesterKey"
 > & {
   role: "owner" | "recipient" | "requester";
+  usage?: CollectionUsage;
   links?: {
     interview: string;
     review: string;

@@ -17,6 +17,11 @@ let store: typeof import("../src/lib/collection/store");
 let factory: typeof import("../src/lib/collection/create");
 
 before(async () => {
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+  });
   for (const name of [
     "KV_REST_API_URL",
     "KV_REST_API_TOKEN",

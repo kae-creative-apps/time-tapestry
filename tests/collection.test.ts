@@ -19,6 +19,11 @@ const request = (url: string, body?: unknown) =>
         },
   );
 before(async () => {
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+  });
   for (const key of [
     "GLOO_API_KEY",
     "OPENAI_API_KEY",
@@ -256,4 +261,83 @@ test("a dead local process lock is recovered without discarding saved data", asy
   const r = await act(c, { action: "progress", currentQuestion: 2 });
   assert.equal(r.status, 200);
   assert.equal((await store.getCollection(c.id)).currentQuestion, 2);
+});
+
+test("digital approval works without a postal address and postal scheduling is explicit", async () => {
+  const c = await make();
+  await ready(c);
+  await store.mutateCollection(c.id, (current: any) => ({
+    ...current,
+    address: undefined,
+    addressConfirmed: false,
+  }));
+  const result = await act(c, {
+    action: "approve",
+    deliveryMode: "digital",
+    allowWrittenOnly: true,
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.collection.status, "approved");
+  assert.equal(result.body.collection.deliveries.length, 0);
+  assert.equal(
+    result.body.collection.notifications.filter(
+      (n: any) => n.kind === "collection_ready",
+    ).length,
+    1,
+  );
+  const postal = await act(c, { action: "schedule_postcards" });
+  assert.equal(postal.status, 400);
+  assert.match(postal.body.error, /address/i);
+});
+
+test("AI film review binds the exact output and changed words invalidate it without deleting original files", async () => {
+  const c = await make();
+  await ready(c);
+  let current = await store.getCollection(c.id);
+  const chapter = current.chapters[0];
+  const hash = "a".repeat(64);
+  await store.mutateCollection(c.id, (value: any) => {
+    Object.assign(value.chapters[0], {
+      videoStatus: "ready",
+      videoMediaId: "test-media-original",
+      editorialReviewed: false,
+      film: {
+        jobId: "film_test",
+        chapterId: chapter.id,
+        mediaId: "test-media-original",
+        narrationKind: "ai_interviewer",
+        sourceTakeIds: chapter.sourceTakeIds,
+        sourceSha256: hash,
+        scriptSha256: hash,
+        audioSha256: hash,
+        outputSha256: hash,
+        voiceId: "test",
+        modelId: "test",
+        durationSeconds: 30,
+        createdAt: new Date().toISOString(),
+      },
+    });
+    return value;
+  });
+  const payload = {
+    action: "edit_chapter",
+    chapterId: chapter.id,
+    title: chapter.title,
+    content: chapter.content,
+    postcardNote: chapter.postcardNote,
+    editorialReviewed: true,
+  };
+  assert.equal((await act(c, payload)).status, 400);
+  const reviewed = await act(c, { ...payload, reviewedFilmSha256: hash });
+  assert.equal(reviewed.status, 200);
+  assert.equal(reviewed.body.collection.chapters[0].reviewedFilmSha256, hash);
+  const edited = await act(c, {
+    ...payload,
+    content: chapter.content + " Another detail.",
+    editorialReviewed: false,
+  });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.collection.chapters[0].videoMediaId, undefined);
+  assert.equal(edited.body.collection.chapters[0].film, undefined);
+  assert.equal(edited.body.collection.chapters[0].editorialReviewed, false);
 });

@@ -4,9 +4,9 @@ export const MAX_FOLLOW_UPS = 2;
 export const CHAPTERS = [
   {
     id: "q1",
-    title: "People who shaped me",
+    title: "Kindness received",
     question:
-      "Tell me about a time someone's kindness changed something for you.",
+      "Tell me about someone whose kindness has stayed with you.",
     followUps: [
       "What do you remember most clearly about that moment?",
       "What did their kindness help you understand?",
@@ -14,7 +14,7 @@ export const CHAPTERS = [
   },
   {
     id: "q2",
-    title: "My walk with Jesus",
+    title: "A life of faith",
     question:
       "Tell me about a time following Jesus shaped a choice you made.",
     followUps: [
@@ -24,17 +24,17 @@ export const CHAPTERS = [
   },
   {
     id: "q3",
-    title: "Learning to live generously",
+    title: "What you sowed",
     question:
-      "Tell me about how you sowed into other people's lives through your time and financial giving.",
+      "When you think about the time or money you sowed into others, is there a story you would like someone you love to know?",
     followUps: [
-      "Would you share a time you chose to give financially to a person, church or ministry?",
+      "If you would like, tell me about a time you gave money to a person, church or ministry. You do not need to share an amount.",
       "What do you hope your family learns from the ways you chose to give?",
     ],
   },
   {
     id: "q4",
-    title: "What I want you to know",
+    title: "What I hope you carry",
     question:
       "Looking back at these stories, what would you like the people you care about to carry into their own lives?",
     followUps: [

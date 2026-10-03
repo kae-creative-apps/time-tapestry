@@ -1,6 +1,8 @@
 "use client";
-import { useCallback, useState } from "react";
-import { Logo } from "@/components/Logo";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Review from "./Review";
+import { AppIcon } from "@/components/icons";
+import { PortalError, PortalShell, isNarratedFilm } from "./PortalUI";
 import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
@@ -17,20 +19,6 @@ const date = (s: string) =>
   });
 const normalizedCopy = (text: string) =>
   text.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
-const postcardStatus = {
-  scheduled: "Scheduled",
-  submitted: "Submitted for printing",
-  mailed: "Mailed",
-  failed: "Needs attention",
-  returned: "Returned by the postal service",
-} as const;
-const emailStatus = {
-  pending: "Waiting to send",
-  sent: "Sent",
-  failed: "Could not send",
-  suppressed: "Not scheduled to send",
-} as const;
-
 function ReplyForm({
   c,
   chapter,
@@ -188,340 +176,309 @@ export default function CollectionHome({
   accessKey: string;
   chapterId?: string;
 }) {
-  const { collection: c, error, act } = useCollection(id, accessKey);
-  const [all, setAll] = useState(!chapterId),
-    [seen, setSeen] = useState<string[]>([]),
-    [activeRecorderChapter, setActiveRecorderChapter] = useState<string | null>(
-      null,
-    ),
-    [recordingChapter, setRecordingChapter] = useState<string | null>(null);
+  const { collection: c, error, act, load } = useCollection(id, accessKey);
+  const [activeChapter, setActiveChapter] = useState(chapterId || "q1");
+  const [seen, setSeen] = useState<string[]>([]);
+  const [activeRecorderChapter, setActiveRecorderChapter] = useState<
+    string | null
+  >(null);
+  const [recordingChapter, setRecordingChapter] = useState<string | null>(null);
+  const chapters = useRef<HTMLDivElement>(null);
   const handleRecorderBusyChange = useCallback(
-    (chapter: string, busy: boolean) => {
+    (chapter: string, busy: boolean) =>
       setRecordingChapter((current) =>
         busy ? chapter : current === chapter ? null : current,
-      );
-    },
+      ),
     [],
   );
   const url = (mediaId: string) =>
-    `/api/collection/${id}/media/${mediaId}?key=${encodeURIComponent(accessKey)}`;
+    `/api/collection/${encodeURIComponent(id)}/media/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(accessKey)}`;
+  useEffect(() => {
+    chapters.current
+      ?.querySelectorAll("article[hidden] video,article[hidden] audio")
+      .forEach((media) => (media as HTMLMediaElement).pause());
+  }, [activeChapter]);
   if (!c)
     return (
-      <main className="brand-page-shell mx-auto max-w-4xl px-5 py-8 sm:px-8">
-        <Logo className="[&_svg]:h-11" />
-        <p className="mt-10" role="status">
-          {error || "Opening your story..."}
-        </p>
-      </main>
+      <PortalShell>
+        <h1 className="mt-10 text-3xl font-medium">Your story collection</h1>
+        <PortalError message={error} />
+        {!error ? (
+          <p role="status" className="mt-5 text-lg text-ink-500">
+            Opening your stories…
+          </p>
+        ) : (
+          <button
+            type="button"
+            className={secondary}
+            onClick={() => void load()}
+          >
+            Try again
+          </button>
+        )}
+      </PortalShell>
     );
+  if (c.role === "owner") return <Review id={id} accessKey={accessKey} />;
   if (c.role === "requester")
     return (
-      <main className="brand-page-shell mx-auto my-6 max-w-2xl rounded-2xl border border-warmgray-200 border-t-8 border-t-sage bg-white px-6 py-8 shadow-soft sm:my-10 sm:px-9">
-        <Logo className="[&_svg]:h-11" />
-        <h1 className="mt-10 font-serif text-3xl">
-          Your request for {c.storyteller.name}’s stories is saved.
-        </h1>
-        <p className="my-5 text-lg leading-relaxed">
-          {c.status === "approved"
-            ? `${c.storyteller.name} has approved their stories.`
-            : c.status === "draft"
-              ? `${c.storyteller.name}’s story drafts are ready for review.`
-              : c.status === "recording"
-                ? `${c.storyteller.name} has started answering the questions.`
-                : `Waiting for ${c.storyteller.name} to begin.`}
-        </p>
-        <p className="my-5">
-          They choose what to share and review everything first. The first
-          postcard introduces all four approved stories to {c.recipient.name}.
-        </p>
-        <p className="text-sm text-ink-500">
-          This page shows progress on your request. Their unfinished answers
-          remain private. Email delivery status is not available here.
-        </p>
-        {!c.capabilities.email && (
-          <p className="mt-5 rounded-md bg-paper-200 p-4 text-sm">
-            Email sending is currently unavailable. The team needs to finish
-            email setup before new invitations can be sent.
+      <PortalShell>
+        <section className="mx-auto max-w-2xl rounded-[28px] border border-warmgray-200 bg-white p-6 sm:p-9">
+          <p className="brand-eyebrow text-taupe-600">Your invitation</p>
+          <h1 className="mt-4 text-3xl font-medium leading-tight">
+            Your request for {c.storyteller.name}’s stories is saved.
+          </h1>
+          <p className="mt-5 text-lg leading-8">
+            {c.status === "approved"
+              ? `${c.storyteller.name} has approved their collection.`
+              : c.status === "draft"
+                ? `${c.storyteller.name}’s story drafts are ready for review.`
+                : c.status === "recording"
+                  ? `${c.storyteller.name} has started answering the questions.`
+                  : `Waiting for ${c.storyteller.name} to begin.`}
           </p>
-        )}
-      </main>
+          <p className="mt-4 text-base leading-7 text-ink-500">
+            They choose what to share and review everything first. This page
+            shows progress on your request. Their unfinished answers remain
+            private.
+          </p>
+        </section>
+      </PortalShell>
     );
   if (c.status !== "approved")
     return (
-      <main className="brand-page-shell mx-auto my-6 max-w-2xl rounded-2xl border border-warmgray-200 border-t-8 border-t-clay bg-white px-6 py-8 shadow-soft sm:my-10 sm:px-9">
-        <Logo className="[&_svg]:h-11" />
-        <h1 className="mt-10 font-serif text-3xl">
-          {c.role === "owner"
-            ? "Your stories are taking shape."
-            : `${c.storyteller.name} is preparing your gift.`}
-        </h1>
-        <p className="my-5 text-lg">
-          All four stories will appear here after {c.storyteller.name} approves
-          them.
-        </p>
-        {c.role === "owner" && (
-          <a href={c.links?.review} className={primary}>
-            Review my stories
-          </a>
-        )}
-      </main>
-    );
-  const selected = all
-    ? c.chapters
-    : c.chapters.filter((ch) => ch.id === chapterId);
-  return (
-    <main className="brand-page-shell mx-auto max-w-4xl px-5 py-6 sm:px-8 sm:py-8">
-      <Logo className="[&_svg]:h-11" />
-      <header className="brand-gradient-chocolate relative mb-9 mt-8 overflow-hidden rounded-2xl p-6 text-white sm:p-10">
-        <BrandPattern
-          variant="weave"
-          className="pointer-events-none absolute -right-40 -top-12 h-[34rem] w-[34rem] text-clay opacity-[0.12]"
-        />
-        <div className="relative">
-          <p className="brand-eyebrow text-white">
-            Stories from {c.storyteller.name}
-          </p>
-          <h1 className="mb-5 mt-4 max-w-2xl font-serif text-4xl leading-tight text-white sm:text-5xl">
-            {c.recipient.name},<br />
-            these stories are for you.
+      <PortalShell>
+        <section className="mx-auto max-w-2xl rounded-[28px] border border-warmgray-200 bg-white p-6 sm:p-9">
+          <p className="brand-eyebrow text-taupe-600">A gift is taking shape</p>
+          <h1 className="mt-4 text-3xl font-medium leading-tight">
+            {c.storyteller.name} is preparing your stories.
           </h1>
-          <p className="max-w-xl text-lg leading-relaxed text-white">
-            Four stories, the values behind them, and encouragement to carry
-            into your own life. All four stories are here for you now.
+          <p className="mt-5 text-lg leading-8 text-ink-500">
+            All four stories will appear here after they have been reviewed and
+            approved. You can return to this same private link.
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <button
-              className="brand-button-secondary min-h-12 bg-white px-5 py-3 text-espresso"
-              onClick={() => {
-                setAll(true);
-                document
-                  .getElementById("chapters")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              Explore all four stories
-            </button>
-          </div>
-          <p className="mt-4 max-w-xl text-sm text-white">
-            You do not need to wait for the next postcard. Every card returns to
-            these same stories.
-          </p>
-        </div>
-      </header>
-      {c.role === "owner" && (
-        <section className="mb-10 rounded-2xl border border-sage-200 bg-sage-50 p-6 sm:p-8">
-          <h2 className="font-serif text-2xl">Your postcards and emails</h2>
-          <p className="my-4 text-sm leading-relaxed">
-            The first postcard is scheduled after approval. Three more are
-            planned for months 3, 6 and 9. The follow-up email is planned for
-            two weeks after confirmed mailing. Scheduled or submitted for
-            printing does not mean mailed or delivered.
-          </p>
-          <ol className="space-y-3">
-            {c.deliveries.map((d, i) => (
-              <li
-                key={d.chapterId}
-                className="flex flex-wrap justify-between gap-3 border-t border-warmgray-200 pt-3"
-              >
-                <span>
-                  Card {i + 1} · {date(d.scheduledFor)}
-                </span>
-                <span className="font-medium">
-                  {postcardStatus[d.status]}
-                  {d.mailedAt ? ` ${date(d.mailedAt)}` : ""}
-                </span>
-                {d.error && (
-                  <p className="w-full text-sm text-red-800">{d.error}</p>
-                )}
-              </li>
-            ))}
-          </ol>
-          {(!c.capabilities.mail || !c.capabilities.email) && (
-            <p className="mt-5 rounded-md bg-paper-200 p-4 text-sm">
-              Delivery setup is incomplete.{" "}
-              {c.capabilities.mail
-                ? ""
-                : "The team needs to finish postcard setup. "}
-              {c.capabilities.email
-                ? ""
-                : "The team needs to finish email setup. "}
-              Check each item’s status above before expecting delivery.
-            </p>
-          )}
-          <details className="mt-5">
-            <summary>Private gift link</summary>
-            <p className="mt-3 break-all text-sm">
-              {typeof window === "undefined" ? "" : window.location.origin}
-              {c.links?.collection}
-            </p>
-            <p className="mt-2 text-sm">
-              The first postcard normally introduces this link. Anyone you share
-              it with can open these stories.
-            </p>
-          </details>
-          <details className="mt-5">
-            <summary>Email status</summary>
-            <ul className="mt-3 space-y-2 text-sm">
-              {c.notifications.map((n) => (
-                <li key={n.id}>
-                  {n.subject}: {emailStatus[n.status]}
-                  {n.error ? ` (${n.error})` : ""}
-                </li>
-              ))}
-            </ul>
-          </details>
+          <button className={`${secondary} mt-6`} onClick={() => void load()}>
+            Check for approved stories
+          </button>
         </section>
-      )}
+      </PortalShell>
+    );
+  const selectedId = c.chapters.some((chapter) => chapter.id === activeChapter)
+    ? activeChapter
+    : c.chapters[0]?.id;
+  return (
+    <PortalShell>
+      <header className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] p-6 text-white sm:p-9">
+        <BrandPattern
+          variant="ribbon"
+          className="absolute -right-36 -top-20 -z-10 w-[600px] max-w-none text-white opacity-[0.06]"
+        />
+        <p className="brand-eyebrow text-white/75">
+          Stories from {c.storyteller.name}
+        </p>
+        <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight text-white sm:text-5xl">
+          {c.recipient.name}, these stories are for you.
+        </h1>
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-white/85">
+          A life is made of many threads. Here are four from{" "}
+          {c.storyteller.name}, saved for you to return to in your own time.
+        </p>
+      </header>
       <nav
-        aria-label="Your four stories"
-        className="mb-10 grid gap-3 sm:grid-cols-2"
+        aria-label="Choose a story"
+        className="my-7 grid grid-cols-2 gap-3 lg:grid-cols-4"
       >
-        {c.chapters.map((ch, i) => (
-          <a
-            key={ch.id}
-            href={`/collection/${id}/chapter/${ch.id}?key=${encodeURIComponent(accessKey)}`}
-            className="rounded-xl border border-sage-200 bg-sage-100 px-5 py-5 transition-colors hover:border-sage hover:bg-sage-200"
+        {c.chapters.map((chapter, index) => (
+          <button
+            type="button"
+            key={chapter.id}
+            disabled={Boolean(recordingChapter)}
+            aria-current={selectedId === chapter.id ? "page" : undefined}
+            onClick={() => {
+              setActiveChapter(chapter.id);
+            }}
+            className={`min-h-28 rounded-2xl border p-4 text-left transition-colors disabled:opacity-60 ${selectedId === chapter.id ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white hover:border-taupe"}`}
           >
-            <span className="text-sm text-oxblood">Story {i + 1}</span>
-            <span className="mt-1 block font-serif text-xl">{ch.title}</span>
-          </a>
+            <span
+              className={`text-xs font-medium uppercase tracking-[.12em] ${selectedId === chapter.id ? "text-white/70" : "text-taupe-600"}`}
+            >
+              Story {index + 1}
+            </span>
+            <span className="mt-2 block font-display text-lg font-semibold leading-7">
+              {chapter.title}
+            </span>
+          </button>
         ))}
       </nav>
-      <div id="chapters" className="space-y-12">
-        {selected.length === 0 && (
-          <p>
-            This story could not be found. Choose one of the four stories above.
-          </p>
-        )}
-        {selected.map((ch) => {
-          const b = c.chapterBlessings[ch.id];
+      {recordingChapter && (
+        <p role="status" className="mb-5 text-sm leading-7 text-ink-500">
+          Finish saving your reply recording before moving to another story.
+        </p>
+      )}
+      <div ref={chapters}>
+        {c.chapters.map((chapter) => {
+          const blessing = c.chapterBlessings[chapter.id];
           return (
             <article
-              id={ch.id}
-              key={ch.id}
-              className="scroll-mt-8 rounded-2xl border border-warmgray-200 border-t-4 border-t-clay bg-white p-5 shadow-soft sm:p-9"
+              key={chapter.id}
+              hidden={selectedId !== chapter.id}
+              aria-label={chapter.title}
             >
-              <p className="brand-eyebrow text-oxblood">
-                Story {ch.id.slice(1)} of 4
-              </p>
-              <h2 className="mb-5 mt-3 font-serif text-3xl">{ch.title}</h2>
-              {ch.videoMediaId ? (
-                <video
-                  className="mb-6 w-full rounded-md bg-black"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  src={url(ch.videoMediaId)}
-                  onPlay={() => {
-                    if (!seen.includes(ch.id)) {
-                      setSeen([...seen, ch.id]);
-                      void act({ action: "view_chapter", chapterId: ch.id });
-                    }
-                  }}
-                />
-              ) : (
-                <p className="mb-6 rounded-md bg-sage-50 p-4 text-sm">
-                  A written story from {c.storyteller.name}.
-                </p>
-              )}
-              {normalizedCopy(ch.postcardNote) &&
-                normalizedCopy(ch.postcardNote) !==
-                  normalizedCopy(ch.content) && (
-                  <p className="mb-6 text-lg leading-relaxed text-ink-500">
-                    {ch.postcardNote}
+              <div className="grid items-start gap-7 lg:grid-cols-[1fr_.9fr]">
+                <div className="min-w-0 lg:sticky lg:top-6">
+                  <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
+                    {chapter.videoMediaId ? (
+                      <>
+                        <video
+                          className="aspect-video w-full bg-espresso"
+                          controls
+                          playsInline
+                          preload={
+                            selectedId === chapter.id ? "metadata" : "none"
+                          }
+                          aria-label={`Film: ${chapter.title}`}
+                          src={url(chapter.videoMediaId)}
+                          onPlay={() => {
+                            if (!seen.includes(chapter.id)) {
+                              setSeen((old) => [...old, chapter.id]);
+                              void act({
+                                action: "view_chapter",
+                                chapterId: chapter.id,
+                              });
+                            }
+                          }}
+                        />
+                        <p className="p-5 text-sm leading-7 text-ink-500">
+                          {isNarratedFilm(chapter)
+                            ? `An AI voice reads ${c.storyteller.name}’s approved story. This is a narrated film, not their original recording.`
+                            : `A video shared by ${c.storyteller.name}.`}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="bg-sage-100 p-8">
+                        <AppIcon
+                          name="collection"
+                          size={32}
+                          className="text-sage-700"
+                        />
+                        <p className="mt-5 font-display text-2xl font-medium">
+                          A written story from {c.storyteller.name}.
+                        </p>
+                        <p className="mt-3 text-base leading-7 text-ink-500">
+                          Take your time with the words below.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <ReplyForm
+                    c={c}
+                    chapter={chapter}
+                    accessKey={accessKey}
+                    act={act}
+                    activeRecorderChapter={activeRecorderChapter}
+                    recordingChapter={recordingChapter}
+                    onOpenRecorder={setActiveRecorderChapter}
+                    onRecorderBusyChange={handleRecorderBusyChange}
+                  />
+                </div>
+                <div className="min-w-0 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8">
+                  <p className="brand-eyebrow text-taupe-600">
+                    Story {chapter.id.slice(1)} of 4
                   </p>
-                )}
-              <div className="whitespace-pre-wrap font-serif text-xl leading-relaxed">
-                {ch.content}
-              </div>
-              {b &&
-                (b.encouragement ||
-                  b.scriptureText ||
-                  b.scriptureReference) && (
-                  <aside className="mt-8 rounded-xl border border-clay-100 bg-clay-50 p-5 sm:p-6">
-                    <p className="mb-3 text-sm uppercase tracking-widest text-oxblood">
-                      A word for {c.recipient.name}
-                    </p>
-                    {b.encouragement && (
-                      <p className="mb-4 text-lg leading-relaxed">
-                        {b.encouragement}
+                  <h2 className="mt-4 text-3xl font-medium leading-tight">
+                    {chapter.title}
+                  </h2>
+                  {normalizedCopy(chapter.postcardNote) &&
+                    normalizedCopy(chapter.postcardNote) !==
+                      normalizedCopy(chapter.content) && (
+                      <p className="mt-5 text-lg leading-8 text-ink-500">
+                        {chapter.postcardNote}
                       </p>
                     )}
-                    {b.scriptureText && (
-                      <blockquote className="font-serif text-xl leading-relaxed">
-                        {b.scriptureText}
-                      </blockquote>
+                  <div className="mt-6 whitespace-pre-wrap text-[18px] leading-9 text-ink-600">
+                    {chapter.content}
+                  </div>
+                  {blessing &&
+                    (blessing.encouragement ||
+                      blessing.scriptureText ||
+                      blessing.scriptureReference) && (
+                      <aside className="mt-7 rounded-2xl bg-clay-50 p-5">
+                        <p className="brand-eyebrow text-taupe-600">
+                          A word for you
+                        </p>
+                        {blessing.encouragement && (
+                          <p className="mt-4 text-lg leading-8">
+                            {blessing.encouragement}
+                          </p>
+                        )}
+                        {blessing.scriptureText && (
+                          <blockquote className="mt-4 text-lg leading-8">
+                            {blessing.scriptureText}
+                          </blockquote>
+                        )}
+                        <p className="mt-3 text-sm text-ink-500">
+                          {blessing.scriptureReference}{" "}
+                          {blessing.scriptureTranslation}
+                        </p>
+                      </aside>
                     )}
-                    <p className="mt-3 text-sm text-ink-500">
-                      {b.scriptureReference} {b.scriptureTranslation}
-                    </p>
-                  </aside>
-                )}
-              {c.role === "recipient" && (
-                <ReplyForm
-                  c={c}
-                  chapter={ch}
-                  accessKey={accessKey}
-                  act={act}
-                  activeRecorderChapter={activeRecorderChapter}
-                  recordingChapter={recordingChapter}
-                  onOpenRecorder={setActiveRecorderChapter}
-                  onRecorderBusyChange={handleRecorderBusyChange}
-                />
-              )}{" "}
-              {c.replies
-                .filter((r) => r.chapterId === ch.id)
-                .map((r) => (
-                  <section
-                    key={r.id}
-                    className="mt-8 border-t border-warmgray-300 pt-6"
-                  >
-                    <h3 className="font-serif text-xl">
-                      A reply from {c.recipient.name}
-                    </h3>
-                    <p className="mb-3 mt-2 text-sm text-ink-500">
-                      {date(r.createdAt)}
-                    </p>
-                    {r.mediaId && (
-                      <video
-                        controls
-                        playsInline
-                        className="w-full rounded-md bg-black"
-                        src={url(r.mediaId)}
-                      />
-                    )}
-                    <p className="mt-4 whitespace-pre-wrap leading-relaxed">
-                      {r.text}
-                    </p>
-                  </section>
-                ))}
+                  {c.replies
+                    .filter((reply) => reply.chapterId === chapter.id)
+                    .map((reply) => (
+                      <section
+                        key={reply.id}
+                        className="mt-7 border-t border-warmgray-200 pt-6"
+                      >
+                        <h3 className="text-xl font-semibold">Your reply</h3>
+                        <p className="mt-2 text-sm text-ink-500">
+                          {date(reply.createdAt)}
+                        </p>
+                        {reply.mediaId && (
+                          <video
+                            controls
+                            playsInline
+                            preload="none"
+                            className="mt-4 aspect-video w-full rounded-xl bg-espresso"
+                            src={url(reply.mediaId)}
+                          />
+                        )}
+                        <p className="mt-4 whitespace-pre-wrap text-base leading-8">
+                          {reply.text}
+                        </p>
+                      </section>
+                    ))}
+                </div>
+              </div>
             </article>
           );
         })}
       </div>
-      {error && (
-        <p className="my-6 text-red-800" role="alert">
-          {error}
-        </p>
-      )}
-      {c.role === "recipient" && (
-        <label className="my-10 flex items-start gap-3 text-sm">
+      <PortalError message={error} />
+      <details className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-5">
+        <summary className="min-h-11 cursor-pointer text-base font-medium">
+          Reply reminders
+        </summary>
+        <label className="mt-3 flex items-start gap-3 text-base leading-7">
           <input
-            className="mt-1"
+            className="mt-1 h-5 w-5"
             type="checkbox"
             checked={c.replyRemindersEnabled}
-            onChange={(e) =>
-              act({ action: "reply_preferences", enabled: e.target.checked })
+            onChange={(event) =>
+              void act({
+                action: "reply_preferences",
+                enabled: event.target.checked,
+              })
             }
           />
-          Send me a follow-up link after each postcard, with an invitation to
-          reply.
+          <span>
+            If postcards are mailed, send me a follow-up link with an invitation
+            to reply.
+          </span>
         </label>
-      )}
-      <footer className="mt-12 border-t border-warmgray-300 py-8 text-sm text-ink-500">
-        Anyone with this private link can open these stories. Share it only with
-        people you trust.
+      </details>
+      <footer className="mt-10 border-t border-warmgray-200 py-6 text-sm leading-7 text-ink-500">
+        Anyone with this private link can open these approved stories. Share it
+        only with people you trust.
       </footer>
-    </main>
+    </PortalShell>
   );
 }

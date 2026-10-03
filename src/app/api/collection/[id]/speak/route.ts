@@ -1,3 +1,5 @@
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/collection/store";
 import { roleFor } from "@/lib/collection/access";
@@ -14,7 +16,8 @@ export async function POST(
         { error: "Storyteller access required" },
         { status: 403 },
       );
-    const b = await req.json();
+    await guardRequest(req, { action: "speak", resourceId: id });
+    const b = await readJsonBody(req);
     if (typeof b.text !== "string" || b.text.length > 1200)
       throw new Error("Question is too long");
     const stream = await streamTextToSpeech(b.text);
@@ -32,7 +35,9 @@ export async function POST(
         "Cache-Control": "private, no-store",
       },
     });
-  } catch {
+  } catch (error) {
+    const protection = securityErrorResponse(error);
+    if (protection) return protection;
     return NextResponse.json(
       {
         error:

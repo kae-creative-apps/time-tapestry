@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { putCollection } from "@/lib/collection/store";
 import {
   prepareCollection,
@@ -8,7 +10,13 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const collection = prepareCollection(await req.json());
+    const body = await readJsonBody(req);
+    await guardRequest(req, {
+      action: "create_collection",
+      requireHuman: true,
+      humanToken: body.humanToken,
+    });
+    const collection = prepareCollection(body);
     await putCollection(collection);
     // Sending is performed by the authenticated delivery worker, never represented as sent here.
     return NextResponse.json(collectionCreationResult(collection), {
@@ -19,6 +27,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
+    const protection = securityErrorResponse(e);
+    if (protection) return protection;
     const invalid =
       e instanceof CollectionInputError || e instanceof SyntaxError;
     return NextResponse.json(

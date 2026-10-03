@@ -1,3 +1,7 @@
+import { SecurityError } from "@/lib/security/policy";
+import { roleFor } from "@/lib/collection/access";
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/collection/store";
 import {
@@ -40,32 +44,34 @@ export async function POST(
         404,
         false,
       );
-    const text = await req.text();
-    if (text.length > 1024)
+    const role = roleFor(c, req.nextUrl.searchParams.get("key") || "");
+    if (!role)
       throw new ConversationSessionError(
-        "Please reopen your interview page.",
-        400,
+        "This private link is not valid.",
+        404,
         false,
       );
+    if (role !== "owner")
+      return NextResponse.json(
+        { error: "Open your interview link to continue." },
+        { status: 403, headers },
+      );
+    await guardRequest(req, { action: "ai_session", resourceId: id });
     let sessionId: string | undefined;
     let connectionType: "webrtc" | "websocket" = "webrtc";
-    if (text) {
-      let body: unknown;
+    if (req.body) {
+      let body: Record<string, unknown>;
       try {
-        body = JSON.parse(text);
-      } catch {
-        throw new ConversationSessionError(
-          "Please reopen your interview page.",
-          400,
-          false,
-        );
+        body = await readJsonBody(req, 1024);
+      } catch (error) {
+        if (error instanceof SecurityError && [400, 413].includes(error.status))
+          throw new ConversationSessionError(
+            "Please reopen your interview page.",
+            400,
+            false,
+          );
+        throw error;
       }
-      if (!body || typeof body !== "object" || Array.isArray(body))
-        throw new ConversationSessionError(
-          "Please reopen your interview page.",
-          400,
-          false,
-        );
       const value = (body as { sessionId?: unknown }).sessionId;
       const transport = (body as { connectionType?: unknown }).connectionType;
       if (transport !== undefined) {
@@ -96,6 +102,8 @@ export async function POST(
     );
     return NextResponse.json(session, { headers });
   } catch (error) {
+    const protection = securityErrorResponse(error);
+    if (protection) return protection;
     const known = error instanceof ConversationSessionError;
     return NextResponse.json(
       {

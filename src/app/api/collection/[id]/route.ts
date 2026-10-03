@@ -14,12 +14,17 @@ import {
 } from "@/lib/collection/access";
 import {
   approveCollection,
+  schedulePostcards,
   draftChapters,
   selectedAnswers,
 } from "@/lib/collection/content";
 import { CHAPTERS, MAX_FOLLOW_UPS } from "@/lib/interview-state";
 import { chat } from "@/lib/gloo-client";
 import type { AnswerTake, Collection, Reply } from "@/lib/collection/types";
+import { getCollectionUsage } from "@/lib/collection/usage";
+import { guardRequest } from "@/lib/security/request";
+import { assertOrigin } from "@/lib/security/policy";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -41,7 +46,14 @@ export async function GET(
         { status: 404 },
       );
     return NextResponse.json(
-      { collection: publicView(c, role) },
+      {
+        collection: {
+          ...publicView(c, role),
+          ...(role === "owner"
+            ? { usage: await getCollectionUsage(c.id) }
+            : {}),
+        },
+      },
       { headers: noStore },
     );
   } catch {
@@ -65,7 +77,9 @@ export async function POST(
         { error: "This private link is not valid." },
         { status: 404 },
       );
-    const b = await req.json();
+    assertOrigin(req);
+    await guardRequest(req, { action: "collection_write", resourceId: id });
+    const b = (await readJsonBody(req, 512 * 1024)) as any;
     let next: Collection;
     let question: string | null = null;
     if (b.action === "generate") {
@@ -75,6 +89,7 @@ export async function POST(
           { collection: publicView(initial, role) },
           { headers: noStore },
         );
+      await guardRequest(req, { action: "generate", resourceId: id });
       const chapters = await draftChapters(initial);
       next = await mutateCollection(id, (c) => {
         requireOwner(c, role);
@@ -114,6 +129,7 @@ export async function POST(
       });
     } else if (b.action === "followup") {
       requireOwner(initial, role);
+      await guardRequest(req, { action: "followup", resourceId: id });
       const chapter = CHAPTERS.find((ch) => ch.id === b.questionId);
       if (!chapter) throw new Error("This story could not be found.");
       const count = initial.followUps[chapter.id]?.length || 0;
@@ -248,6 +264,13 @@ export async function POST(
             chapterId: chapter.id,
           });
           return c;
+        }
+        if (b.action === "schedule_postcards") {
+          if (role !== "owner")
+            throw new Error(
+              "Open your private storyteller link to schedule postcards.",
+            );
+          return schedulePostcards(c);
         }
         requireOwner(c, role);
         if (b.action === "save_take") {
@@ -384,13 +407,35 @@ export async function POST(
               scriptureTranslation: clean(v.scriptureTranslation, 60),
             };
           }
+          const changed =
+            (clean(b.title, 120) || ch.title) !== ch.title ||
+            clean(b.content, 100000) !== ch.content;
+          if (changed && ch.film) {
+            ch.film = undefined;
+            ch.videoMediaId = undefined;
+            ch.videoStatus = "not_requested";
+            ch.reviewedFilmSha256 = undefined;
+          }
           ch.title = clean(b.title, 120) || ch.title;
           ch.content = clean(b.content, 100000);
           ch.postcardNote = clean(b.postcardNote, 400);
-          ch.editorialReviewed = Boolean(b.editorialReviewed);
+          if (
+            b.editorialReviewed &&
+            ch.film &&
+            b.reviewedFilmSha256 !== ch.film.outputSha256
+          )
+            throw new Error(
+              "Watch and approve the latest version of this film before sharing.",
+            );
+          ch.editorialReviewed = !changed && Boolean(b.editorialReviewed);
+          ch.reviewedFilmSha256 = ch.editorialReviewed
+            ? ch.film?.outputSha256
+            : undefined;
           if (b.videoStatus === "not_requested") {
             ch.videoStatus = "not_requested";
             ch.videoMediaId = undefined;
+            ch.film = undefined;
+            ch.reviewedFilmSha256 = undefined;
           }
           return c;
         }
@@ -410,15 +455,35 @@ export async function POST(
             b.durationSeconds <= 0 ||
             b.durationSeconds > 3600
           )
-            throw new Error(
-              "Finished videos must be one hour or shorter.",
-            );
+            throw new Error("Finished videos must be one hour or shorter.");
+          ch.film = undefined;
+          ch.reviewedFilmSha256 = undefined;
           ch.videoMediaId = m.id;
           ch.videoStatus = "ready";
           ch.editorialReviewed = false;
           return c;
         }
-        if (b.action === "approve") return approveCollection(c);
+        if (b.action === "approve") {
+          const approved = approveCollection(c, new Date().toISOString(), {
+            deliveryMode: b.deliveryMode === "digital" ? "digital" : "postal",
+            allowWrittenOnly: b.allowWrittenOnly === true,
+          });
+          if (
+            b.deliveryMode === "digital" &&
+            !approved.notifications.some((n) => n.id === `${id}:digital-ready`)
+          )
+            approved.notifications.push({
+              id: `${id}:digital-ready`,
+              kind: "collection_ready",
+              to: c.recipient.email,
+              subject: `A story for you from ${c.storyteller.name}`,
+              text: `${c.storyteller.name} has shared four stories with you. Open your private collection to read, watch and send a reply.`,
+              url: appOrigin() + linksFor(c).collection,
+              dueAt: new Date().toISOString(),
+              status: "pending",
+            });
+          return approved;
+        }
         if (b.action === "request_address") {
           c.notifications.push({
             id: `${id}:address`,
@@ -436,10 +501,20 @@ export async function POST(
       });
     }
     return NextResponse.json(
-      { collection: publicView(next, role), question },
+      {
+        collection: {
+          ...publicView(next, role),
+          ...(role === "owner"
+            ? { usage: await getCollectionUsage(next.id) }
+            : {}),
+        },
+        question,
+      },
       { headers: noStore },
     );
   } catch (e) {
+    const securityResponse = securityErrorResponse(e);
+    if (securityResponse) return securityResponse;
     return NextResponse.json(
       {
         error:

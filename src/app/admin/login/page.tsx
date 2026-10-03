@@ -24,22 +24,35 @@ function LoginForm() {
     setSubmitting(true);
     setError("");
 
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret }),
-    });
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret }),
+      });
 
-    if (res.ok) {
-      const redirect = searchParams.get("redirect") ?? "/admin";
-      router.push(
-        /^\/admin(?:\/[a-zA-Z0-9_/-]*)?$/.test(redirect) ? redirect : "/admin",
+      if (res.ok) {
+        const redirect = searchParams.get("redirect") ?? "/admin/collections";
+        router.push(
+          /^\/admin(?:\/[a-zA-Z0-9_/-]*)?$/.test(redirect)
+            ? redirect
+            : "/admin/collections",
+        );
+        return;
+      }
+
+      setError(
+        res.status === 429
+          ? "Too many attempts. Please wait a few minutes and try again."
+          : res.status >= 500
+            ? "Admin access is unavailable right now. Please try again shortly."
+            : "That admin secret was not recognized. Please try again.",
       );
-      return;
+    } catch {
+      setError("We could not connect. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
-
-    setError("Invalid admin secret.");
-    setSubmitting(false);
   }
 
   return (

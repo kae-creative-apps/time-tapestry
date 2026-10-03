@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { securityErrorResponse, readJsonBody } from "../security/http";
 import { OrganizationError } from "./service";
 
 export const privateHeaders = {
@@ -7,6 +8,8 @@ export const privateHeaders = {
 };
 
 export function organizationFailure(error: unknown) {
+  const protection = securityErrorResponse(error);
+  if (protection) return protection;
   return NextResponse.json(
     {
       error:
@@ -31,20 +34,5 @@ export function organizationFailure(error: unknown) {
 export async function organizationBody(
   req: NextRequest,
 ): Promise<Record<string, unknown>> {
-  const max = 64 * 1024;
-  if (Number(req.headers.get("content-length") || 0) > max)
-    throw new OrganizationError(
-      "These details are too long. Please shorten them and try again.",
-      413,
-    );
-  const text = await req.text();
-  if (Buffer.byteLength(text) > max)
-    throw new OrganizationError(
-      "These details are too long. Please shorten them and try again.",
-      413,
-    );
-  const value: unknown = JSON.parse(text);
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new OrganizationError("Please provide valid gift details.", 400);
-  return value as Record<string, unknown>;
+  return readJsonBody(req);
 }

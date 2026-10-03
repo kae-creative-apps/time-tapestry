@@ -1,3 +1,4 @@
+import { guardRequest } from "@/lib/security/request";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getOrganizationForManager,
@@ -21,6 +22,7 @@ export async function POST(
     const key = req.nextUrl.searchParams.get("key") || "";
     // Authorize before parsing contacts. Mutations repeat this check under the lock.
     await getOrganizationForManager(id, key);
+    await guardRequest(req, { action: "issue_gift", resourceId: id });
     const body = await organizationBody(req);
     if (body.action !== undefined && body.action !== "revoke")
       throw new OrganizationError("This gift action is not available.", 400);

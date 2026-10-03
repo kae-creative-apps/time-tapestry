@@ -1,3 +1,11 @@
+import { guardRequest } from "@/lib/security/request";
+import {
+  readFormBody,
+  readJsonBody,
+  securityErrorResponse,
+} from "@/lib/security/http";
+import { MAX_MEDIA_BYTES } from "@/lib/collection/usage";
+import { SecurityError } from "@/lib/security/policy";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, getMedia } from "@/lib/collection/store";
 import { roleFor } from "@/lib/collection/access";
@@ -19,20 +27,33 @@ export async function POST(
       throw new Error("The gift is not ready for replies yet.");
     if (role === "owner" && c.status === "approved")
       throw new Error("Approved recordings cannot be changed.");
+    await guardRequest(req, { action: "upload", resourceId: id });
+    if (
+      Number(req.headers.get("content-length") || 0) >
+      MAX_MEDIA_BYTES + 1024 * 1024
+    )
+      throw new SecurityError(
+        "This recording exceeds the 512 MiB upload limit.",
+        413,
+      );
     if (req.headers.get("content-type")?.includes("application/json")) {
-      const b = await req.json();
-      const m = await getMedia(b.mediaId);
+      const b = await readJsonBody(req);
+      const m = await getMedia(
+        typeof b.mediaId === "string" ? b.mediaId : "invalid-id",
+      );
       if (!m || m.collectionId !== id || m.role !== role)
         throw new Error("Recording not found");
       const saved = await finalizeCloudMedia(m.id);
       return NextResponse.json({ mediaId: saved.id });
     }
-    const form = await req.formData();
+    const form = await readFormBody(req, MAX_MEDIA_BYTES + 1024 * 1024);
     const file = form.get("file");
     if (!(file instanceof File)) throw new Error("Choose a recording");
     const media = await saveLocalMedia(id, role, file);
     return NextResponse.json({ mediaId: media.id });
   } catch (e) {
+    const protection = securityErrorResponse(e);
+    if (protection) return protection;
     return NextResponse.json(
       {
         error:

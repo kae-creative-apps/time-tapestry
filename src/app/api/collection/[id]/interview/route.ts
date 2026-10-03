@@ -1,3 +1,5 @@
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getCollection,
@@ -35,24 +37,8 @@ export async function POST(
         { error: "Open your interview link to save a conversation." },
         { status: 403, headers },
       );
-    const raw = await req.text();
-    if (raw.length > 1_000_000)
-      return NextResponse.json(
-        {
-          error:
-            "Save this conversation in smaller updates. Your local words are unchanged.",
-        },
-        { status: 413, headers },
-      );
-    let input: unknown;
-    try {
-      input = JSON.parse(raw);
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid interview update." },
-        { status: 400, headers },
-      );
-    }
+    await guardRequest(req, { action: "interview_write", resourceId: id });
+    const input = await readJsonBody(req, 1024 * 1024);
     const next = await mutateCollection(id, async (c) => {
       requireOwner(c, roleFor(c, key));
       return applyInterviewAction(c, input, getMedia);
@@ -62,6 +48,8 @@ export async function POST(
       { headers },
     );
   } catch (error) {
+    const protection = securityErrorResponse(error);
+    if (protection) return protection;
     return NextResponse.json(
       {
         error:

@@ -28,6 +28,7 @@ export type MigrationOptions = {
   destination: string;
   sourceQuiescent: boolean;
   repository?: string;
+  allowExternalDestination?: boolean;
 };
 
 function isWithin(parent: string, child: string) {
@@ -58,7 +59,17 @@ async function inventory(root: string): Promise<Entry[]> {
   const entries: Entry[] = [];
   async function visit(directory: string) {
     for (const name of (await readdir(directory)).sort()) {
-      if (name === ".storage-migration.json") continue;
+      if (
+        name === ".storage-migration.json" ||
+        name === ".backup-complete.json"
+      )
+        continue;
+      if (name === ".git" || name.startsWith(".env") || name.endsWith(".pem"))
+        throw new Error(
+          "The source contains repository or environment-secret files. Select only the private collection data directory.",
+        );
+      if (name === ".backup-incomplete")
+        throw new Error("The source is an incomplete backup.");
       if (name === ".migration-incomplete")
         throw new Error(
           "The source is an incomplete migration and cannot be used.",
@@ -102,7 +113,8 @@ export async function migrateLocalData(options: MigrationOptions) {
   const source = await realpath(path.resolve(options.source));
   const destination = await futureRealPath(path.resolve(options.destination));
   const privateRoot = path.join(repository, ".data");
-  if (!isWithin(privateRoot, destination))
+  const externalDestination = !isWithin(privateRoot, destination);
+  if (externalDestination && !options.allowExternalDestination)
     throw new Error(
       "Choose a new destination inside this repository's gitignored .data directory.",
     );
@@ -112,32 +124,64 @@ export async function migrateLocalData(options: MigrationOptions) {
     isWithin(destination, source)
   )
     throw new Error("Source and destination must be separate directories.");
-  try {
-    await exec(
-      "git",
-      [
-        "check-ignore",
-        "--quiet",
-        "--",
-        path.join(destination, "private-data-probe"),
-      ],
-      { cwd: repository },
-    );
-  } catch {
-    throw new Error(
-      "The destination is not ignored by Git. Refusing to copy private data.",
-    );
-  }
   await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
   const actualParent = await realpath(path.dirname(destination));
-  const actualPrivateRoot = await realpath(privateRoot);
-  if (
-    actualPrivateRoot !== privateRoot ||
-    (actualParent !== privateRoot && !isWithin(privateRoot, actualParent))
-  )
-    throw new Error(
-      "The destination's parent must not redirect outside the private data directory.",
-    );
+  if (externalDestination) {
+    // An external backup must not silently land in another repository's tracked tree.
+    let externalRepository: string | undefined;
+    try {
+      externalRepository = (
+        await exec("git", ["rev-parse", "--show-toplevel"], {
+          cwd: actualParent,
+        })
+      ).stdout.trim();
+    } catch {
+      /* No enclosing repository is allowed. */
+    }
+    if (externalRepository) {
+      try {
+        await exec(
+          "git",
+          [
+            "check-ignore",
+            "--quiet",
+            "--",
+            path.join(destination, "private-data-probe"),
+          ],
+          { cwd: externalRepository },
+        );
+      } catch {
+        throw new Error(
+          "The external destination is inside a repository and is not ignored by Git.",
+        );
+      }
+    }
+  } else {
+    try {
+      await exec(
+        "git",
+        [
+          "check-ignore",
+          "--quiet",
+          "--",
+          path.join(destination, "private-data-probe"),
+        ],
+        { cwd: repository },
+      );
+    } catch {
+      throw new Error(
+        "The destination is not ignored by Git. Refusing to copy private data.",
+      );
+    }
+    const actualPrivateRoot = await realpath(privateRoot);
+    if (
+      actualPrivateRoot !== privateRoot ||
+      (actualParent !== privateRoot && !isWithin(privateRoot, actualParent))
+    )
+      throw new Error(
+        "The destination's parent must not redirect outside the private data directory.",
+      );
+  }
   const before = await inventory(source);
   if (!before.length)
     throw new Error("The source has no saved data to migrate.");

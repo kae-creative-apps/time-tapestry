@@ -1,3 +1,5 @@
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI, { toFile } from "openai";
 import { getCollection, getMedia } from "@/lib/collection/store";
@@ -23,11 +25,14 @@ export async function POST(
         },
         { status: 503 },
       );
-    const b = await req.json();
-    const m = await getMedia(b.mediaId);
+    await guardRequest(req, { action: "transcribe", resourceId: id });
+    const b = await readJsonBody(req);
+    const m = await getMedia(
+      typeof b.mediaId === "string" ? b.mediaId : "invalid-id",
+    );
     if (!m || m.collectionId !== id || m.role !== "owner")
       throw new Error("Your recording could not be found. Please try again.");
-    const bytes = await mediaBytes(m);
+    const bytes = await mediaBytes(m, 25 * 1024 * 1024);
     if (bytes.byteLength > 25 * 1024 * 1024)
       throw new Error(
         "This recording is too large to turn into text here. Your original is saved. Type or paste its words below to continue.",
@@ -51,6 +56,8 @@ export async function POST(
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
+    const protection = securityErrorResponse(e);
+    if (protection) return protection;
     return NextResponse.json(
       {
         error:

@@ -1,3 +1,7 @@
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
+import { reserveMediaUpload } from "@/lib/collection/usage";
+import { finalizeCloudMedia } from "@/lib/collection/media";
 import { NextRequest, NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getCollection, getMedia, putMedia } from "@/lib/collection/store";
@@ -9,7 +13,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const body = (await req.json()) as HandleUploadBody;
+    const body = (await readJsonBody(req)) as unknown as HandleUploadBody;
     const result = await handleUpload({
       body,
       request: req,
@@ -24,6 +28,7 @@ export async function POST(
           (role === "recipient" && c.status !== "approved")
         )
           throw new Error("Upload access denied");
+        await guardRequest(req, { action: "upload", resourceId: id });
         const p = JSON.parse(payload || "{}");
         if (
           !/^[a-zA-Z0-9_-]{8,80}$/.test(p.mediaId) ||
@@ -37,6 +42,11 @@ export async function POST(
           (existing.collectionId !== id || existing.role !== role)
         )
           throw new Error("Invalid recording");
+        await reserveMediaUpload({
+          collectionId: id,
+          mediaId: p.mediaId,
+          bytes: p.bytes,
+        });
         if (!existing)
           await putMedia({
             id: p.mediaId,
@@ -49,7 +59,8 @@ export async function POST(
           });
         return {
           allowedContentTypes: mediaTypes,
-          maximumSizeInBytes: 512 * 1024 * 1024,
+          maximumSizeInBytes: p.bytes,
+          validUntil: Date.now() + 15 * 60 * 1000,
           addRandomSuffix: false,
           allowOverwrite: false,
           tokenPayload: JSON.stringify({ id: p.mediaId, collectionId: id }),
@@ -64,11 +75,14 @@ export async function POST(
           !blob.url.includes(".private.blob.vercel-storage.com/")
         )
           throw new Error("Invalid upload completion");
-        await putMedia({ ...m, url: blob.url, mimeType: blob.contentType });
+        // handleUpload validates the provider callback. Do not require browser Origin here.
+        await finalizeCloudMedia(m.id);
       },
     });
     return NextResponse.json(result);
   } catch (e) {
+    const protection = securityErrorResponse(e);
+    if (protection) return protection;
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Upload failed" },
       { status: 400 },

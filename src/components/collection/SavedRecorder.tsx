@@ -296,6 +296,7 @@ export default function SavedRecorder({
         contentType: blob.type.split(";")[0],
         handleUploadUrl: `${endpoint}/media/upload${query}`,
         clientPayload: JSON.stringify({
+                  bytes: blob.size,
           mediaId,
           mimeType: blob.type.split(";")[0],
           name,

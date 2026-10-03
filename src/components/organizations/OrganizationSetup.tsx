@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { HumanVerification } from "@/components/security/HumanVerification";
 import { AppIcon } from "@/components/icons";
 import {
   FormError,
@@ -12,11 +13,14 @@ import {
 } from "./shared";
 
 export function OrganizationSetup() {
+  const [humanToken, setHumanToken] = useState("");
+  const [humanReady, setHumanReady] = useState(false);
+  const [humanRevision, setHumanRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !humanReady) return;
     const form = new FormData(event.currentTarget);
     setError("");
     setBusy(true);
@@ -27,6 +31,7 @@ export function OrganizationSetup() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            humanToken,
             organizationName: String(form.get("organizationName") || "").trim(),
             organizationType: form.get("organizationType"),
             contactName: String(form.get("contactName") || "").trim(),
@@ -39,6 +44,7 @@ export function OrganizationSetup() {
     } catch (cause) {
       setError(errorMessage(cause));
       setBusy(false);
+      setHumanRevision((value) => value + 1);
     }
   }
 
@@ -140,7 +146,17 @@ export function OrganizationSetup() {
             </p>
           </div>
         </div>
-        <button className={`${primaryClass} w-full`} type="submit">
+        <HumanVerification
+          action="create_organization"
+          onToken={setHumanToken}
+          onReady={setHumanReady}
+          resetKey={humanRevision}
+        />
+        <button
+          disabled={!humanReady}
+          className={`${primaryClass} w-full`}
+          type="submit"
+        >
           {busy ? "Creating your group…" : "Create free group"}
           {!busy && <AppIcon name="arrowRight" size={20} />}
         </button>

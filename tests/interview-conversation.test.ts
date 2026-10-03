@@ -24,6 +24,11 @@ const request = (url: string, body?: unknown) =>
         },
   );
 before(async () => {
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+  });
   for (const name of [
     "GLOO_API_KEY",
     "ELEVENLABS_API_KEY",

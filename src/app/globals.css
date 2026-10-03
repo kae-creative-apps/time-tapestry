@@ -248,3 +248,5 @@ a {
 .brand-control { accent-color: #535842; }
 h1, h2, h3 { text-wrap: balance; }
 input[type="radio"], input[type="checkbox"] { accent-color: #535842; box-shadow: none; }
+
+.interview-preview-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { HumanVerification } from "@/components/security/HumanVerification";
 import Image from "next/image";
 import { Logo } from "@/components/Logo";
 import { BrandPattern } from "@/components/BrandPattern";
@@ -33,6 +34,9 @@ export default function StartCollection({
     [note, setNote] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [humanToken, setHumanToken] = useState("");
+  const [humanReady, setHumanReady] = useState(false);
+  const [humanRevision, setHumanRevision] = useState(0);
   const receiver = mode === "share" ? other : recipientIsMe ? me : recipient;
   function fields(value: Contact, set: (v: Contact) => void) {
     return (
@@ -76,6 +80,7 @@ export default function StartCollection({
     );
   }
   async function submit() {
+    if (!humanReady || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -83,6 +88,7 @@ export default function StartCollection({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          humanToken,
           initiationPath: mode,
           storyteller: mode === "share" ? me : other,
           recipient: receiver,
@@ -101,6 +107,7 @@ export default function StartCollection({
         e instanceof Error ? e.message : "Unable to save. Please try again.",
       );
       setBusy(false);
+      setHumanRevision((value) => value + 1);
     }
   }
   return (
@@ -312,6 +319,14 @@ export default function StartCollection({
                 </label>
               </>
             )}
+            {step === 3 && (
+              <HumanVerification
+                action="create_collection"
+                onToken={setHumanToken}
+                onReady={setHumanReady}
+                resetKey={humanRevision}
+              />
+            )}
             {error && (
               <p role="alert" className="rounded-md bg-red-50 p-4 text-red-800">
                 {error}
@@ -332,7 +347,10 @@ export default function StartCollection({
                   Back
                 </a>
               )}
-              <button className={primary} disabled={busy}>
+              <button
+                className={primary}
+                disabled={busy || (step === 3 && !humanReady)}
+              >
                 {busy
                   ? "Saving..."
                   : step < 3

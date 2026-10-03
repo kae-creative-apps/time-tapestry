@@ -216,6 +216,7 @@ export function useInterviewArchive({
                 contentType: blob.type.split(";")[0],
                 handleUploadUrl: `${endpoint}/upload${query}`,
                 clientPayload: JSON.stringify({
+                  bytes: blob.size,
                   mediaId,
                   mimeType: blob.type.split(";")[0],
                   name,

@@ -9,6 +9,7 @@ import {
   stat,
 } from "node:fs/promises";
 import path from "node:path";
+import { serializeMetadata } from "../security/storage";
 import { randomUUID } from "node:crypto";
 import { kv } from "@vercel/kv";
 import type { Collection, StoredMedia } from "./types";
@@ -45,6 +46,7 @@ export async function readRecord<T>(key: string): Promise<T | null> {
   }
 }
 export async function writeRecord(key: string, value: unknown) {
+  const serialized = serializeMetadata(value);
   requireStorage();
   if (cloud()) {
     await kv.set(`collection-v2:${key}`, value);
@@ -52,7 +54,7 @@ export async function writeRecord(key: string, value: unknown) {
   }
   await mkdir(dataRoot, { recursive: true });
   const temporary = path.join(dataRoot, `${key}.${randomUUID()}.tmp`);
-  await writeFile(temporary, JSON.stringify(value), { mode: 0o600 });
+  await writeFile(temporary, serialized, { mode: 0o600 });
   await rename(temporary, path.join(dataRoot, `${key}.json`));
 }
 export const getCollection = (id: string) => readRecord<Collection>(safeId(id));
@@ -138,7 +140,7 @@ export async function mutateRecord<T>(
       const saved = await kv.eval(
         "if redis.call('get',KEYS[1]) == ARGV[1] then redis.call('set',KEYS[2],ARGV[2]); return 1 else return 0 end",
         [lockKey, `collection-v2:${id}`],
-        [token, JSON.stringify(next)],
+        [token, serializeMetadata(next)],
       );
       if (!saved) throw new Error("This save took too long. Please retry.");
     } else await writeRecord(id, next);

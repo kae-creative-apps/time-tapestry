@@ -130,12 +130,16 @@ function OriginalPlayback({
 }
 
 function TurnReview({
+  collectionId,
+  onDirty,
   turn,
   included,
   busy,
   onSave,
   onInclude,
 }: {
+  collectionId: string;
+  onDirty: (id: string, dirty: boolean) => void;
   turn: InterviewTurn;
   included: boolean;
   busy: boolean;
@@ -145,6 +149,35 @@ function TurnReview({
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(turn.text);
   const [error, setError] = useState("");
+  const dirty = text !== turn.text;
+  useEffect(() => {
+    let active = true;
+    void getTextDraft(collectionId, `correction-${turn.id}`)
+      .then((draft) => {
+        if (active && draft && draft !== turn.text) {
+          setText(draft);
+          setEditing(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [collectionId, turn.id, turn.text]);
+  useEffect(() => {
+    onDirty(turn.id, dirty);
+    return () => onDirty(turn.id, false);
+  }, [dirty, turn.id, onDirty]);
+  async function remember(value: string) {
+    setText(value);
+    try {
+      await saveTextDraft(collectionId, `correction-${turn.id}`, value);
+    } catch {
+      setError(
+        "This correction is not saved on this device yet. Keep this page open and save the correction before leaving.",
+      );
+    }
+  }
   return (
     <article
       className={`border-b border-warmgray-300 py-5 ${included ? "" : "opacity-60"}`}
@@ -157,7 +190,7 @@ function TurnReview({
             rows={5}
             maxLength={30000}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => void remember(e.target.value)}
           />
         </label>
       ) : (
@@ -172,6 +205,11 @@ function TurnReview({
               onClick={async () => {
                 try {
                   await onSave(text.trim());
+                  await saveTextDraft(
+                    collectionId,
+                    `correction-${turn.id}`,
+                    "",
+                  );
                   setEditing(false);
                 } catch (e) {
                   setError(friendly(e));
@@ -183,7 +221,7 @@ function TurnReview({
             <button
               type="button"
               onClick={() => {
-                setText(turn.text);
+                void remember(turn.text);
                 setEditing(false);
               }}
             >
@@ -274,6 +312,17 @@ export default function LiveInterview({
   const [journalError, setJournalError] = useState("");
   const [journalChecking, setJournalChecking] = useState(true);
   const [wordsChecked, setWordsChecked] = useState(false);
+  const [dirtyCorrections, setDirtyCorrections] = useState<string[]>([]);
+  const markCorrectionDirty = useCallback((id: string, dirty: boolean) => {
+    setDirtyCorrections((current) =>
+      dirty
+        ? current.includes(id)
+          ? current
+          : [...current, id]
+        : current.filter((item) => item !== id),
+    );
+    if (dirty) setWordsChecked(false);
+  }, []);
   const [missingWords, setMissingWords] = useState("");
   const [missingTheme, setMissingTheme] = useState<InterviewChapterId>("q1");
   const lastMessageAt = useRef(0);
@@ -483,7 +532,9 @@ export default function LiveInterview({
         ["talking", "connecting", "finishing"].includes(phase) ||
         pending.length ||
         memoryWarning ||
-        archive.pendingCount
+        archive.pendingCount ||
+        dirtyCorrections.length ||
+        missingWords.trim()
       ) {
         e.preventDefault();
         e.returnValue = "";
@@ -491,7 +542,14 @@ export default function LiveInterview({
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [phase, pending.length, memoryWarning, archive.pendingCount]);
+  }, [
+    phase,
+    pending.length,
+    memoryWarning,
+    archive.pendingCount,
+    dirtyCorrections.length,
+    missingWords,
+  ]);
 
   async function ensureSession(provider: "elevenlabs" | "guided") {
     await localWrites.current;
@@ -526,6 +584,19 @@ export default function LiveInterview({
           .reverse()
           .find((x) => x.status !== "completed" && x.provider === provider) ??
         null;
+    }
+    if (
+      s &&
+      (Date.now() - Date.parse(s.startedAt) > 24 * 60 * 60 * 1000 ||
+        s.turns.length >= 250 ||
+        s.segments.length >= 35)
+    ) {
+      await request("/interview", {
+        action: "set_status",
+        sessionId: s.id,
+        status: "completed",
+      });
+      s = null;
     }
     if (!s) {
       const id = crypto.randomUUID();
@@ -1012,6 +1083,10 @@ export default function LiveInterview({
     setWorking(true);
     setError("");
     try {
+      if (dirtyCorrections.length || missingWords.trim())
+        throw new Error(
+          "Save or cancel your corrections and added words before preparing your stories.",
+        );
       await localWrites.current;
       await flush();
       if (archiveRef.current.pendingCount || memoryWarning)
@@ -1622,6 +1697,8 @@ export default function LiveInterview({
           {userItems.map(({ turn, session }) => (
             <TurnReview
               key={turn.id}
+              collectionId={collectionId}
+              onDirty={markCorrectionDirty}
               turn={turn}
               included={!session.excludedTurnIds?.includes(turn.id)}
               busy={working || savingWords}
@@ -1708,6 +1785,14 @@ export default function LiveInterview({
               Save these words
             </button>
           </details>
+          {(dirtyCorrections.length > 0 || missingWords.trim()) && (
+            <p
+              role="status"
+              className="mt-4 rounded-xl bg-clay-50 p-4 text-base"
+            >
+              Save your corrections and added words before continuing.
+            </p>
+          )}
           <label className="mt-6 flex items-start gap-3 rounded-md bg-paper-100 p-4">
             <input
               className="mt-1 h-5 w-5"
@@ -1730,6 +1815,8 @@ export default function LiveInterview({
                 pending.length > 0 ||
                 memoryWarning ||
                 !wordsChecked ||
+                dirtyCorrections.length > 0 ||
+                Boolean(missingWords.trim()) ||
                 !userItems.length
               }
               onClick={() => void prepareStories()}
@@ -1738,7 +1825,11 @@ export default function LiveInterview({
             </button>
             <button
               className={secondary}
-              disabled={working}
+              disabled={
+                working ||
+                dirtyCorrections.length > 0 ||
+                Boolean(missingWords.trim())
+              }
               onClick={() => {
                 sessionRef.current = null;
                 setSessionId("");

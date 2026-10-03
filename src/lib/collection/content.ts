@@ -105,6 +105,10 @@ export function addCalendarMonths(iso: string, months: number) {
 export function approveCollection(
   c: Collection,
   now = new Date().toISOString(),
+  options: {
+    deliveryMode?: "digital" | "postal";
+    allowWrittenOnly?: boolean;
+  } = {},
 ): Collection {
   if (c.status === "approved") return c;
   if (c.draftOutdated)
@@ -118,7 +122,8 @@ export function approveCollection(
         !ch.content.trim() ||
         !ch.postcardNote.trim() ||
         !ch.editorialReviewed ||
-        ch.videoStatus === "awaiting_edit" ||
+        (ch.videoStatus === "awaiting_edit" && !options.allowWrittenOnly) ||
+        (Boolean(ch.film) && ch.reviewedFilmSha256 !== ch.film?.outputSha256) ||
         (ch.videoStatus === "ready" && !ch.videoMediaId),
     )
   )
@@ -141,7 +146,7 @@ export function approveCollection(
     throw new Error(
       "Shorten postcard notes and encouragement to 1,000 characters total per card.",
     );
-  if (!c.addressConfirmed || !c.address)
+  if (options.deliveryMode !== "digital" && (!c.addressConfirmed || !c.address))
     throw new Error(
       "Confirm the recipient mailing address before approving the first postcard.",
     );
@@ -150,10 +155,31 @@ export function approveCollection(
     status: "approved",
     approvedAt: now,
     approvedVersion: 1,
-    deliveries: c.chapters.map((ch, i) => ({
-      chapterId: ch.id,
-      scheduledFor: addCalendarMonths(now, i * 3),
-      status: "scheduled",
-    })),
+    deliveries:
+      options.deliveryMode === "digital"
+        ? []
+        : c.chapters.map((ch, i) => ({
+            chapterId: ch.id,
+            scheduledFor: addCalendarMonths(now, i * 3),
+            status: "scheduled",
+          })),
   };
+}
+
+/** Postal delivery is a separate, explicit choice after digital approval. */
+export function schedulePostcards(
+  c: Collection,
+  now = new Date().toISOString(),
+): Collection {
+  if (c.status !== "approved")
+    throw new Error("Approve your stories before scheduling postcards.");
+  if (c.deliveries.length) return c;
+  if (!c.addressConfirmed || !c.address)
+    throw new Error("Confirm the recipient mailing address first.");
+  // Reuse the approval checks against the exact approved version.
+  const scheduled = approveCollection({ ...c, status: "draft" }, now, {
+    deliveryMode: "postal",
+    allowWrittenOnly: true,
+  });
+  return { ...c, deliveries: scheduled.deliveries };
 }

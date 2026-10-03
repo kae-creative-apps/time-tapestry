@@ -1,0 +1,392 @@
+import { randomUUID } from "node:crypto";
+import {
+  getCollection,
+  getMedia,
+  mutateCollection,
+  mutateRecord,
+  readRecord,
+} from "../store";
+import type { Collection } from "../types";
+import {
+  collectionFilmSourceHash,
+  filmChapters,
+  filmVersionHash,
+  FILM_TEMPLATE_VERSION,
+} from "./plan";
+import { resolveFilmVoice } from "./provider";
+import type { FilmJobView, FilmVoice, StoryFilmJob } from "./types";
+
+const registryKey = "story-film-registry";
+const indexKey = (id: string) => `film-index-${id}`;
+type Index = { ids: string[] };
+const nowIso = () => new Date().toISOString();
+export const FILM_LEASE_MS = 120000;
+
+export const getFilmJob = (id: string) => {
+  if (!/^film_[a-f0-9]{64}$/.test(id)) throw new Error("Invalid film job.");
+  return readRecord<StoryFilmJob>(id);
+};
+
+export async function latestFilmJob(collectionId: string) {
+  const index = await readRecord<Index>(indexKey(collectionId));
+  return index?.ids.length ? getFilmJob(index.ids.at(-1)!) : null;
+}
+
+export function filmJobView(job: StoryFilmJob): FilmJobView {
+  return {
+    id: job.id,
+    collectionId: job.collectionId,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    scriptsApprovedAt: job.scriptsApprovedAt,
+    ...(job.error ? { error: job.error } : {}),
+    chapters: job.chapters.map(
+      ({ chapterId, title, status, progress, error, artifact }) => ({
+        chapterId,
+        title,
+        status,
+        progress,
+        error,
+        artifact,
+      }),
+    ),
+  };
+}
+
+export function filmJobMatches(job: StoryFilmJob, c: Collection) {
+  try {
+    return job.sourceSha256 === collectionFilmSourceHash(c);
+  } catch {
+    return false;
+  }
+}
+
+/** The provider lookup happens before every storage lock. No paid work runs here. */
+export async function enqueueStoryFilms(
+  c: Collection,
+  scriptsApproved: boolean,
+  options: {
+    resolveVoice?: () => Promise<FilmVoice>;
+    now?: Date;
+    dailyLimit?: number;
+  } = {},
+) {
+  if (!scriptsApproved)
+    throw new Error(
+      "Approve the four narration scripts and the AI interviewer voice before making films.",
+    );
+  if (c.status === "approved")
+    throw new Error("Approved stories cannot be replaced in this pilot.");
+  const chapters = filmChapters(c);
+  const sourceSha256 = collectionFilmSourceHash(c);
+  const voice = await (options.resolveVoice ?? resolveFilmVoice)();
+  const versionHash = filmVersionHash(sourceSha256, voice);
+  const id = `film_${versionHash}`;
+  const now = options.now ?? new Date();
+  const timestamp = now.toISOString();
+  const configuredLimit = Number(process.env.STORY_FILM_DAILY_LIMIT || 3);
+  const dailyLimit =
+    options.dailyLimit ??
+    (Number.isInteger(configuredLimit)
+      ? Math.max(1, Math.min(10, configuredLimit))
+      : 3);
+  let result: StoryFilmJob | null = null;
+  await mutateRecord<Index>(indexKey(c.id), async (index) => {
+    const ids = index?.ids ?? [];
+    const current = await getCollection(c.id);
+    if (
+      !current ||
+      current.status === "approved" ||
+      collectionFilmSourceHash(current) !== sourceSha256
+    )
+      throw new Error(
+        "Your stories changed while preparing the films. Review the latest version first.",
+      );
+    const existing = await getFilmJob(id);
+    if (existing) {
+      if (existing.collectionId !== c.id)
+        throw new Error("Film identity mismatch.");
+      result = existing;
+      await mutateRecord<Index>(registryKey, (registry) => ({
+        ids: [...new Set([...(registry?.ids ?? []), id])],
+      }));
+      return { ids: [...ids.filter((entry) => entry !== id), id] };
+    }
+    const jobs = await Promise.all(ids.map(getFilmJob));
+    if (
+      jobs.filter(
+        (job) => job && Date.parse(job.createdAt) >= now.getTime() - 86400000,
+      ).length >= dailyLimit
+    )
+      throw new Error(
+        `This collection has reached its ${dailyLimit} film versions per day. Existing films and originals are preserved.`,
+      );
+    const job: StoryFilmJob = {
+      schemaVersion: 1,
+      kind: "story-film-job",
+      id,
+      collectionId: c.id,
+      storytellerName: c.storyteller.name,
+      versionHash,
+      sourceSha256,
+      templateVersion: FILM_TEMPLATE_VERSION,
+      voice,
+      status: "queued",
+      chapters,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      scriptsApprovedAt: timestamp,
+      attempts: 0,
+    };
+    result = await mutateRecord<StoryFilmJob>(id, (old) => old ?? job);
+    await mutateRecord<Index>(registryKey, (registry) => ({
+      ids: [...new Set([...(registry?.ids ?? []), id])],
+    }));
+    return { ids: [...ids, id] };
+  });
+  return result!;
+}
+
+export async function retryStoryFilms(
+  c: Collection,
+  id: string,
+  scriptsApproved: boolean,
+) {
+  if (!scriptsApproved)
+    throw new Error("Confirm the narration scripts before retrying.");
+  await getFilmJob(id);
+  return mutateRecord<StoryFilmJob>(id, (job) => {
+    if (!job || job.collectionId !== c.id)
+      throw new Error("Film job not found.");
+    if (c.status === "approved" || !filmJobMatches(job, c))
+      throw new Error(
+        "These film scripts are out of date. Generate films from the current reviewed stories.",
+      );
+    if (job.status !== "failed")
+      throw new Error("Only a failed film job can be retried.");
+    if (job.attempts >= 3)
+      throw new Error(
+        "This film job needs an operator check after three attempts. Completed work is preserved.",
+      );
+    return {
+      ...job,
+      status: "queued",
+      error: undefined,
+      lease: undefined,
+      updatedAt: nowIso(),
+      chapters: job.chapters.map((chapter) =>
+        chapter.status === "ready"
+          ? chapter
+          : { ...chapter, status: "queued", error: undefined, progress: 0 },
+      ),
+    };
+  });
+}
+
+export async function claimNextFilmJob(
+  workerId: string,
+  now = Date.now(),
+  onlyId?: string,
+) {
+  const registry = await readRecord<Index>(registryKey);
+  for (const id of registry?.ids ?? []) {
+    if (onlyId && id !== onlyId) continue;
+    const snapshot = await getFilmJob(id);
+    if (
+      !snapshot ||
+      !["queued", "narrating", "rendering"].includes(snapshot.status)
+    )
+      continue;
+    let claimed: StoryFilmJob | null = null;
+    await mutateRecord<StoryFilmJob>(id, async (job) => {
+      if (!job) throw new Error("Film job not found.");
+      if (
+        ["narrating", "rendering"].includes(job.status) &&
+        job.lease &&
+        job.lease.expiresAt <= now
+      ) {
+        const completed = await getCollection(job.collectionId);
+        // Attachment and final job status are separate records. Recover a crash
+        // between them without generating or replacing any media.
+        if (
+          completed &&
+          filmJobMatches(job, completed) &&
+          job.chapters.length === 4 &&
+          job.chapters.every(
+            (chapter) =>
+              chapter.artifact &&
+              completed.chapters.find((item) => item.id === chapter.chapterId)
+                ?.film?.outputSha256 === chapter.artifact.outputSha256,
+          )
+        ) {
+          return {
+            ...job,
+            status: "ready",
+            lease: undefined,
+            error: undefined,
+            updatedAt: nowIso(),
+          };
+        }
+        return {
+          ...job,
+          status: "failed",
+          lease: undefined,
+          updatedAt: nowIso(),
+          error:
+            "The worker stopped before finishing. Completed files are preserved. Retry after checking the worker; an unfinished narration request may already have been processed.",
+        };
+      }
+      if (job.status !== "queued" || (job.lease && job.lease.expiresAt > now))
+        return job;
+      const c = await getCollection(job.collectionId);
+      if (
+        !c ||
+        c.status === "approved" ||
+        !filmJobMatches(job, c) ||
+        (await latestFilmJob(job.collectionId))?.id !== job.id
+      )
+        return {
+          ...job,
+          status: "stale",
+          updatedAt: nowIso(),
+          error:
+            "The stories changed before these films started. Generate a new reviewed version.",
+        };
+      claimed = {
+        ...job,
+        status: "narrating",
+        attempts: job.attempts + 1,
+        lease: {
+          token: `${workerId}:${randomUUID()}`,
+          expiresAt: now + FILM_LEASE_MS,
+        },
+        updatedAt: nowIso(),
+      };
+      return claimed;
+    });
+    if (claimed) return claimed as StoryFilmJob;
+  }
+  return null;
+}
+
+export async function updateFilmJob(
+  id: string,
+  token: string,
+  update: (job: StoryFilmJob) => StoryFilmJob,
+) {
+  return mutateRecord<StoryFilmJob>(id, (job) => {
+    if (!job || job.lease?.token !== token || job.lease.expiresAt <= Date.now())
+      throw new Error(
+        "The film worker lease expired. This worker cannot publish progress or outputs.",
+      );
+    const next = update(job);
+    return {
+      ...next,
+      updatedAt: nowIso(),
+      lease: next.lease
+        ? { token, expiresAt: Date.now() + FILM_LEASE_MS }
+        : undefined,
+    };
+  });
+}
+
+export async function attachReadyFilms(job: StoryFilmJob) {
+  if (
+    job.chapters.length !== 4 ||
+    job.chapters.some((chapter) => !chapter.artifact)
+  )
+    throw new Error("All four films must finish before attachment.");
+  return mutateCollection(job.collectionId, async (c) => {
+    const latest = await getFilmJob(job.id);
+    if ((await latestFilmJob(job.collectionId))?.id !== job.id)
+      throw new Error(
+        "A newer film version replaced this job. Completed files are preserved.",
+      );
+    if (
+      !latest ||
+      (latest.status !== "ready" &&
+        (!job.lease ||
+          latest.lease?.token !== job.lease.token ||
+          latest.lease.expiresAt <= Date.now()))
+    )
+      throw new Error("The film worker no longer owns this job.");
+    if (!filmJobMatches(job, c))
+      throw new Error(
+        "The stories changed while rendering. Completed films are preserved but have not been shared.",
+      );
+    if (
+      job.chapters.every(
+        (chapter) =>
+          c.chapters.find((entry) => entry.id === chapter.chapterId)?.film
+            ?.outputSha256 === chapter.artifact!.outputSha256,
+      )
+    )
+      return c;
+    if (c.status === "approved" || !filmJobMatches(job, c))
+      throw new Error(
+        "The stories changed while rendering. Completed films are preserved but have not been shared.",
+      );
+    for (const chapter of job.chapters) {
+      const artifact = chapter.artifact!;
+      const media = await getMedia(artifact.mediaId);
+      if (
+        !media ||
+        media.collectionId !== c.id ||
+        media.role !== "owner" ||
+        media.mimeType !== "video/mp4"
+      )
+        throw new Error("A finished film is missing private storage.");
+    }
+    for (const chapter of job.chapters) {
+      const target = c.chapters.find(
+        (entry) => entry.id === chapter.chapterId,
+      )!;
+      target.videoMediaId = chapter.artifact!.mediaId;
+      target.videoStatus = "ready";
+      target.editorialReviewed = false;
+      target.reviewedFilmSha256 = undefined;
+      target.film = chapter.artifact;
+    }
+    return c;
+  });
+}
+
+const workerKey = "story-film-worker-heartbeat";
+export async function writeWorkerHeartbeat(workerId: string) {
+  await mutateRecord<{ workerId: string; at: number }>(workerKey, () => ({
+    workerId,
+    at: Date.now(),
+  }));
+}
+export async function filmWorkerHealthy(now = Date.now()) {
+  const heartbeat = await readRecord<{ at: number }>(workerKey);
+  return Boolean(
+    heartbeat && now - heartbeat.at < 90000 && heartbeat.at <= now + 1000,
+  );
+}
+
+/** An expired owner may report failure, but can never attach or renew outputs. */
+export async function failFilmJob(
+  id: string,
+  token: string,
+  message: string,
+  stale: boolean,
+) {
+  return mutateRecord<StoryFilmJob>(id, (job) => {
+    if (!job || job.lease?.token !== token)
+      throw new Error("Another worker owns this job.");
+    return {
+      ...job,
+      status: stale ? "stale" : "failed",
+      error: message,
+      lease: undefined,
+      updatedAt: nowIso(),
+      chapters: job.chapters.map((chapter) =>
+        ["narrating", "rendering"].includes(chapter.status)
+          ? { ...chapter, status: stale ? "stale" : "failed", error: message }
+          : chapter,
+      ),
+    };
+  });
+}
