@@ -1,93 +1,74 @@
-import { Card } from '@/components/ui/Card';
-import Link from 'next/link';
-
-export default function AboutPage() {
+import { Logo } from "@/components/Logo";
+import Link from "next/link";
+export default function About() {
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <Card className="mb-8 text-center">
-        <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
-          About us
+    <main className="mx-auto max-w-2xl px-6 py-12">
+      <Logo />
+      <h1 className="mb-6 mt-12 font-serif text-4xl">
+        A legacy people can return to.
+      </h1>
+      <div className="space-y-6 text-lg leading-relaxed">
+        <p>
+          Time Tapestry helps people share the stories, faith and values behind
+          their lives. Generosity is part of that story: the kindness they
+          received, the choices they made and what they hope others will carry
+          forward.
         </p>
-        <h1 className="mb-4 font-serif text-3xl leading-tight text-ink sm:text-4xl">
-          Why Time Tapestry
-        </h1>
-        <p className="font-serif text-lg leading-relaxed text-ink-500">
-          Generosity is a story before it is a gift.
+        <p>
+          Kaelyn Brooks and Tayloe Hansen are building this pilot for the Gloo
+          AI Hackathon. Our focus is relationships and character, especially the
+          practice of generosity. Purpose and meaning are also part of helping
+          someone reflect on a legacy they want to share.
         </p>
-      </Card>
-
-      <div className="space-y-6">
-        <Card className="border-l-4 border-l-oxblood">
-          <h2 className="mb-3 font-serif text-xl text-ink">The problem</h2>
-          <div className="space-y-3 leading-relaxed text-ink-500">
-            <p>Generosity is declining. Connections between generations are breaking down.</p>
-            <p>
-              Families grow up scattered. Stories stay in the room where they were told, then disappear. The values and causes that shaped a lifetime are reduced to a name in a ledger.
-            </p>
-          </div>
-        </Card>
-
-        <Card className="border-l-4 border-l-oxblood">
-          <h2 className="mb-3 font-serif text-xl text-ink">The insight</h2>
-          <p className="font-serif text-lg leading-relaxed text-oxblood">
-            Generosity is a story before it is a gift.
-          </p>
-          <p className="mt-3 leading-relaxed text-ink-500">
-            A person gives because they were shaped by moments, people, and convictions. When we capture the story, the giving makes sense for generations.
-          </p>
-        </Card>
-
-        <Card>
-          <h2 className="mb-3 font-serif text-xl text-ink">The research</h2>
-          <ul className="space-y-3 text-ink-500">
-            <li className="flex gap-3">
-              <span className="mt-1 text-oxblood">{'//'}</span>
-              <span className="leading-relaxed">
-                Women Give 2013 found that when children hear parents talk about giving, they are significantly more likely to give themselves.
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 text-oxblood">{'//'}</span>
-              <span className="leading-relaxed">
-                Barna research shows younger adults want to inherit values and purpose, not just assets.
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 text-oxblood">{'//'}</span>
-              <span className="leading-relaxed">
-                Most legacy tools preserve objects. Time Tapestry preserves the meaning behind them.
-              </span>
-            </li>
-          </ul>
-        </Card>
-
-        <Card>
-          <h2 className="mb-3 font-serif text-xl text-ink">The team</h2>
-          <div className="space-y-3 leading-relaxed text-ink-500">
-            <p>
-              Time Tapestry was founded by Kaelyn Brooks and Tayloe [last name], with one conviction: the stories that shape a family deserve better than a shelf.
-            </p>
-            <p>
-              We are building tools that treat memory like what it is — a thread that can still weave people together, even after the storyteller is gone.
-            </p>
-          </div>
-        </Card>
-
-        <Card className="bg-oxblood text-paper">
-          <p className="mb-3 font-sans text-[10px] uppercase tracking-[0.14em] opacity-80">
-            Our mission
-          </p>
-          <p className="font-serif text-xl leading-relaxed text-paper sm:text-2xl">
-            We weave the stories that matter.
-          </p>
-        </Card>
+        <h2 className="pt-5 font-serif text-2xl">
+          The research gives us a reason to explore.
+        </h2>
+        <p>
+          In a 2021 Edward Jones and Age Wave survey, 43% of adults 50 and older
+          named life lessons and values among their most important legacies.{" "}
+          <a
+            className="text-oxblood underline"
+            href="https://www.prnewswire.com/news-releases/pandemic-prompted-first-time-legacy-planning-conversations-for-44-5-million-americans-edward-jones-finds-301398039.html"
+          >
+            Read the study announcement
+          </a>
+          .
+        </p>
+        <p>
+          Barna reported that 51% of surveyed Protestant senior pastors were
+          very concerned about younger Christians’ financial support for the
+          church. That describes pastors’ concern, not what all younger donors
+          do.{" "}
+          <a
+            className="text-oxblood underline"
+            href="https://www.barna.com/research/future-generosity/"
+          >
+            Read Barna’s research
+          </a>
+          .
+        </p>
+        <p>
+          Indiana University’s Women Give 2013 study linked parent-child
+          conversations about giving with children’s giving. This supports
+          studying family conversations. It does not prove Time Tapestry
+          increases donations or family connection.{" "}
+          <a
+            className="text-oxblood underline"
+            href="https://philanthropy.indianapolis.iu.edu/news-events/news/_news/2013/women-give-2013.html"
+          >
+            Read the study summary
+          </a>
+          .
+        </p>
+        <p>
+          Our pilot will look at completed interviews, approved stories and
+          replies, then ask families whether the experience led to a meaningful
+          conversation.
+        </p>
       </div>
-
-      <div className="mt-10 text-center">
-        <Link href="/" className="font-sans text-sm text-oxblood transition hover:text-oxblood-600">
-          Return home
-        </Link>
-      </div>
+      <Link href="/" className="mt-10 inline-block text-oxblood underline">
+        Return home
+      </Link>
     </main>
   );
 }

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AdminNav } from '@/components/AdminNav';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AdminNav } from "@/components/AdminNav";
 
 type SessionSummary = {
   id: string;
@@ -24,27 +24,27 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filter, setFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
-    fetch('/api/admin/sessions')
+    fetch("/api/admin/sessions")
       .then((res) => {
         if (res.status === 401) {
-          router.push('/admin/login?redirect=/admin');
+          router.push("/admin/login?redirect=/admin");
           return null;
         }
         return res.json();
       })
       .then((data) => {
-        if (data && 'sessions' in data) {
+        if (data && "sessions" in data) {
           setSessions(data.sessions);
-        } else if (data && 'error' in data) {
+        } else if (data && "error" in data) {
           setError(data.error);
         }
       })
-      .catch(() => setError('Failed to load sessions'))
+      .catch(() => setError("Failed to load sessions"))
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -64,17 +64,34 @@ export default function AdminDashboardPage() {
 
   const stats = useMemo(() => {
     const total = sessions.length;
-    const interviewsStarted = sessions.filter((s) => s.interviewStartedAt).length;
-    const interviewsCompleted = sessions.filter((s) => s.interviewCompletedAt).length;
+    const interviewsStarted = sessions.filter(
+      (s) => s.interviewStartedAt,
+    ).length;
+    const interviewsCompleted = sessions.filter(
+      (s) => s.interviewCompletedAt,
+    ).length;
     const storiesApproved = sessions.filter((s) => s.storyApprovedAt).length;
-    const postcardsSent = sessions.reduce((sum, s) => sum + s.postcardsScheduledCount, 0);
-    return { total, interviewsStarted, interviewsCompleted, storiesApproved, postcardsSent };
+    const postcardsSent = sessions.reduce(
+      (sum, s) => sum + s.postcardsScheduledCount,
+      0,
+    );
+    return {
+      total,
+      interviewsStarted,
+      interviewsCompleted,
+      storiesApproved,
+      postcardsSent,
+    };
   }, [sessions]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-paper-texture">
         <AdminNav />
+        <p className="mx-auto max-w-6xl px-6 pt-5 text-sm text-ink-500">
+          Archived prototype records. Current collections are managed through
+          their storyteller links.
+        </p>
         <main className="mx-auto max-w-6xl px-6 py-10">
           <p className="text-ink-500">Loading sessions...</p>
         </main>
@@ -85,6 +102,10 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-paper-texture">
       <AdminNav />
+      <p className="mx-auto max-w-6xl px-6 pt-5 text-sm text-ink-500">
+        Archived prototype records. Current collections are managed through
+        their storyteller links.
+      </p>
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -124,28 +145,49 @@ export default function AdminDashboardPage() {
 
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <StatCard label="Total sessions" value={stats.total} />
-          <StatCard label="Interviews started" value={stats.interviewsStarted} />
-          <StatCard label="Interviews completed" value={stats.interviewsCompleted} />
+          <StatCard
+            label="Interviews started"
+            value={stats.interviewsStarted}
+          />
+          <StatCard
+            label="Interviews completed"
+            value={stats.interviewsCompleted}
+          />
           <StatCard label="Stories approved" value={stats.storiesApproved} />
           <StatCard label="Postcards scheduled" value={stats.postcardsSent} />
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-warmgray-300 bg-paper-50 shadow-soft">
+        <div className="overflow-x-auto rounded-lg border border-warmgray-300 bg-paper-50">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead className="border-b border-warmgray-300 bg-paper-200">
               <tr>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Created</th>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Grandparent</th>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Grandchild</th>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Status</th>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Path</th>
-                <th className="px-4 py-3 font-sans font-medium text-ink-500">Actions</th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Created
+                </th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Grandparent
+                </th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Grandchild
+                </th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Status
+                </th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Path
+                </th>
+                <th className="px-4 py-3 font-sans font-medium text-ink-500">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredSessions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-ink-400">
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-ink-400"
+                  >
                     No sessions found.
                   </td>
                 </tr>
@@ -159,16 +201,16 @@ export default function AdminDashboardPage() {
                     {formatDate(session.createdAt)}
                   </td>
                   <td className="px-4 py-3 font-medium text-ink">
-                    {session.grandparentName || '—'}
+                    {session.grandparentName || "Not supplied"}
                   </td>
                   <td className="px-4 py-3 text-ink-600">
-                    {session.grandchildName || '—'}
+                    {session.grandchildName || "Not supplied"}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={session.status} />
                   </td>
                   <td className="px-4 py-3 text-ink-600">
-                    {session.initiationPath || '—'}
+                    {session.initiationPath || "Not supplied"}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
@@ -198,36 +240,40 @@ export default function AdminDashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-warmgray-300 bg-paper-50 p-4 text-center shadow-soft">
+    <div className="rounded-lg border border-warmgray-300 bg-paper-50 p-4 text-center">
       <p className="font-serif text-2xl text-oxblood">{value}</p>
-      <p className="font-sans text-xs uppercase tracking-wide text-ink-500">{label}</p>
+      <p className="font-sans text-xs uppercase tracking-wide text-ink-500">
+        {label}
+      </p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const color =
-    status === 'approved' || status === 'delivered'
-      ? 'bg-forest/10 text-forest'
-      : status === 'interview_complete'
-        ? 'bg-oxblood/10 text-oxblood'
-        : status === 'interview_started'
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-warmgray-200 text-ink-500';
+    status === "approved" || status === "delivered"
+      ? "bg-forest/10 text-forest"
+      : status === "interview_complete"
+        ? "bg-oxblood/10 text-oxblood"
+        : status === "interview_started"
+          ? "bg-amber-100 text-amber-800"
+          : "bg-warmgray-200 text-ink-500";
 
   return (
-    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${color}`}>
-      {status.replace(/_/g, ' ')}
+    <span
+      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${color}`}
+    >
+      {status.replace(/_/g, " ")}
     </span>
   );
 }
 
 function formatDate(iso?: string): string {
-  if (!iso) return '—';
+  if (!iso) return "Not supplied";
   const date = new Date(iso);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }

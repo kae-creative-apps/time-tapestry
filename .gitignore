@@ -5,6 +5,7 @@
 
 # next.js
 /.next/
+/.next-*/
 /out/
 
 # production
@@ -33,3 +34,7 @@ next-env.d.ts
 # data
 src/data/sessions/*.json
 !src/data/sessions/.gitkeep
+
+# private recordings and collection records
+.data/
+video/output/

@@ -1,0 +1,321 @@
+.grain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 85% 10%, #eee9e0 0%, transparent 65%), #fbfaf8;
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.075;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.8' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  mix-blend-mode: multiply;
+}
+.grain[data-tone="espresso"] {
+  background:
+    radial-gradient(ellipse at 95% 10%, #715442 0%, transparent 67%),
+    linear-gradient(145deg, #34231b 0%, #432e23 70%, #604632 100%);
+}
+.grain[data-tone="espresso"]::after {
+  opacity: 0.13;
+  mix-blend-mode: soft-light;
+}
+.grain[data-tone="sage"] {
+  background:
+    radial-gradient(ellipse at 95% 0%, #d9dbc9, transparent 76%), #a4aa8d;
+}
+.grain[data-tone="clay"] {
+  background:
+    radial-gradient(ellipse at 5% 5%, #f1dfd5, transparent 80%), #d6af9c;
+}
+
+.threadBorderHost {
+  position: relative;
+  isolation: isolate;
+}
+.threadBorder {
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    #bcc1a6 42%,
+    #fbfaf8 49%,
+    #d6af9c 56%,
+    transparent 70%
+  );
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  animation: borderPass 4.4s ease-in-out 0.4s 1 both;
+}
+.threadBorderHost:hover .threadBorder,
+.threadBorderHost:focus-visible .threadBorder {
+  animation: none;
+  opacity: 0.85;
+  background-position: 50% 0;
+}
+@keyframes borderPass {
+  0% {
+    background-position: 100% 0;
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  75% {
+    opacity: 0.9;
+  }
+  100% {
+    background-position: 0 0;
+    opacity: 0;
+  }
+}
+
+.pitchCanvas {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 16 / 9;
+  border-radius: 24px;
+  padding: clamp(24px, 4vw, 54px);
+  color: #fbfaf8;
+  box-shadow: 0 20px 60px rgba(67, 46, 35, 0.1);
+}
+.pitchTop,
+.threadScene,
+.pitchBottom {
+  position: relative;
+  z-index: 1;
+}
+.pitchTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.pitchEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e5d4be;
+}
+.pitchTitle {
+  margin-top: 14px;
+  font-size: clamp(30px, 4.5vw, 62px);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+  color: #fbfaf8;
+}
+.pitchWordmark {
+  width: clamp(76px, 11vw, 132px);
+  flex-shrink: 0;
+  color: #fbfaf8;
+}
+.threadScene {
+  display: grid;
+  grid-template-columns: 1.12fr 2fr 1fr;
+  align-items: center;
+  margin-top: 18px;
+  min-height: 0;
+}
+.threadLabels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.threadLabels li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: clamp(11px, 1.17vw, 16px);
+  line-height: 1.45;
+  color: #fbfaf8;
+}
+.threadNumber {
+  font-size: 10px;
+  color: #d6af9c;
+  font-variant-numeric: tabular-nums;
+}
+.threads {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.threadPath {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.pitchCanvas[data-started="true"] .threadPath {
+  animation: gatherThread 2.8s ease-in-out var(--thread-delay) 1 both;
+}
+.pitchCanvas[data-visible="false"] .threadPath {
+  animation-play-state: paused;
+}
+@keyframes gatherThread {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0.25;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+.keepsake {
+  background: #fbfaf8;
+  color: #432e23;
+  border: 1px solid #e5e2db;
+  padding: clamp(18px, 2.5vw, 32px);
+  border-radius: 5px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 12px 32px rgba(24, 15, 9, 0.18);
+  transform: rotate(3deg);
+}
+.pitchBottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-top: 24px;
+  font-size: clamp(10px, 1.1vw, 14px);
+  line-height: 1.5;
+}
+.pitchBottom > p {
+  max-width: 370px;
+  color: #fbfaf8;
+}
+.pitchBottom > span {
+  text-align: right;
+  font-size: 10px;
+  color: #e5d4be;
+}
+.usageVisual {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+}
+.usageVisual > :not(.grain) {
+  z-index: 1;
+}
+
+@media (max-width: 760px) {
+  .pitchCanvas {
+    aspect-ratio: auto;
+    min-height: 680px;
+    padding: 28px 22px;
+  }
+  .pitchTitle {
+    font-size: clamp(31px, 6vw, 44px);
+  }
+  .pitchWordmark {
+    width: 72px;
+  }
+  .threadScene {
+    grid-template-columns: 1fr 1.4fr;
+    margin-top: 24px;
+  }
+  .threadLabels {
+    min-height: 220px;
+  }
+  .threadLabels li {
+    font-size: 12px;
+    gap: 8px;
+  }
+  .threads {
+    height: 220px;
+  }
+  .keepsake {
+    grid-column: 1 / -1;
+    width: 200px;
+    margin: 22px auto 0;
+    padding: 22px;
+    transform: rotate(2deg);
+  }
+  .keepsake p {
+    margin-top: 12px;
+  }
+  .keepsake > span {
+    margin-top: 14px;
+  }
+  .pitchBottom {
+    margin-top: 36px;
+    font-size: 12px;
+    gap: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .threadBorder {
+    animation: none;
+    opacity: 0.55;
+    background-position: 50% 0;
+  }
+  .pitchCanvas[data-started="true"] .threadPath {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+/* The small printed keepsake stays subordinate to the slide headline. */
+.keepsake > svg {
+  width: 44px;
+  height: 44px;
+}
+.keepsake > p:first-of-type {
+  margin-top: 14px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+.keepsake > span {
+  margin-top: 14px;
+}
+.keepsake > p:last-of-type {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .pitchCanvas {
+    aspect-ratio: auto;
+    min-height: 570px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pitchCanvas[data-started="false"] .threadPath {
+    stroke-dashoffset: 1;
+  }
+}

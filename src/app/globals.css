@@ -3,12 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --font-fraunces: 'Fraunces', Georgia, serif;
-  --font-inter: 'Inter', -apple-system, sans-serif;
-  --color-paper: #faf6ef;
-  --color-ink: #3a3a3a;
-  --color-oxblood: #7a2e2e;
-  --color-warmgray-400: #a89e8e;
+  /* Compatibility aliases keep every existing screen on the same brand. */
+  --font-fraunces: var(--font-display, "Quicksand"), sans-serif;
+  --color-paper: #fbfaf8;
+  --color-ink: #432e23;
+  --color-oxblood: #432e23;
+  --color-warmgray-400: #a29b8e;
+  --color-sage: #939480;
+  --color-clay: #c18f7b;
+  --color-taupe: #756454;
 }
 
 html {
@@ -18,22 +21,17 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(at 20% 80%, rgba(122, 46, 46, 0.03) 0%, transparent 50%),
-    radial-gradient(at 80% 20%, rgba(61, 107, 78, 0.02) 0%, transparent 50%),
-    url("data:image/svg+xml,%3Csvg width='240' height='240' viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
   background-color: var(--color-paper);
   color: var(--color-ink);
   line-height: 1.6;
-  font-feature-settings: 'kern' 1, 'liga' 1;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1;
 }
 
-/* deliberate: warm radial gradient plus paper texture to signal premium without loading an image asset */
+/* Historical class name retained for existing pages, now a clean brand canvas. */
 .bg-paper-texture {
-  background:
-    radial-gradient(ellipse at 10% 0%, rgba(232, 220, 194, 0.4) 0%, transparent 40%),
-    radial-gradient(ellipse at 90% 100%, rgba(168, 46, 46, 0.04) 0%, transparent 35%),
-    url("data:image/svg+xml,%3Csvg width='240' height='240' viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  background-image: none;
   background-color: var(--color-paper);
 }
 
@@ -43,9 +41,11 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-fraunces);
-  font-weight: 500;
-  color: var(--color-ink);
+  font-family: var(--font-display, "Quicksand"), sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  color: inherit;
 }
 
 p {
@@ -56,19 +56,19 @@ p {
   input,
   textarea,
   select {
-    @apply rounded-md border border-warmgray-300 bg-paper-50 px-4 py-3 font-sans text-sm text-ink outline-none transition-all duration-200;
+    @apply rounded-md border border-warmgray-300 bg-paper-50 px-4 py-3 font-sans text-base text-ink outline-none transition-colors duration-200;
   }
 
   input:focus,
   textarea:focus,
   select:focus {
     border-color: var(--color-oxblood);
-    box-shadow: 0 0 0 3px rgba(122, 46, 46, 0.12);
+    box-shadow: 0 0 0 3px rgba(67, 46, 35, 0.12);
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #a89e8e;
+    color: var(--color-taupe);
   }
 }
 
@@ -113,7 +113,7 @@ a {
 }
 
 .letterpress {
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  text-shadow: none;
 }
 
 .breathing {
@@ -154,7 +154,7 @@ a {
 }
 
 .shimmer::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -186,6 +186,67 @@ a {
 }
 
 .postcard-paper {
-  background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
-  background-color: #fdfbf6;
+  background-image: none;
+  background-color: #ffffff;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Brand fields carry the expressive identity; content sits on quiet surfaces. */
+.brand-gradient-chocolate {
+  background-color: #432e23;
+  background-image: radial-gradient(ellipse at 95% 0%, rgba(168, 134, 109, .25), transparent 60%), linear-gradient(125deg, #38271f 0%, #543b2e 55%, #705541 100%);
+}
+.brand-gradient-sage {
+  background-color: #939480;
+  background-image: radial-gradient(ellipse at 100% 0%, #bcbaa1 0%, transparent 65%), linear-gradient(140deg, #9e9f88, #868c73);
+}
+.brand-gradient-clay {
+  background-color: #d6af9c;
+  background-image: radial-gradient(ellipse at 0% 100%, #c18f7b 0%, transparent 65%), linear-gradient(120deg, #e9d9cb, #d3ac95);
+}
+.brand-page-shell {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 100% 0%, #edece3 0%, transparent 42%), #fbfaf8;
+}
+.brand-eyebrow {
+  font-family: var(--font-inter), sans-serif;
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.brand-button-primary,
+.brand-button-secondary {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 14px 22px;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.brand-button-primary { background: #432e23; color: #fff; border: 1px solid #432e23; }
+.brand-button-primary:hover:not(:disabled) { background: #332219; border-color: #332219; box-shadow: 0 4px 14px #432e2314; }
+.brand-button-secondary { background: #fff; color: #432e23; border: 1px solid #d6d0c6; }
+.brand-button-secondary:hover:not(:disabled) { background: #f4f4ef; border-color: #939480; }
+.brand-button-primary:disabled,
+.brand-button-secondary:disabled { opacity: .5; cursor: not-allowed; }
+.brand-control { accent-color: #535842; }
+h1, h2, h3 { text-wrap: balance; }
+input[type="radio"], input[type="checkbox"] { accent-color: #535842; box-shadow: none; }
+
+.interview-preview-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }

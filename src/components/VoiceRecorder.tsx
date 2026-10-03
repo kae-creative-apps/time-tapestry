@@ -77,7 +77,7 @@ export function VoiceRecorder({ onDone }: { onDone: (blob: Blob) => void }) {
   }, [onDone]);
 
   return (
-    <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-6 text-center shadow-soft">
+    <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-6 text-center">
       {phase === 'idle' && (
         <>
           <p className="mb-1 font-serif text-lg text-ink">

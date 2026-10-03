@@ -1,8 +1,10 @@
-import { Logo } from '@/components/Logo';
-import { Footer } from '@/components/Footer';
-import { Postcard } from '@/components/Postcard';
-import { getSession } from '@/lib/session';
-import { demoStory } from '@/lib/mock-data';
+import { legacyPageAllowed } from "@/lib/legacy-access";
+import LegacyAccessNotice from "@/components/LegacyAccessNotice";
+import { Logo } from "@/components/Logo";
+import { Footer } from "@/components/Footer";
+import { Postcard } from "@/components/Postcard";
+import { getSession } from "@/lib/session";
+import { demoStory } from "@/lib/mock-data";
 
 const startDate = new Date();
 
@@ -13,18 +15,19 @@ function addWeeks(date: Date, weeks: number): Date {
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 export default async function PostcardsPage({
-  params
+  params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await legacyPageAllowed())) return <LegacyAccessNotice />;
   const { id } = await params;
   const session = await getSession(id);
   const story = session?.story ?? {
@@ -32,9 +35,10 @@ export default async function PostcardsPage({
     chapters: demoStory.chapters,
     causes: demoStory.causes,
     values: demoStory.values,
-    keyQuotes: demoStory.keyQuotes
+    keyQuotes: demoStory.keyQuotes,
   };
-  const grandparentName = session?.grandparent.name ?? demoStory.grandparent.name;
+  const grandparentName =
+    session?.grandparent.name ?? demoStory.grandparent.name;
   const grandchildName = session?.grandchild.name ?? demoStory.grandchild.name;
   const chapters = story.chapters;
 
@@ -44,36 +48,36 @@ export default async function PostcardsPage({
       frontExcerpt: story.welcomeNote,
       backMessage: `Dear ${grandchildName}, I am sending you pieces of my story, one postcard at a time. Start here.`,
       chapterIndex: 0,
-      rotation: 'rotate-1' as const
+      rotation: "rotate-1" as const,
     },
     {
-      frontTitle: chapters[0]?.title ?? 'Chapter One',
-      frontExcerpt: chapters[0]?.content ?? '',
+      frontTitle: chapters[0]?.title ?? "Chapter One",
+      frontExcerpt: chapters[0]?.content ?? "",
       backMessage: `This is the story that shaped me. I wanted you to know where it all began.`,
       chapterIndex: 1,
-      rotation: '-rotate-1' as const
+      rotation: "-rotate-1" as const,
     },
     {
-      frontTitle: chapters[1]?.title ?? 'Chapter Two',
-      frontExcerpt: chapters[1]?.content ?? '',
+      frontTitle: chapters[1]?.title ?? "Chapter Two",
+      frontExcerpt: chapters[1]?.content ?? "",
       backMessage: `This is when I learned what I value most began before I had words for it.`,
       chapterIndex: 2,
-      rotation: 'rotate-2' as const
+      rotation: "rotate-2" as const,
     },
     {
-      frontTitle: chapters[2]?.title ?? 'Chapter Three',
-      frontExcerpt: chapters[2]?.content ?? '',
+      frontTitle: chapters[2]?.title ?? "Chapter Three",
+      frontExcerpt: chapters[2]?.content ?? "",
       backMessage: `These are the people and places I have given to. They are people I have prayed for by name.`,
       chapterIndex: 3,
-      rotation: '-rotate-2' as const
+      rotation: "-rotate-2" as const,
     },
     {
-      frontTitle: chapters[3]?.title ?? 'Chapter Four',
-      frontExcerpt: chapters[3]?.content ?? '',
+      frontTitle: chapters[3]?.title ?? "Chapter Four",
+      frontExcerpt: chapters[3]?.content ?? "",
       backMessage: `This is what I hope you remember from me, long after these postcards stop coming.`,
       chapterIndex: 4,
-      rotation: 'rotate-1' as const
-    }
+      rotation: "rotate-1" as const,
+    },
   ];
 
   return (
@@ -82,13 +86,14 @@ export default async function PostcardsPage({
         <Logo className="mb-8" />
         <div className="mb-12 text-center">
           <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
-            Time Tapestry Post
+            Postcards to keep
           </p>
           <h1 className="mb-4 font-serif text-3xl text-ink sm:text-4xl">
             A legacy, in the mail
           </h1>
           <p className="mx-auto max-w-md font-sans text-base leading-relaxed text-ink-500">
-            Five postcards, sent one at a time. Each one carries a piece of the story.
+            Five postcards, sent one at a time. Each one carries a piece of the
+            story.
           </p>
         </div>
 
@@ -108,7 +113,8 @@ export default async function PostcardsPage({
         </div>
 
         <p className="mt-16 text-center font-sans text-sm text-warmgray-500">
-          This is a preview. In production, these would be mailed to you via Lob.
+          This is a preview. In production, these would be mailed to you via
+          Lob.
         </p>
       </main>
       <Footer />

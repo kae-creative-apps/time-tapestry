@@ -140,7 +140,7 @@ export default function AdminSessionDetailPage() {
           </div>
         </div>
 
-        <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+        <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
           <h2 className="mb-4 font-serif text-xl text-ink">People</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Grandparent" value={session.grandparent.name} />
@@ -162,7 +162,7 @@ export default function AdminSessionDetailPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+        <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
           <h2 className="mb-4 font-serif text-xl text-ink">Timeline</h2>
           <dl className="grid gap-3 sm:grid-cols-2">
             {steps.map((step) => (
@@ -177,7 +177,7 @@ export default function AdminSessionDetailPage() {
         </section>
 
         {session.interview && session.interview.transcript.length > 0 && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">
               Interview transcript ({session.interview.transcript.length} turns)
             </h2>
@@ -195,7 +195,7 @@ export default function AdminSessionDetailPage() {
         )}
 
         {session.story && session.story.chapters.length > 0 && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">Generated story</h2>
             <div className="mb-4 rounded border border-warmgray-200 bg-paper p-4">
               <h3 className="mb-2 font-serif text-lg text-ink">Welcome note</h3>
@@ -246,21 +246,21 @@ export default function AdminSessionDetailPage() {
         )}
 
         {session.videoUrl && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">Video</h2>
             <video controls src={session.videoUrl} className="w-full max-w-xl rounded" />
           </section>
         )}
 
         {session.voiceIntroUrl && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">Voice intro</h2>
             <audio controls src={session.voiceIntroUrl} className="w-full max-w-xl" />
           </section>
         )}
 
         {session.postcardsScheduled && session.postcardsScheduled.length > 0 && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">
               Postcards ({session.postcardsScheduled.length})
             </h2>
@@ -295,7 +295,7 @@ export default function AdminSessionDetailPage() {
         )}
 
         {session.grandchildReply && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">Grandchild reply</h2>
             <p className="mb-2 font-sans text-xs uppercase tracking-wide text-ink-400">
               {session.grandchildReply.type} · {formatTimestamp(session.grandchildReply.submittedAt)}
@@ -308,7 +308,7 @@ export default function AdminSessionDetailPage() {
         )}
 
         {session.grandchildAction && (
-          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-soft">
+          <section className="mb-8 rounded-lg border border-warmgray-300 bg-paper-50 p-6">
             <h2 className="mb-4 font-serif text-xl text-ink">Grandchild action</h2>
             <p className="font-sans text-xs uppercase tracking-wide text-ink-400">
               Action
