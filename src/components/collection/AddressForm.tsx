@@ -23,7 +23,7 @@ export default function AddressForm({
   );
   return (
     <form
-      className="space-y-4"
+      className="space-y-5 text-base"
       onSubmit={(e) => {
         e.preventDefault();
         void onSave(a);
@@ -42,7 +42,7 @@ export default function AddressForm({
           {label}
           <input
             required={key !== "line2"}
-            className="mt-2 min-h-12 w-full rounded-md border border-warmgray-300 bg-white px-4 py-3 text-base"
+            className="mt-2 min-h-12 w-full rounded-md border border-warmgray-300 bg-white px-4 py-3 text-base transition-colors hover:border-taupe"
             value={a[key] || ""}
             onChange={(e) => setA({ ...a, [key]: e.target.value })}
           />
@@ -53,7 +53,7 @@ export default function AddressForm({
       </p>
       <button
         disabled={busy}
-        className="min-h-12 rounded-md bg-oxblood px-5 py-3 text-white"
+        className="brand-button-primary min-h-12 px-5 py-3 disabled:opacity-50"
       >
         {busy ? "Saving..." : "Confirm mailing address"}
       </button>

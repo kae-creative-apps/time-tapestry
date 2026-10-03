@@ -33,6 +33,22 @@ The typed-answer path works without AI or delivery keys. Without Gloo, chapters 
 
 Local collection records and media use `.data/collections/`, or `COLLECTION_DATA_DIR` when set. Browser recordings also use IndexedDB backups. Browser storage can be cleared or evicted, so it is not a substitute for successful server backup. Keep local data out of Git.
 
+## Free pilot and group gifts
+
+All current family and organization journeys are free. `/for-organizations` creates a group of 1 to 100 gifts, collects organizer contact details, and opens a private management dashboard. Organizers add a storyteller's name and email, then copy and share the individual gift link themselves. No checkout runs and no invitation email is claimed as sent. Families choose their own recipient and retain control of their collection. The organization dashboard shows invitation and claim status, not family stories, recordings or private story links.
+
+Unused gift links can be revoked. Redemption is serialized and retryable with a browser-session claim token, so duplicate requests cannot consume another gift or overwrite saved answers. Keep the management URL private, since it provides access to names, emails and unclaimed gift links.
+
+## Live interview controls
+
+The orb remains the interviewer's visual presence. Before starting, participants can select microphone and camera, explicitly open a local preview, and check microphone input. Device changes require a pause so each recording segment is finalized first. Mute applies to both the conversation and the separate original recording.
+
+The client bundle warms on focus or hover and loads alongside session setup. Stable orb, question and status areas avoid page-height changes during incoming speech. A delayed connection message explains when the interviewer is still loading. Failed connections can be retried normally or through the authenticated WebSocket alternative. Both paths preserve the same interview prompt and require owner access. No automatic second conversation is started.
+
+Live voice requires `ELEVENLABS_API_KEY` and `ELEVENLABS_AGENT_ID` on the server. Credentials must never be placed in GitHub or client code. The app validates agent settings and obtains a short-lived connection credential. WebRTC uses the SDK's dual peer connection option for compatibility. WebSocket fallback does not bypass agent authorization.
+
+See [Storage readiness](docs/STORAGE_READINESS.md) before accepting lasting family archives. GitHub stores application code, not contact records or recordings.
+
 ## Configuration
 
 [.env.local.example](.env.local.example) lists every setting for the new collection journey. Restart the development server after changing it.

@@ -1,53 +1,56 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { Logo } from "./Logo";
+import { BrandPattern } from "./BrandPattern";
 import Link from "next/link";
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-warmgray-200 bg-paper-50 px-6 py-12 text-center">
-      <div className="mb-4 inline-flex">
-        <Logo />
+    <footer className="brand-gradient-chocolate relative isolate mt-auto overflow-hidden px-6 py-12 text-white sm:px-10 sm:py-16">
+      <BrandPattern
+        variant="ribbon"
+        className="absolute -right-12 -top-12 -z-10 h-full min-h-[320px] w-auto text-white opacity-[.06]"
+      />
+      <div className="mx-auto flex max-w-[1250px] flex-col justify-between gap-10 sm:flex-row sm:items-end">
+        <div>
+          <Logo variant="light" />
+          <p className="mt-5 text-base text-white/80">
+            What you gave lives on.
+          </p>
+        </div>
+        <div>
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap items-center gap-6 text-sm"
+          >
+            <Link
+              href="/for-organizations"
+              className="inline-flex items-center hover:underline"
+            >
+              Group gifting
+            </Link>
+            <Link
+              href="/about"
+              className="inline-flex items-center hover:underline"
+            >
+              About
+            </Link>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center hover:underline"
+            >
+              Pilot
+            </Link>
+            <Link
+              href="/privacy"
+              className="inline-flex items-center hover:underline"
+            >
+              Privacy
+            </Link>
+          </nav>
+          <p className="mt-5 text-xs text-white/65 sm:text-right">
+            &copy; 2026 time tapestry
+          </p>
+        </div>
       </div>
-      <motion.p
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="mb-5 font-sans text-sm text-ink-500"
-      >
-        What you gave lives on.
-      </motion.p>
-      <motion.nav
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-sans text-sm text-oxblood"
-      >
-        <Link
-          href="/about"
-          className="transition-colors hover:text-oxblood-700"
-        >
-          About
-        </Link>
-        <Link
-          href="/pricing"
-          className="transition-colors hover:text-oxblood-700"
-        >
-          Pilot
-        </Link>
-        <Link
-          href="/privacy"
-          className="transition-colors hover:text-oxblood-700"
-        >
-          Privacy
-        </Link>
-      </motion.nav>
-      <p className="mt-5 font-sans text-[11px] tracking-wide text-ink-500">
-        &copy; 2026 time tapestry
-      </p>
     </footer>
   );
 }

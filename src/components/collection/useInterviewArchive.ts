@@ -19,6 +19,10 @@ import {
   type ArchiveLocalTake,
 } from "@/lib/collection/archive-utils";
 import type { InterviewSegment } from "@/lib/collection/types";
+import {
+  interviewCaptureConstraints,
+  type InterviewDevices,
+} from "@/lib/collection/interview-devices";
 
 export type ArchiveRecording = {
   id: string;
@@ -80,14 +84,13 @@ function friendlyError(error: unknown) {
     : "Your recording could not be saved. Keep this tab open.";
 }
 
-function requestCaptureStream(kind: "voice" | "video") {
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true },
-    video:
-      kind === "video"
-        ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
-        : false,
-  });
+function requestCaptureStream(
+  kind: "voice" | "video",
+  devices: InterviewDevices = {},
+) {
+  return navigator.mediaDevices.getUserMedia(
+    interviewCaptureConstraints(kind, devices),
+  );
 }
 
 async function responseData(response: Response) {
@@ -107,7 +110,6 @@ export function useInterviewArchive({
     "idle" | "starting" | "recording" | "paused" | "stopping"
   >("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [durationMs, setDurationMs] = useState(0);
   const [recordings, setRecordings] = useState<ArchiveRecording[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -124,6 +126,7 @@ export function useInterviewArchive({
     kind: "voice" | "video";
     startedAt: string;
     origin: number;
+    devices: InterviewDevices;
   } | null>(null);
   const stored = useRef(new Map<string, ArchiveLocalTake>());
   const memory = useRef(new Map<string, Blob>());
@@ -606,6 +609,7 @@ export function useInterviewArchive({
       sessionId: string,
       kind: "voice" | "video",
       sessionStartedAt?: string,
+      devices: InterviewDevices = {},
     ) => {
       if (transitioning.current || active.current || media.current)
         throw new Error(
@@ -640,8 +644,9 @@ export function useInterviewArchive({
           kind,
           startedAt,
           origin: performance.now() - offset,
+          devices: { ...devices },
         };
-        const nextStream = await requestCaptureStream(kind);
+        const nextStream = await requestCaptureStream(kind, devices);
         if (!mounted.current) {
           nextStream.getTracks().forEach((track) => track.stop());
           throw new Error("Recording was cancelled.");
@@ -650,6 +655,7 @@ export function useInterviewArchive({
         active.current = await beginSegment();
         setStatus("recording");
         scheduleRollover();
+        return nextStream;
       } catch (cause) {
         // installStream updates this ref inside a callback.
         (media.current as MediaStream | null)
@@ -701,48 +707,64 @@ export function useInterviewArchive({
     }
   }, [acquireTransition, clearRollover, completeTransition, stopSegment]);
 
-  const resume = useCallback(async () => {
-    if (transitioning.current || active.current)
-      throw new Error("The recording is already running or saving.");
-    if (!media.current || !session.current)
-      throw new Error("Start the interview to continue recording.");
-    await acquireTransition();
-    setError("");
-    try {
-      if (
-        media.current.getTracks().some((track) => track.readyState !== "live")
-      ) {
-        media.current.getTracks().forEach((track) => track.stop());
-        const nextStream = await requestCaptureStream(session.current.kind);
-        if (!mounted.current) {
-          nextStream.getTracks().forEach((track) => track.stop());
-          throw new Error("Recording was cancelled.");
+  const resume = useCallback(
+    async (devices?: InterviewDevices) => {
+      if (transitioning.current || active.current)
+        throw new Error("The recording is already running or saving.");
+      if (!media.current || !session.current)
+        throw new Error("Start the interview to continue recording.");
+      await acquireTransition();
+      setError("");
+      try {
+        const nextDevices = devices ?? session.current.devices;
+        const changed =
+          nextDevices.microphoneId !== session.current.devices.microphoneId ||
+          nextDevices.cameraId !== session.current.devices.cameraId;
+        if (
+          changed ||
+          media.current.getTracks().some((track) => track.readyState !== "live")
+        ) {
+          // The previous segment has finished before changing capture devices.
+          media.current.getTracks().forEach((track) => track.stop());
+          const nextStream = await requestCaptureStream(
+            session.current.kind,
+            nextDevices,
+          );
+          if (!mounted.current) {
+            nextStream.getTracks().forEach((track) => track.stop());
+            throw new Error("Recording was cancelled.");
+          }
+          installStream(nextStream);
+          session.current.devices = { ...nextDevices };
         }
-        installStream(nextStream);
+        media.current.getTracks().forEach((track) => {
+          track.enabled = true;
+        });
+        active.current = await beginSegment();
+        setStatus("recording");
+        scheduleRollover();
+        return media.current;
+      } catch (cause) {
+        media.current?.getTracks().forEach((track) => {
+          track.enabled = false;
+        });
+        if (mounted.current) {
+          setStatus("paused");
+          setError(friendlyError(cause));
+        }
+        throw cause;
+      } finally {
+        completeTransition();
       }
-      media.current.getTracks().forEach((track) => {
-        track.enabled = true;
-      });
-      active.current = await beginSegment();
-      setStatus("recording");
-      scheduleRollover();
-    } catch (cause) {
-      media.current.getTracks().forEach((track) => {
-        track.enabled = false;
-      });
-      setStatus("paused");
-      setError(friendlyError(cause));
-      throw cause;
-    } finally {
-      completeTransition();
-    }
-  }, [
-    acquireTransition,
-    beginSegment,
-    completeTransition,
-    installStream,
-    scheduleRollover,
-  ]);
+    },
+    [
+      acquireTransition,
+      beginSegment,
+      completeTransition,
+      installStream,
+      scheduleRollover,
+    ],
+  );
 
   const stop = useCallback(async () => {
     await acquireTransition();
@@ -818,17 +840,6 @@ export function useInterviewArchive({
   }, [clearRollover, collectionId, publish]);
 
   useEffect(() => {
-    if (status !== "recording") return;
-    const timer = setInterval(() => {
-      if (session.current)
-        setDurationMs(
-          Math.max(0, Math.round(performance.now() - session.current.origin)),
-        );
-    }, 250);
-    return () => clearInterval(timer);
-  }, [status]);
-
-  useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (
         active.current ||
@@ -855,7 +866,6 @@ export function useInterviewArchive({
     getBlob,
     stream,
     status,
-    durationMs,
     recordings,
     error,
     warning,

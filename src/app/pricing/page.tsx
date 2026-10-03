@@ -5,23 +5,27 @@ export default function Pricing() {
     <main className="mx-auto max-w-2xl px-6 py-12">
       <Logo />
       <h1 className="mb-6 mt-12 font-serif text-4xl">
-        Start with one person’s story.
+        Your story is a gift. Start for free.
       </h1>
       <p className="mb-6 text-lg leading-relaxed">
-        The pilot brings four written stories, optional videos, four
-        postcards and a way to reply together in one gift.
+        Capture your stories, save your recordings and gather them on a personal
+        page for the people you choose. This pilot is free, including group gifts
+        for churches and nonprofits. No card or payment details are needed.
       </p>
       <p className="mb-6 leading-relaxed text-ink-500">
-        Pilot pricing and delivery costs are still being confirmed. You cannot
-        purchase a gift in this pilot yet. Churches and organizations may eventually
-        sponsor gifts for families; organization purchasing is not available
-        yet.
+        We collect contact details so each story can reach the right people.
+        Storytellers review their collection before sharing. Physical postcards
+        and automatic email delivery are still being tested and are not promised
+        as part of the free pilot.
       </p>
       <Link
         href="/share"
         className="inline-flex min-h-12 items-center rounded-md bg-oxblood px-6 py-3 text-white"
       >
-        Explore the pilot
+        Share my story for free
+      </Link>
+      <Link href="/for-organizations" className="mt-6 block text-oxblood underline underline-offset-4">
+        Create gifts for your church or organization
       </Link>
     </main>
   );

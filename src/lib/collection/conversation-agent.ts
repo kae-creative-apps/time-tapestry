@@ -17,8 +17,10 @@ INTERNAL ORGANIZATION, DO NOT ANNOUNCE CHAPTERS, PART NUMBERS OR THEME IDS
 The conversation should gently explore these four themes, in this order unless the person's story naturally covers another theme:
 q1: People who shaped me. Start with a specific moment of kindness the person received.
 q2: My walk with Jesus. Invite a specific choice shaped by following Jesus. If faithFraming in the saved context is beliefs, ask about a choice shaped by their beliefs instead. Do not presume conversion, church membership or a particular religious experience. Respect uncertainty.
-q3: Learning to live generously. Invite a concrete example of giving time, attention, care or resources. Do not presume wealth or ask for amounts donated.
+q3: Learning to live generously. Explore both giving time and giving financially, in separate turns. Invite a specific memory of how they sowed into another person's life through their time or care. Unless they have already told a financial giving story or declined this topic, use one of the two follow-ups to ask gently about a time they chose to sow financially into a person, church or ministry. Do not let a general mention of resources replace that invitation. Use the remaining follow-up, if needed, to explore the values or gratitude behind their giving and what they hope their family carries forward. Respect the existing follow-up limit and any request to skip or finish.
 q4: What I want you to know. Invite what they hope the recipient carries into daily life, in the storyteller's own words.
+For q3 in a faith-framed interview, briefly connect generosity with Scripture: Jesus taught about storing up treasure in heaven (Matthew 6:19-21), and Paul pictured generosity as sowing and urged willing, cheerful giving without compulsion (2 Corinthians 9:6-7). Use one short paraphrase when it fits, not a sermon or a recitation of both passages. Clearly distinguish Scripture from the storyteller's own words. Do not combine these passages into an invented quotation or promise a financial return. When faithFraming is beliefs, use the person's own values language instead.
+Welcome stories of financial giving with the same warmth as stories of service. Briefly reassure them that speaking openly can help their family understand their values, gratitude and character. If they worry about bragging, acknowledge that concern and invite them to share what mattered to them about the gift. Say that they choose what to share and who receives it; never promise absolute privacy. Do not presume wealth, praise the size of a gift or compare their generosity with anyone else's. Amounts are optional only if the storyteller chooses to mention them. Do not require a dollar amount or request bank balances or account information. Never pressure them to disclose more, solicit a new gift or turn this family conversation into fundraising.
 Before a question that changes the active theme, call set_interview_theme with exactly one themeId: q1, q2, q3 or q4. Wait for the client response before asking that question. The app initially selects the current theme from the saved context. This tool only organizes answers. It cannot save, approve or share a gift. Do not speak its name or its identifiers.
 Within the two-follow-up limit, invite a short personal encouragement for the recipient when it fits and they have not already offered it. Skip this invitation when the theme already has enough questions or the encouragement is already clear. A Scripture reference or words they personally remember are optional. Never supply a Bible quotation as if the storyteller said it, and never invent a reference, translation or spiritual interpretation. Avoid making this invitation a repeated formula.
 The person may pause or end at any time. If they explicitly finish the interview, briefly tell them they can select Finish and review. Then stop asking questions. Do not add a final question after they say they are finished. Do not end because someone says a historical event was finished. When the four themes have sufficient material, ask whether there is anything else they would like to say. Then explain that the application will let them review their story. Do not keep adding questions to fill time. Never approve, send, publish, mail, invite anyone, or collect contact/address/payment details through this conversation.
@@ -118,6 +120,7 @@ type Provider = {
   getAgent: () => Promise<ElevenLabs.GetAgentResponseModel>;
   getTool: (id: string) => Promise<ElevenLabs.ToolResponseModel>;
   getToken: () => Promise<ElevenLabs.TokenResponseModel>;
+  getSignedUrl?: () => Promise<ElevenLabs.ConversationSignedUrlResponseModel>;
 };
 
 function providerForEnvironment(): Provider {
@@ -132,6 +135,8 @@ function providerForEnvironment(): Provider {
     getTool: (id) => client.conversationalAi.tools.get(id),
     getToken: () =>
       client.conversationalAi.conversations.getWebrtcToken({ agentId }),
+    getSignedUrl: () =>
+      client.conversationalAi.conversations.getSignedUrl({ agentId }),
   };
 }
 
@@ -209,6 +214,7 @@ export async function createInterviewSession(
   key: string,
   sessionId?: string,
   provider?: Provider,
+  connectionType: "webrtc" | "websocket" = "webrtc",
 ) {
   const role = roleFor(c, key);
   if (!role)
@@ -247,12 +253,27 @@ export async function createInterviewSession(
       await client.getAgent(),
       client.getTool,
     );
-    const result = await client.getToken();
-    if (typeof result.token !== "string" || !result.token) throw setupError();
+    // A deliberate retry can use WebSocket when the browser's WebRTC signaling
+    // connection is unavailable. Both transports require the same owner access
+    // and freshly validated agent configuration. Never accept a client URL.
+    let conversationToken: string | undefined;
+    let signedUrl: string | undefined;
+    if (connectionType === "websocket") {
+      if (!client.getSignedUrl) throw setupError();
+      const result = await client.getSignedUrl();
+      if (typeof result.signedUrl !== "string" || !result.signedUrl)
+        throw setupError();
+      signedUrl = result.signedUrl;
+    } else {
+      const result = await client.getToken();
+      if (typeof result.token !== "string" || !result.token) throw setupError();
+      conversationToken = result.token;
+    }
     return {
       configured: true as const,
-      conversationToken: result.token,
-      connectionType: "webrtc" as const,
+      conversationToken,
+      signedUrl,
+      connectionType,
       overrides: {
         agent: {
           prompt: { prompt: INTERVIEW_AGENT_PROMPT },

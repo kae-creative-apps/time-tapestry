@@ -26,10 +26,10 @@ export const CHAPTERS = [
     id: "q3",
     title: "Learning to live generously",
     question:
-      "Tell me about a time you chose to give your time, attention or resources to someone.",
+      "Tell me about how you sowed into other people's lives through your time and financial giving.",
     followUps: [
-      "What moved you to respond?",
-      "What did you learn from that experience?",
+      "Would you share a time you chose to give financially to a person, church or ministry?",
+      "What do you hope your family learns from the ways you chose to give?",
     ],
   },
   {

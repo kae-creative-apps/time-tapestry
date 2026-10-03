@@ -3,16 +3,16 @@ import { useState, useEffect, useCallback } from "react";
 import { upload } from "@vercel/blob/client";
 import { QRCodeSVG } from "qrcode.react";
 import { Logo } from "@/components/Logo";
+import { BrandPattern } from "@/components/BrandPattern";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 import { useCollection } from "./useCollection";
 import AddressForm from "./AddressForm";
 import { interviewAnswers } from "@/lib/collection/interview";
 const field =
-  "mt-2 w-full rounded-md border border-warmgray-300 bg-white p-3 text-base leading-relaxed";
-const primary =
-  "min-h-12 rounded-md bg-oxblood px-5 py-3 text-white disabled:opacity-50";
+  "mt-2 w-full rounded-md border border-warmgray-300 bg-white p-3 text-base leading-relaxed transition-colors hover:border-taupe";
+const primary = "brand-button-primary min-h-12 px-5 py-3 disabled:opacity-50";
 const secondary =
-  "min-h-12 rounded-md border border-warmgray-300 px-4 py-3 text-ink disabled:opacity-50";
+  "brand-button-secondary min-h-12 px-4 py-3 disabled:opacity-50";
 function ChapterEditor({
   chapter,
   c,
@@ -182,8 +182,8 @@ function ChapterEditor({
     }
   }
   return (
-    <section className="my-8 rounded-xl border border-warmgray-300 bg-paper-50 p-5 sm:p-8">
-      <p className="text-sm uppercase tracking-widest text-oxblood">
+    <section className="my-8 rounded-2xl border border-warmgray-200 border-t-4 border-t-sage bg-white p-5 shadow-soft sm:p-8">
+      <p className="brand-eyebrow text-oxblood">
         Story {chapter.id.slice(1)} of 4
       </p>
       <label className="mt-4 block">
@@ -410,7 +410,7 @@ function ChapterEditor({
         {cardLength} / 1,000 postcard characters. Check any Scripture against
         your chosen Bible translation.
       </p>
-      <div className="my-6 border border-warmgray-300 bg-white p-6">
+      <div className="my-6 rounded-xl border border-clay-100 bg-clay-50 p-6 sm:p-8">
         <p className="font-serif text-2xl">{title}</p>
         <p className="mt-4 leading-relaxed">{note}</p>
         {blessing.encouragement && (
@@ -483,8 +483,8 @@ export default function Review({
   );
   if (!c)
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
-        <Logo />
+      <main className="brand-page-shell mx-auto max-w-4xl px-5 py-8 sm:px-8">
+        <Logo className="[&_svg]:h-11" />
         <p className="mt-10" role="status">
           {error || "Loading your review..."}
         </p>
@@ -492,24 +492,35 @@ export default function Review({
     );
   if (c.role !== "owner")
     return (
-      <main className="p-12">Please use the storyteller review link.</main>
+      <main className="brand-page-shell mx-auto max-w-4xl px-6 py-12">
+        Please use the storyteller review link.
+      </main>
     );
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <Logo />
-      <p className="mt-10 text-sm uppercase tracking-widest text-oxblood">
-        Your stories, in your own words
-      </p>
-      <h1 className="mb-4 mt-3 font-serif text-4xl">
-        Review your stories before sharing.
-      </h1>
-      <p className="text-lg leading-relaxed text-ink-500">
-        Read each story, watch any included video, and check the postcard
-        message. {c.recipient.name} can open all four approved stories from the
-        first postcard. The next three cards are planned for months 3, 6 and 9.
-      </p>
+    <main className="brand-page-shell mx-auto max-w-4xl px-5 py-6 sm:px-8 sm:py-8">
+      <Logo className="[&_svg]:h-11" />
+      <header className="brand-gradient-clay relative mt-8 overflow-hidden rounded-2xl p-6 sm:p-9">
+        <BrandPattern
+          variant="weave"
+          className="pointer-events-none absolute -right-24 -top-16 h-96 w-96 text-espresso opacity-[0.07]"
+        />
+        <div className="relative">
+          <p className="brand-eyebrow text-espresso">
+            Your stories, in your own words
+          </p>
+          <h1 className="mb-4 mt-3 max-w-xl font-serif text-3xl text-espresso sm:text-4xl">
+            Review your stories before sharing.
+          </h1>
+          <p className="max-w-2xl text-lg leading-relaxed text-espresso">
+            Read each story, watch any included video, and check the postcard
+            message. {c.recipient.name} can open all four approved stories from
+            the first postcard. The next three cards are planned for months 3, 6
+            and 9.
+          </p>
+        </div>
+      </header>
       {c.status === "approved" ? (
-        <div className="mt-8 rounded-xl border border-warmgray-300 p-6">
+        <div className="mt-8 rounded-2xl border border-sage-200 bg-white p-6 shadow-soft sm:p-8">
           <h2 className="font-serif text-2xl">Your gift is approved.</h2>
           <p className="my-4">
             This approved version cannot be changed in the pilot, so every visit
@@ -529,7 +540,7 @@ export default function Review({
             Return to my answers
           </a>
           {c.draftOutdated && (
-            <div className="my-6 rounded-md bg-paper-200 p-5">
+            <div className="my-6 rounded-xl border border-clay-100 bg-clay-50 p-5">
               <p className="mb-3">
                 You changed your selected answers after these drafts were made.
                 Create new drafts to include those changes. Your earlier drafts
@@ -545,12 +556,12 @@ export default function Review({
             </div>
           )}
           {Boolean(c.draftHistory?.length) && (
-            <details className="my-6">
+            <details className="my-6 rounded-xl border border-warmgray-200 bg-white p-5">
               <summary>Saved draft history ({c.draftHistory?.length})</summary>
               {c.draftHistory?.map((v, i) => (
                 <div
                   key={v.savedAt}
-                  className="my-4 border border-warmgray-300 p-4"
+                  className="my-4 rounded-lg border border-warmgray-200 bg-paper p-4"
                 >
                   <p>
                     Draft {i + 1}, saved {new Date(v.savedAt).toLocaleString()}
@@ -574,7 +585,7 @@ export default function Review({
             </details>
           )}
           {!c.chapters.length ? (
-            <div className="my-8 rounded-lg border border-warmgray-300 p-6">
+            <div className="my-8 rounded-2xl border border-sage-200 bg-white p-6 shadow-soft">
               <p className="mb-5">
                 Save an answer in each of the four interview parts, then create
                 your story drafts. You will review everything before sharing.
@@ -591,7 +602,7 @@ export default function Review({
             <>
               <nav
                 aria-label="Story review"
-                className="my-7 grid grid-cols-2 gap-3 sm:grid-cols-4"
+                className="my-7 grid grid-cols-2 gap-3 rounded-xl bg-sage-100 p-3 sm:grid-cols-4"
               >
                 {c.chapters.map((ch, i) => (
                   <button
@@ -629,7 +640,7 @@ export default function Review({
               ))}
             </>
           )}
-          <section className="my-10 border-t border-warmgray-300 pt-8">
+          <section className="my-10 rounded-2xl border border-warmgray-200 bg-white p-6 shadow-soft sm:p-8">
             <h2 className="mb-4 font-serif text-2xl">
               Delivery to {c.recipient.name}
             </h2>
@@ -678,7 +689,7 @@ export default function Review({
               {error}
             </p>
           )}
-          <section className="mb-12 rounded-xl bg-paper-200 p-6">
+          <section className="mb-12 rounded-2xl border border-sage-200 bg-sage-100 p-6 sm:p-8">
             <h2 className="font-serif text-2xl">Ready to approve your gift?</h2>
             <p className="my-4 leading-relaxed">
               Approving makes all four stories available at the private gift

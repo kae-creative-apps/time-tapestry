@@ -1,0 +1,100 @@
+/* SmoothUI / Edu Calvo: https://21st.dev/@educalvolpz/components/siri-orb */
+@property --tt-orb-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.orb {
+  display: inline-grid;
+  grid-template-areas: "stack";
+  overflow: hidden;
+  border-radius: 50%;
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 auto;
+}
+
+.orb::before,
+.orb::after {
+  content: "";
+  display: block;
+  grid-area: stack;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.orb::before {
+  background:
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * 2) at 25% 70%,
+      var(--tt-orb-c3),
+      transparent 20% 80%,
+      var(--tt-orb-c3)
+    ),
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * 2) at 45% 75%,
+      var(--tt-orb-c2),
+      transparent 30% 60%,
+      var(--tt-orb-c2)
+    ),
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * -3) at 80% 20%,
+      var(--tt-orb-c1),
+      transparent 40% 60%,
+      var(--tt-orb-c1)
+    ),
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * 2) at 15% 5%,
+      var(--tt-orb-c2),
+      transparent 10% 90%,
+      var(--tt-orb-c2)
+    ),
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * 1) at 20% 80%,
+      var(--tt-orb-c1),
+      transparent 10% 90%,
+      var(--tt-orb-c1)
+    ),
+    conic-gradient(
+      from calc(var(--tt-orb-angle) * -2) at 85% 10%,
+      var(--tt-orb-c3),
+      transparent 20% 80%,
+      var(--tt-orb-c3)
+    );
+  box-shadow: inset var(--tt-orb-bg) 0 0 var(--tt-orb-shadow)
+    calc(var(--tt-orb-shadow) * 0.2);
+  filter: blur(var(--tt-orb-blur)) contrast(var(--tt-orb-contrast));
+  animation: rotate var(--tt-orb-duration) linear infinite;
+}
+
+.orb::after {
+  background-image: radial-gradient(
+    circle at center,
+    var(--tt-orb-bg) var(--tt-orb-dot-size),
+    transparent var(--tt-orb-dot-size)
+  );
+  background-size: calc(var(--tt-orb-dot-size) * 2)
+    calc(var(--tt-orb-dot-size) * 2);
+  backdrop-filter: blur(calc(var(--tt-orb-blur) * 2))
+    contrast(calc(var(--tt-orb-contrast) * 2));
+  mix-blend-mode: overlay;
+  mask-image: radial-gradient(black var(--tt-orb-mask-radius), transparent 75%);
+}
+
+.orb[data-mask="none"]::after {
+  mask-image: none;
+}
+
+@keyframes rotate {
+  to {
+    --tt-orb-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb::before {
+    animation: none;
+  }
+}

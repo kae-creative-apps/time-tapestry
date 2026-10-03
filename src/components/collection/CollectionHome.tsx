@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useState } from "react";
 import { Logo } from "@/components/Logo";
+import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 const primary =
-  "inline-flex min-h-12 items-center justify-center rounded-md bg-oxblood px-5 py-3 text-white disabled:opacity-50";
+  "brand-button-primary inline-flex min-h-12 items-center justify-center px-5 py-3 disabled:opacity-50";
 const secondary =
-  "inline-flex min-h-12 items-center justify-center rounded-md border border-warmgray-300 px-5 py-3 text-ink disabled:opacity-50";
+  "brand-button-secondary inline-flex min-h-12 items-center justify-center px-5 py-3 disabled:opacity-50";
 const date = (s: string) =>
   new Date(s).toLocaleDateString(undefined, {
     month: "long",
@@ -86,7 +87,7 @@ function ReplyForm({
     }
   }
   return (
-    <section className="mt-8 border-t border-warmgray-300 pt-6">
+    <section className="mt-8 rounded-xl border border-sage-200 bg-sage-50 p-5 sm:p-6">
       <h3 className="font-serif text-2xl">
         Send a message to {c.storyteller.name}.
       </h3>
@@ -206,8 +207,8 @@ export default function CollectionHome({
     `/api/collection/${id}/media/${mediaId}?key=${encodeURIComponent(accessKey)}`;
   if (!c)
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
-        <Logo />
+      <main className="brand-page-shell mx-auto max-w-4xl px-5 py-8 sm:px-8">
+        <Logo className="[&_svg]:h-11" />
         <p className="mt-10" role="status">
           {error || "Opening your story..."}
         </p>
@@ -215,8 +216,8 @@ export default function CollectionHome({
     );
   if (c.role === "requester")
     return (
-      <main className="mx-auto max-w-2xl px-6 py-12">
-        <Logo />
+      <main className="brand-page-shell mx-auto my-6 max-w-2xl rounded-2xl border border-warmgray-200 border-t-8 border-t-sage bg-white px-6 py-8 shadow-soft sm:my-10 sm:px-9">
+        <Logo className="[&_svg]:h-11" />
         <h1 className="mt-10 font-serif text-3xl">
           Your request for {c.storyteller.name}’s stories is saved.
         </h1>
@@ -247,8 +248,8 @@ export default function CollectionHome({
     );
   if (c.status !== "approved")
     return (
-      <main className="mx-auto max-w-2xl px-6 py-12">
-        <Logo />
+      <main className="brand-page-shell mx-auto my-6 max-w-2xl rounded-2xl border border-warmgray-200 border-t-8 border-t-clay bg-white px-6 py-8 shadow-soft sm:my-10 sm:px-9">
+        <Logo className="[&_svg]:h-11" />
         <h1 className="mt-10 font-serif text-3xl">
           {c.role === "owner"
             ? "Your stories are taking shape."
@@ -269,40 +270,46 @@ export default function CollectionHome({
     ? c.chapters
     : c.chapters.filter((ch) => ch.id === chapterId);
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <Logo />
-      <header className="mb-12 mt-12 border-b border-warmgray-300 pb-10">
-        <p className="text-sm uppercase tracking-widest text-oxblood">
-          Stories from {c.storyteller.name}
-        </p>
-        <h1 className="mb-5 mt-4 max-w-2xl font-serif text-4xl leading-tight sm:text-5xl">
-          {c.recipient.name},<br />
-          these stories are for you.
-        </h1>
-        <p className="max-w-2xl text-lg leading-relaxed text-ink-500">
-          Four stories, the values behind them, and encouragement to carry into
-          your own life. All four stories are here for you now.
-        </p>
-        <div className="mt-7 flex flex-wrap gap-3">
-          <button
-            className={primary}
-            onClick={() => {
-              setAll(true);
-              document
-                .getElementById("chapters")
-                ?.scrollIntoView({ behavior: "smooth" });
-            }}
-          >
-            Explore all four stories
-          </button>
+    <main className="brand-page-shell mx-auto max-w-4xl px-5 py-6 sm:px-8 sm:py-8">
+      <Logo className="[&_svg]:h-11" />
+      <header className="brand-gradient-chocolate relative mb-9 mt-8 overflow-hidden rounded-2xl p-6 text-white sm:p-10">
+        <BrandPattern
+          variant="weave"
+          className="pointer-events-none absolute -right-40 -top-12 h-[34rem] w-[34rem] text-clay opacity-[0.12]"
+        />
+        <div className="relative">
+          <p className="brand-eyebrow text-white">
+            Stories from {c.storyteller.name}
+          </p>
+          <h1 className="mb-5 mt-4 max-w-2xl font-serif text-4xl leading-tight text-white sm:text-5xl">
+            {c.recipient.name},<br />
+            these stories are for you.
+          </h1>
+          <p className="max-w-xl text-lg leading-relaxed text-white">
+            Four stories, the values behind them, and encouragement to carry
+            into your own life. All four stories are here for you now.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <button
+              className="brand-button-secondary min-h-12 bg-white px-5 py-3 text-espresso"
+              onClick={() => {
+                setAll(true);
+                document
+                  .getElementById("chapters")
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              Explore all four stories
+            </button>
+          </div>
+          <p className="mt-4 max-w-xl text-sm text-white">
+            You do not need to wait for the next postcard. Every card returns to
+            these same stories.
+          </p>
         </div>
-        <p className="mt-4 text-sm text-ink-500">
-          You do not need to wait for the next postcard. Every card returns to
-          these same stories.
-        </p>
       </header>
       {c.role === "owner" && (
-        <section className="mb-10 rounded-xl border border-warmgray-300 bg-paper-50 p-6">
+        <section className="mb-10 rounded-2xl border border-sage-200 bg-sage-50 p-6 sm:p-8">
           <h2 className="font-serif text-2xl">Your postcards and emails</h2>
           <p className="my-4 text-sm leading-relaxed">
             The first postcard is scheduled after approval. Three more are
@@ -373,7 +380,7 @@ export default function CollectionHome({
           <a
             key={ch.id}
             href={`/collection/${id}/chapter/${ch.id}?key=${encodeURIComponent(accessKey)}`}
-            className="rounded-lg border border-warmgray-300 px-5 py-4"
+            className="rounded-xl border border-sage-200 bg-sage-100 px-5 py-5 transition-colors hover:border-sage hover:bg-sage-200"
           >
             <span className="text-sm text-oxblood">Story {i + 1}</span>
             <span className="mt-1 block font-serif text-xl">{ch.title}</span>
@@ -392,9 +399,9 @@ export default function CollectionHome({
             <article
               id={ch.id}
               key={ch.id}
-              className="scroll-mt-8 rounded-xl border border-warmgray-300 bg-paper-50 p-5 sm:p-8"
+              className="scroll-mt-8 rounded-2xl border border-warmgray-200 border-t-4 border-t-clay bg-white p-5 shadow-soft sm:p-9"
             >
-              <p className="text-sm uppercase tracking-widest text-oxblood">
+              <p className="brand-eyebrow text-oxblood">
                 Story {ch.id.slice(1)} of 4
               </p>
               <h2 className="mb-5 mt-3 font-serif text-3xl">{ch.title}</h2>
@@ -413,7 +420,7 @@ export default function CollectionHome({
                   }}
                 />
               ) : (
-                <p className="mb-6 rounded-md bg-paper-200 p-4 text-sm">
+                <p className="mb-6 rounded-md bg-sage-50 p-4 text-sm">
                   A written story from {c.storyteller.name}.
                 </p>
               )}
@@ -431,7 +438,7 @@ export default function CollectionHome({
                 (b.encouragement ||
                   b.scriptureText ||
                   b.scriptureReference) && (
-                  <aside className="mt-8 border-l-2 border-oxblood pl-5">
+                  <aside className="mt-8 rounded-xl border border-clay-100 bg-clay-50 p-5 sm:p-6">
                     <p className="mb-3 text-sm uppercase tracking-widest text-oxblood">
                       A word for {c.recipient.name}
                     </p>

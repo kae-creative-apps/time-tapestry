@@ -250,6 +250,44 @@ test("session body cannot inject provider settings or arbitrary context", async 
   });
   assert.equal(result.status, 503);
   assert.equal(JSON.stringify(result.body).includes("not-used"), false);
+  assert.equal(
+    (await request(c, c.ownerKey, { connectionType: "https://untrusted.example" })).status,
+    400,
+  );
+});
+
+test("alternative connection is owner-only, validated, and returns a signed WebSocket URL", async () => {
+  process.env.ELEVENLABS_API_KEY = "test-api-key-never-send-to-browser";
+  process.env.ELEVENLABS_AGENT_ID = "agent_test";
+  const c = collection();
+  let signedRequests = 0;
+  const provider = {
+    getAgent: async () => agent(),
+    getTool: noToolLookup,
+    getToken: async () => { throw new Error("WebRTC must not be used for the alternative connection"); },
+    getSignedUrl: async () => {
+      signedRequests += 1;
+      return { signedUrl: "wss://api.elevenlabs.io/test-signed-interview" };
+    },
+  };
+  try {
+    await assert.rejects(createInterviewSession(c, c.recipientKey, undefined, provider, "websocket"));
+    assert.equal(signedRequests, 0);
+    const result = await createInterviewSession(c, c.ownerKey, undefined, provider, "websocket");
+    assert.equal(result.connectionType, "websocket");
+    assert.equal(result.signedUrl, "wss://api.elevenlabs.io/test-signed-interview");
+    assert.equal(result.conversationToken, undefined);
+    assert.equal(result.overrides.agent.prompt.prompt, INTERVIEW_AGENT_PROMPT);
+    const invalid = agent();
+    invalid.platformSettings!.auth!.enableAuth = false;
+    await assert.rejects(createInterviewSession(c, c.ownerKey, undefined, {
+      ...provider, getAgent: async () => invalid,
+    }, "websocket"), ConversationSessionError);
+    assert.equal(signedRequests, 1);
+  } finally {
+    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.ELEVENLABS_AGENT_ID;
+  }
 });
 
 test("resume includes all accepted user turns and selected originals, never agent claims", () => {

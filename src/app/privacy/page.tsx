@@ -26,15 +26,20 @@ export default function Privacy() {
           The storyteller reviews the stories, videos and postcard messages
           before sharing. Original recordings are kept separately from
           edited videos. This pilot does not yet offer self-service account
-          deletion, complete data export or link revocation.
+          deletion, complete data export or story-link revocation. Organization
+          organizers can revoke unclaimed gift invitations, but cannot view a
+          family’s interview answers, recordings or approved story page through
+          the organization dashboard.
         </p>
         <h2 className="font-serif text-2xl">Services used to make the gift</h2>
         <p>
           When configured, Gloo processes answer text to help organize stories
           and follow-up questions; OpenAI transcribes recordings; ElevenLabs
-          speaks interview questions and can process audio for an edited
-          version. Vercel stores application records and private recording
-          files. Lob receives approved postcard content and mailing details;
+          processes live interview audio and transcripts, speaks the interview
+          questions and can process audio for an edited version. Local previews
+          store records and uploads on the server’s filesystem. Hosted deployments
+          require configured persistent storage for records and private recordings.
+          When delivery is enabled, Lob receives approved postcard content and mailing details;
           Resend sends product emails. The video editor may use HyperFrames and
           Remotion to render graphics and approved footage.
         </p>
@@ -46,10 +51,12 @@ export default function Privacy() {
         </p>
         <h2 className="font-serif text-2xl">Postcards and email</h2>
         <p>
-          The first postcard introduces the gift. A follow-up email is scheduled
-          two weeks after confirmed mailing. Recipients can turn off postcard
-          follow-up invitations on their story page. Sending a reply
-          notifies the storyteller by email.
+          Postcard and email delivery depend on a configured delivery service
+          and job runner. Queued messages have not necessarily been sent.
+          In the free group gifting flow, organizers copy and share invitation
+          links themselves. The planned first postcard introduces the gift, with
+          a follow-up email two weeks after confirmed mailing. Recipients can
+          turn off postcard follow-up invitations on their story page.
         </p>
       </div>
       <Link className="mt-10 inline-block text-oxblood underline" href="/">

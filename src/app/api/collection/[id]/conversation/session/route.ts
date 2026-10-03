@@ -48,6 +48,7 @@ export async function POST(
         false,
       );
     let sessionId: string | undefined;
+    let connectionType: "webrtc" | "websocket" = "webrtc";
     if (text) {
       let body: unknown;
       try {
@@ -66,6 +67,16 @@ export async function POST(
           false,
         );
       const value = (body as { sessionId?: unknown }).sessionId;
+      const transport = (body as { connectionType?: unknown }).connectionType;
+      if (transport !== undefined) {
+        if (transport !== "webrtc" && transport !== "websocket")
+          throw new ConversationSessionError(
+            "Choose a supported interview connection.",
+            400,
+            false,
+          );
+        connectionType = transport;
+      }
       if (value !== undefined) {
         if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{8,80}$/.test(value))
           throw new ConversationSessionError(
@@ -80,6 +91,8 @@ export async function POST(
       c,
       req.nextUrl.searchParams.get("key") || "",
       sessionId,
+      undefined,
+      connectionType,
     );
     return NextResponse.json(session, { headers });
   } catch (error) {

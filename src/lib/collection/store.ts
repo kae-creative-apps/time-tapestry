@@ -85,10 +85,11 @@ export async function listCollections() {
     Boolean(v && v.schemaVersion === 2),
   );
 }
-export async function mutateCollection(
+/** Serialize a read/update/write, including creation, under the record's lock. */
+export async function mutateRecord<T>(
   id: string,
-  update: (c: Collection) => Collection | Promise<Collection>,
-) {
+  update: (record: T | null) => T | Promise<T>,
+): Promise<T> {
   safeId(id);
   requireStorage();
   const token = randomUUID();
@@ -130,11 +131,17 @@ export async function mutateCollection(
   }
   if (!locked) throw new Error("Another save is in progress. Please retry.");
   try {
-    const c = await getCollection(id);
-    if (!c) throw new Error("Your stories could not be found.");
-    const next = await update(c);
-    next.updatedAt = new Date().toISOString();
-    await putCollection(next);
+    const current = await readRecord<T>(id);
+    const next = await update(current);
+    if (cloud()) {
+      // A slow update must not overwrite a newer writer after its lease expires.
+      const saved = await kv.eval(
+        "if redis.call('get',KEYS[1]) == ARGV[1] then redis.call('set',KEYS[2],ARGV[2]); return 1 else return 0 end",
+        [lockKey, `collection-v2:${id}`],
+        [token, JSON.stringify(next)],
+      );
+      if (!saved) throw new Error("This save took too long. Please retry.");
+    } else await writeRecord(id, next);
     return next;
   } finally {
     if (cloud())
@@ -145,4 +152,16 @@ export async function mutateCollection(
       );
     else await unlink(lockFile).catch(() => {});
   }
+}
+
+export async function mutateCollection(
+  id: string,
+  update: (c: Collection) => Collection | Promise<Collection>,
+) {
+  return mutateRecord<Collection>(id, async (c) => {
+    if (!c) throw new Error("Your stories could not be found.");
+    const next = await update(c);
+    next.updatedAt = new Date().toISOString();
+    return next;
+  });
 }
