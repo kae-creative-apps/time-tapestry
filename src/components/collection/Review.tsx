@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 import { useCollection } from "./useCollection";
 import AddressForm from "./AddressForm";
+import { interviewAnswers } from "@/lib/collection/interview";
 const field =
   "mt-2 w-full rounded-md border border-warmgray-300 bg-white p-3 text-base leading-relaxed";
 const primary =
@@ -41,7 +42,28 @@ function ChapterEditor({
     ),
     [uploading, setUploading] = useState(false),
     [error, setError] = useState("");
-  const sources = c.takes.filter((t) => chapter.sourceTakeIds.includes(t.id));
+  const sources = [...c.takes, ...interviewAnswers(c, chapter.id)].filter((t) =>
+    chapter.sourceTakeIds.includes(t.id),
+  );
+  const liveOriginals = new Map<
+    string,
+    { mediaId: string; kind: "voice" | "video" }
+  >();
+  for (const source of sources) {
+    if (!source.liveSource) continue;
+    const session = c.interviews?.find(
+      (item) => item.id === source.liveSource!.sessionId,
+    );
+    for (const range of source.liveSource.sourceRanges) {
+      const segment = session?.segments.find(
+        (item) => item.id === range.segmentId,
+      );
+      liveOriginals.set(range.mediaId, {
+        mediaId: range.mediaId,
+        kind: segment?.kind ?? (source.kind === "video" ? "video" : "voice"),
+      });
+    }
+  }
   const mediaUrl = (id: string) =>
     `/api/collection/${c.id}/media/${id}?key=${encodeURIComponent(accessKey)}`;
   useEffect(() => {
@@ -162,10 +184,10 @@ function ChapterEditor({
   return (
     <section className="my-8 rounded-xl border border-warmgray-300 bg-paper-50 p-5 sm:p-8">
       <p className="text-sm uppercase tracking-widest text-oxblood">
-        Chapter {chapter.id.slice(1)}
+        Story {chapter.id.slice(1)} of 4
       </p>
       <label className="mt-4 block">
-        Chapter title
+        Story title
         <input
           className={field}
           value={title}
@@ -203,6 +225,7 @@ function ChapterEditor({
             <div key={s.id}>
               <p className="mb-2 text-sm text-ink-500">{s.prompt}</p>
               {s.mediaId &&
+                !s.liveSource &&
                 (s.kind === "video" ? (
                   <video
                     className="w-full rounded-md bg-black"
@@ -222,9 +245,46 @@ function ChapterEditor({
               </p>
             </div>
           ))}
+          {liveOriginals.size > 0 && (
+            <div className="border-t border-warmgray-300 pt-5">
+              <h4 className="font-medium">Original conversation recordings</h4>
+              <p className="mt-2 text-sm leading-relaxed text-ink-500">
+                These are the full, unedited recordings used for this story.
+                They may include other answers and the interviewer&apos;s
+                questions. Review the finished story video separately below.
+              </p>
+              <div className="mt-4 space-y-5">
+                {[...liveOriginals.values()].map((original, index) => (
+                  <div key={original.mediaId}>
+                    <p className="mb-2 text-sm font-medium">
+                      Full original recording {index + 1}
+                    </p>
+                    {original.kind === "video" ? (
+                      <video
+                        className="w-full rounded-md bg-black"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        aria-label={`Full unedited conversation recording ${index + 1}`}
+                        src={mediaUrl(original.mediaId)}
+                      />
+                    ) : (
+                      <audio
+                        controls
+                        preload="metadata"
+                        className="w-full"
+                        aria-label={`Full unedited conversation recording ${index + 1}`}
+                        src={mediaUrl(original.mediaId)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </details>
-      <h3 className="mb-4 font-serif text-2xl">Legacy video</h3>
+      <h3 className="mb-4 font-serif text-2xl">Video for this story</h3>
       {chapter.videoMediaId ? (
         <video
           className="w-full rounded-md bg-black"
@@ -235,12 +295,12 @@ function ChapterEditor({
       ) : (
         <p className="rounded-md bg-paper-200 p-4 leading-relaxed">
           {chapter.videoStatus === "awaiting_edit"
-            ? "Your original is saved. The finished edit still needs to be rendered and reviewed."
-            : "This chapter currently has a written story. You can add a video below."}
+            ? "Your original recording is saved. A video editor still needs to finish the video for you to review."
+            : "Your written story is ready to review. You can also add a finished video below."}
         </p>
       )}
       <label className="mt-4 block text-sm">
-        Upload the finished, reviewed edit
+        Add the finished video
         <input
           type="file"
           accept="video/mp4,video/webm"
@@ -273,7 +333,7 @@ function ChapterEditor({
             })
           }
         >
-          Use a written chapter without a video for now
+          Share this story without a video
         </button>
       )}
       <h3 className="mb-4 mt-8 font-serif text-2xl">
@@ -293,7 +353,7 @@ function ChapterEditor({
         />
       </label>
       <label className="mt-5 block">
-        A personal encouragement
+        A word for {c.recipient.name} (optional)
         <textarea
           rows={3}
           className={field}
@@ -371,7 +431,7 @@ function ChapterEditor({
           />
           <p className="text-sm">
             A story and encouragement from {c.storyteller.name}.<br />
-            Scan to visit the complete collection.
+            Scan to open this story and explore the others.
           </p>
         </div>
         <p className="mt-4 text-xs text-ink-500">
@@ -401,7 +461,7 @@ function ChapterEditor({
         disabled={busy || uploading || cardLength > 1000}
         onClick={() => void save()}
       >
-        Save chapter review
+        Save story review
       </button>
     </section>
   );
@@ -438,26 +498,26 @@ export default function Review({
     <main className="mx-auto max-w-3xl px-6 py-10">
       <Logo />
       <p className="mt-10 text-sm uppercase tracking-widest text-oxblood">
-        Your story, in your words
+        Your stories, in your own words
       </p>
       <h1 className="mb-4 mt-3 font-serif text-4xl">
-        Make it yours before you share.
+        Review your stories before sharing.
       </h1>
       <p className="text-lg leading-relaxed text-ink-500">
-        Review all four chapters and their postcards. Your recipient can see the
-        complete collection from the first postcard. The next cards bring an
-        encouragement back at months 3, 6 and 9.
+        Read each story, watch any included video, and check the postcard
+        message. {c.recipient.name} can open all four approved stories from the
+        first postcard. The next three cards are planned for months 3, 6 and 9.
       </p>
       {c.status === "approved" ? (
         <div className="mt-8 rounded-xl border border-warmgray-300 p-6">
-          <h2 className="font-serif text-2xl">Your collection is approved.</h2>
+          <h2 className="font-serif text-2xl">Your gift is approved.</h2>
           <p className="my-4">
-            This version is fixed so every visit returns the same story and
-            encouragement. Postcard and email delivery status appears on your
-            collection page.
+            This approved version cannot be changed in the pilot, so every visit
+            returns the same stories and encouragement. Check postcard and email
+            progress on your story page.
           </p>
           <a className={primary} href={`/collection/${id}?key=${accessKey}`}>
-            Open my collection
+            Open my stories
           </a>
         </div>
       ) : (
@@ -466,22 +526,21 @@ export default function Review({
             className="mt-6 inline-block text-oxblood underline"
             href={`/record/${id}?key=${accessKey}`}
           >
-            Return to my recordings
+            Return to my answers
           </a>
           {c.draftOutdated && (
             <div className="my-6 rounded-md bg-paper-200 p-5">
               <p className="mb-3">
-                Your selected answers changed after this draft was made.
-                Recreating it makes a fresh version from those answers. Your
-                previous draft and video references remain in the saved draft
-                history.
+                You changed your selected answers after these drafts were made.
+                Create new drafts to include those changes. Your earlier drafts
+                and their attached videos stay in the draft history.
               </p>
               <button
                 className={secondary}
                 disabled={busy}
                 onClick={() => act({ action: "generate", regenerate: true })}
               >
-                Recreate chapters from updated answers
+                Create new drafts from my answers
               </button>
             </div>
           )}
@@ -517,21 +576,21 @@ export default function Review({
           {!c.chapters.length ? (
             <div className="my-8 rounded-lg border border-warmgray-300 p-6">
               <p className="mb-5">
-                Finish an answer in each of the four sections, then create your
-                written draft.
+                Save an answer in each of the four interview parts, then create
+                your story drafts. You will review everything before sharing.
               </p>
               <button
                 className={primary}
                 disabled={busy}
                 onClick={() => act({ action: "generate" })}
               >
-                Create my four chapters
+                Create my story drafts
               </button>
             </div>
           ) : (
             <>
               <nav
-                aria-label="Chapter review"
+                aria-label="Story review"
                 className="my-7 grid grid-cols-2 gap-3 sm:grid-cols-4"
               >
                 {c.chapters.map((ch, i) => (
@@ -547,13 +606,13 @@ export default function Review({
                     className={activeChapter === ch.id ? primary : secondary}
                     onClick={() => setActiveChapter(ch.id)}
                   >
-                    {ch.editorialReviewed ? "✓ " : ""}Chapter {i + 1}
+                    {ch.editorialReviewed ? "✓ " : ""}Story {i + 1}
                   </button>
                 ))}
               </nav>
               <p className="text-sm text-ink-500">
-                Review one chapter at a time. Save any changes before moving to
-                another chapter.
+                Review one story at a time. Save any changes before moving to
+                another story.
               </p>
               {c.chapters.map((ch) => (
                 <div key={ch.id} hidden={activeChapter !== ch.id}>
@@ -605,7 +664,8 @@ export default function Review({
                   Ask {c.recipient.name} for their address
                 </button>
                 <p className="mt-2 text-sm text-ink-500">
-                  This sends an address request without showing their stories.
+                  This prepares an email asking for their address. It does not
+                  share your unfinished stories.
                 </p>
               </>
             )}
@@ -619,19 +679,24 @@ export default function Review({
             </p>
           )}
           <section className="mb-12 rounded-xl bg-paper-200 p-6">
-            <h2 className="font-serif text-2xl">Ready to send this gift?</h2>
+            <h2 className="font-serif text-2xl">Ready to approve your gift?</h2>
             <p className="my-4 leading-relaxed">
-              Approval fixes the collection and schedules four postcards. The
-              first postcard is their introduction. Two weeks after confirmed
-              mailing, email gives them the same link in case the card did not
-              arrive.
+              Approving makes all four stories available at the private gift
+              link and schedules the postcards. The approved stories cannot be
+              changed in this pilot. Anyone with the link can open them.
+            </p>
+            <p className="mb-5 text-sm leading-relaxed">
+              The first postcard introduces the gift. A follow-up email with the
+              link is planned for two weeks after confirmed mailing, unless
+              follow-ups are turned off or no longer needed. Scheduled postcards
+              and emails have not necessarily been sent.
             </p>
             <p className="mb-5 text-sm">
               {Object.values(dirty).some(Boolean)
                 ? "Save your latest edits before approving. "
                 : ""}
               {c.chapters.filter((ch) => ch.editorialReviewed).length} of 4
-              chapters reviewed.{" "}
+              stories reviewed.{" "}
               {c.addressConfirmed
                 ? "Mailing address confirmed."
                 : "Mailing address still needed."}
@@ -651,9 +716,7 @@ export default function Review({
               }
               onClick={() => act({ action: "approve" })}
             >
-              {busy
-                ? "Saving..."
-                : "Approve my collection and schedule postcards"}
+              {busy ? "Saving..." : "Approve my gift and schedule postcards"}
             </button>
           </section>
         </>

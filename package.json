@@ -13,6 +13,7 @@
     "video:audio": "node --import tsx scripts/render-chapter-audio.ts"
   },
   "dependencies": {
+    "@elevenlabs/client": "^1.26.0",
     "@elevenlabs/elevenlabs-js": "^2.70.0",
     "@lob/lob-typescript-sdk": "^1.4.2",
     "@remotion/bundler": "4.0.532",

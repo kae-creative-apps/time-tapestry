@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       address,
       addressConfirmed: Boolean(address),
       invitationNote: clean(b.invitationNote, 2000),
-      faithFraming: b.faithFraming === "beliefs" ? "beliefs" : "faith",
+      faithFraming: "faith",
       currentQuestion: 0,
       chapterBlessings: {},
       takes: [],
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Unable to create collection" },
+      { error: e instanceof Error ? e.message : "Unable to start your gift. Please try again." },
       { status: 400 },
     );
   }

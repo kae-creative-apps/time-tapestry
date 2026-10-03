@@ -7,6 +7,7 @@ import {
   answerFromLocal,
   appendTakeChunk,
   getTakeBlob,
+  getLocalTake,
   listLocalTakes,
   putLocalTake,
   recordingExtension,
@@ -15,6 +16,8 @@ import {
 } from "@/lib/collection/local-takes";
 
 const MAX_SECONDS = 10 * 60;
+const NOT_SAVED_WARNING =
+  "Not saved yet. Keep this tab open and download your recording.";
 const primary =
   "min-h-12 rounded-md bg-oxblood px-5 py-3 font-medium text-white disabled:opacity-50";
 const secondary =
@@ -72,11 +75,25 @@ function friendlyRecordingError(error: unknown): string {
 async function responseData(response: Response) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(
-      data.error ||
-        "Your recording could not be backed up yet. It is still on this device.",
-    );
+    throw new Error(data.error || "Your recording could not be backed up yet.");
   return data;
+}
+
+async function hasDurableLocalCopy(
+  take: LocalTake,
+  expectedBytes?: number,
+): Promise<boolean> {
+  try {
+    const stored = await getLocalTake(take.id);
+    if (!stored) return false;
+    const blob = await getTakeBlob(stored);
+    return (
+      blob.size > 0 &&
+      (expectedBytes === undefined || blob.size === expectedBytes)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function LocalPlayback({
@@ -117,7 +134,7 @@ function LocalPlayback({
             playsInline
             preload="metadata"
             className="aspect-video w-full rounded-md bg-ink-800"
-            aria-label="Preview your saved video"
+            aria-label="Preview your video"
           />
         ) : (
           <audio
@@ -125,7 +142,7 @@ function LocalPlayback({
             controls
             preload="metadata"
             className="w-full"
-            aria-label="Preview your saved voice recording"
+            aria-label="Preview your voice recording"
           />
         ))}
       {error && (
@@ -139,7 +156,7 @@ function LocalPlayback({
           download={`time-tapestry-${take.questionId}-${take.id}.${recordingExtension(take.mimeType)}`}
           className="inline-flex items-center text-sm font-medium text-oxblood underline underline-offset-4"
         >
-          Download a backup
+          Download recording
         </a>
       )}
     </div>
@@ -172,6 +189,7 @@ export default function SavedRecorder({
   const [message, setMessage] = useState("");
   const [storageWarning, setStorageWarning] = useState("");
   const [fallbacks, setFallbacks] = useState<Record<string, Blob>>({});
+  const [localCopies, setLocalCopies] = useState<Record<string, boolean>>({});
   const video = useRef<HTMLVideoElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const audioRecorder = useRef<MediaRecorder | null>(null);
@@ -179,7 +197,6 @@ export default function SavedRecorder({
   const active = useRef<LocalTake | null>(null);
   const chunks = useRef<Blob[]>([]);
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
-  const saveFailed = useRef(false);
   const startedAt = useRef(0);
   const mounted = useRef(true);
   const onSavedRef = useRef(onSaved);
@@ -191,6 +208,18 @@ export default function SavedRecorder({
   const refresh = useCallback(async () => {
     try {
       const stored = await listLocalTakes(collectionId, questionId);
+      const checks = await Promise.all(
+        stored
+          .filter((take) => take.kind === kind && take.state !== "backed_up")
+          .map(
+            async (take) => [take.id, await hasDurableLocalCopy(take)] as const,
+          ),
+      );
+      if (mounted.current)
+        setLocalCopies((previous) => ({
+          ...previous,
+          ...Object.fromEntries(checks),
+        }));
       if (mounted.current)
         setTakes((previous) => {
           const memoryOnly = previous.filter(
@@ -219,14 +248,20 @@ export default function SavedRecorder({
   }, [busy, onBusyChange]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (recorder.current?.state === "recording" || uploading) {
+      const memoryOnly = takes.some(
+        (take) =>
+          take.state !== "backed_up" &&
+          fallbacks[take.id] &&
+          localCopies[take.id] !== true,
+      );
+      if (recorder.current?.state === "recording" || uploading || memoryOnly) {
         event.preventDefault();
         event.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [uploading]);
+  }, [uploading, takes, fallbacks, localCopies]);
   useEffect(
     () => () => {
       if (recorder.current?.state === "recording") recorder.current.stop();
@@ -287,8 +322,10 @@ export default function SavedRecorder({
     setUploading(take.id);
     setError("");
     let current = take;
+    let recordingBlob = blobOverride;
     try {
       const blob = blobOverride ?? (await getTakeBlob(take));
+      recordingBlob = blob;
       if (!blob.size)
         throw new Error("This take is empty. Please record another take.");
       if (!current.mediaId) {
@@ -329,8 +366,11 @@ export default function SavedRecorder({
             ...previous.filter((item) => item.id !== current.id),
             current,
           ]);
+          setStorageWarning((previous) =>
+            previous === NOT_SAVED_WARNING ? "" : previous,
+          );
           setMessage(
-            "Your recording is backed up. Review it, then choose Send message when you are ready.",
+            "Your recording is backed up. Review it, then choose Send my message when you are ready.",
           );
         }
         return;
@@ -362,6 +402,9 @@ export default function SavedRecorder({
           ...previous.filter((item) => item.id !== current.id),
           current,
         ]);
+        setStorageWarning((previous) =>
+          previous === NOT_SAVED_WARNING ? "" : previous,
+        );
         setMessage(
           "Your take is backed up. You can replay it below, record another, or continue.",
         );
@@ -425,7 +468,7 @@ export default function SavedRecorder({
           .catch(() => undefined);
         if (mounted.current)
           setMessage(
-            "Your recording is backed up. A transcript could not be created yet. Add the words below so they can become part of your written story.",
+            "Your recording is backed up. Check its transcription status below.",
           );
       }
       try {
@@ -439,8 +482,20 @@ export default function SavedRecorder({
           current,
         ]);
     } catch (error) {
+      const durable = await hasDurableLocalCopy(current, recordingBlob?.size);
       if (mounted.current) {
-        setError(friendlyRecordingError(error));
+        setLocalCopies((previous) => ({ ...previous, [current.id]: durable }));
+        if (!durable && recordingBlob?.size) {
+          const copy = recordingBlob;
+          setFallbacks((previous) => ({ ...previous, [current.id]: copy }));
+        }
+        setError(
+          durable
+            ? `${friendlyRecordingError(error)} Your recording is saved on this device. You can retry the backup.`
+            : recordingBlob?.size
+              ? NOT_SAVED_WARNING
+              : "We could not find a saved recording for this take. Please record another take.",
+        );
         setTakes((previous) => [
           ...previous.filter((item) => item.id !== current.id),
           { ...current, state: "local" },
@@ -530,7 +585,6 @@ export default function SavedRecorder({
       await putLocalTake(take);
       active.current = take;
       chunks.current = [];
-      saveFailed.current = false;
       writeQueue.current = Promise.resolve();
       recorder.current = mediaRecorder;
       let sequence = 0;
@@ -551,7 +605,6 @@ export default function SavedRecorder({
             ),
           )
           .catch((error) => {
-            saveFailed.current = true;
             if (mounted.current)
               setStorageWarning(friendlyRecordingError(error));
             if (mediaRecorder.state === "recording") mediaRecorder.stop();
@@ -568,7 +621,7 @@ export default function SavedRecorder({
               // The original video stays intact even if the transcription copy cannot save.
               if (mounted.current)
                 setStorageWarning(
-                  "The original video is being saved. Its written transcript may need to be added later.",
+                  "The copy used for automatic transcription could not be saved. Check your recording status below.",
                 );
             });
         };
@@ -604,15 +657,22 @@ export default function SavedRecorder({
         try {
           await putLocalTake(complete);
         } catch {
-          saveFailed.current = true;
+          // Verify the stored copy below before claiming it is saved.
         }
+        const durable = await hasDurableLocalCopy(complete, blob.size);
         if (mounted.current) {
+          setLocalCopies((previous) => ({
+            ...previous,
+            [complete.id]: durable,
+          }));
           setTakes((previous) => [
             ...previous.filter((item) => item.id !== complete.id),
             complete,
           ]);
-          if (saveFailed.current)
+          if (!durable && blob.size) {
             setFallbacks((previous) => ({ ...previous, [complete.id]: blob }));
+            setStorageWarning(NOT_SAVED_WARNING);
+          }
           setPhase("idle");
         }
         active.current = null;
@@ -652,8 +712,10 @@ export default function SavedRecorder({
         )}
         <p className="text-base text-ink-700">{suggestedDuration}</p>
         <p className="mt-2 text-sm text-ink-400">
-          Each clip saves as you record. At {Math.floor(limit / 60)} minutes,
-          recording stops and saves. Your other takes stay available to replay.
+          Each clip saves on this device while you record, then backs up to your
+          collection after you stop. Recording stops automatically at{" "}
+          {Math.floor(limit / 60)} minutes. Your other takes stay available to
+          replay.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-4">
           {phase === "recording" ? (
@@ -736,16 +798,27 @@ export default function SavedRecorder({
             <h3 className="text-xl">
               {take.state === "recording"
                 ? "Recovered recording"
-                : `Saved take ${index + 1}`}
+                : `${take.state === "backed_up" || localCopies[take.id] ? "Saved take" : "Take"} ${index + 1}`}
             </h3>
             <span className="text-sm text-ink-400">
               {take.state === "backed_up"
                 ? "Backed up"
-                : fallbacks[take.id]
-                  ? "Backup needed before leaving"
-                  : "Saved on this device"}
+                : localCopies[take.id] === true
+                  ? "Saved on this device"
+                  : localCopies[take.id] === undefined
+                    ? "Checking device copy…"
+                    : fallbacks[take.id]
+                      ? "Not saved yet"
+                      : "Device copy unavailable"}
             </span>
           </div>
+          {take.state !== "backed_up" &&
+            localCopies[take.id] === false &&
+            fallbacks[take.id] && (
+              <p role="alert" className="text-sm text-oxblood">
+                {NOT_SAVED_WARNING}
+              </p>
+            )}
           {take.state === "recording" && (
             <p className="text-sm text-ink-400">
               The previous recording stopped before it finished saving. Replay
@@ -767,7 +840,7 @@ export default function SavedRecorder({
                   localTakeId: take.id,
                 });
                 setMessage(
-                  "This recording is selected. Choose Send message when you are ready.",
+                  "This recording is selected. Choose Send my message when you are ready.",
                 );
               } else
                 void backup({ ...take, state: "local" }, fallbacks[take.id]);

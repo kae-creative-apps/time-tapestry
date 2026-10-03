@@ -148,7 +148,7 @@ export function VideoRecorder({
   }, [sessionId, onDone, onStartUpload]);
 
   return (
-    <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-6 text-center shadow-soft">
+    <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-6 text-center">
       {error && <p className="mb-4 text-oxblood">{error}</p>}
       <video
         ref={videoRef}

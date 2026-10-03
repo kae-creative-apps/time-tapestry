@@ -16,6 +16,19 @@ const date = (s: string) =>
   });
 const normalizedCopy = (text: string) =>
   text.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+const postcardStatus = {
+  scheduled: "Scheduled",
+  submitted: "Submitted for printing",
+  mailed: "Mailed",
+  failed: "Needs attention",
+  returned: "Returned by the postal service",
+} as const;
+const emailStatus = {
+  pending: "Waiting to send",
+  sent: "Sent",
+  failed: "Could not send",
+  suppressed: "Not scheduled to send",
+} as const;
 
 function ReplyForm({
   c,
@@ -78,13 +91,13 @@ function ReplyForm({
         Send a message to {c.storyteller.name}.
       </h3>
       <p className="my-4 leading-relaxed text-ink-500">
-        What would you like them to know after hearing this? A memory, a
-        question or a simple thank-you is enough.
+        What would you like them to know after this story? A memory, a question
+        or a simple thank-you is enough.
       </p>
       {sent && (
         <p role="status" className="mb-4 rounded-md bg-paper-200 p-4">
-          Your message is saved. An email notification is queued for{" "}
-          {c.storyteller.name}.
+          Your message is saved here. An email notification is waiting to send
+          to {c.storyteller.name}.
         </p>
       )}
       <div className="mb-5 flex flex-wrap gap-3">
@@ -108,7 +121,7 @@ function ReplyForm({
       </div>
       {anotherRecording && (
         <p role="status" className="mb-4 text-sm text-ink-500">
-          Finish saving the recording in the other chapter before opening this
+          Finish saving your recording for the other story before opening this
           camera.
         </p>
       )}
@@ -205,22 +218,31 @@ export default function CollectionHome({
       <main className="mx-auto max-w-2xl px-6 py-12">
         <Logo />
         <h1 className="mt-10 font-serif text-3xl">
-          Your story request is saved.
+          Your request for {c.storyteller.name}’s stories is saved.
         </h1>
         <p className="my-5 text-lg leading-relaxed">
-          The invitation for {c.storyteller.name} is queued.{" "}
-          {c.capabilities.email
-            ? "The delivery worker will send it."
-            : "Email setup is still needed before the invitation can be sent."}
+          {c.status === "approved"
+            ? `${c.storyteller.name} has approved their stories.`
+            : c.status === "draft"
+              ? `${c.storyteller.name}’s story drafts are ready for review.`
+              : c.status === "recording"
+                ? `${c.storyteller.name} has started answering the questions.`
+                : `Waiting for ${c.storyteller.name} to begin.`}
         </p>
         <p className="my-5">
-          They will review their stories before sharing. The first postcard
-          introduces the complete collection to {c.recipient.name}.
+          They choose what to share and review everything first. The first
+          postcard introduces all four approved stories to {c.recipient.name}.
         </p>
         <p className="text-sm text-ink-500">
-          Current status: {c.status}. This page tracks the request; it does not
-          grant access to their unfinished interview.
+          This page shows progress on your request. Their unfinished answers
+          remain private. Email delivery status is not available here.
         </p>
+        {!c.capabilities.email && (
+          <p className="mt-5 rounded-md bg-paper-200 p-4 text-sm">
+            Email sending is currently unavailable. The team needs to finish
+            email setup before new invitations can be sent.
+          </p>
+        )}
       </main>
     );
   if (c.status !== "approved")
@@ -229,16 +251,16 @@ export default function CollectionHome({
         <Logo />
         <h1 className="mt-10 font-serif text-3xl">
           {c.role === "owner"
-            ? "Your story is taking shape."
-            : "Your story collection is being prepared."}
+            ? "Your stories are taking shape."
+            : `${c.storyteller.name} is preparing your gift.`}
         </h1>
         <p className="my-5 text-lg">
-          The complete collection appears here after the storyteller approves
-          it.
+          All four stories will appear here after {c.storyteller.name} approves
+          them.
         </p>
         {c.role === "owner" && (
           <a href={c.links?.review} className={primary}>
-            Review my collection
+            Review my stories
           </a>
         )}
       </main>
@@ -251,15 +273,15 @@ export default function CollectionHome({
       <Logo />
       <header className="mb-12 mt-12 border-b border-warmgray-300 pb-10">
         <p className="text-sm uppercase tracking-widest text-oxblood">
-          A story from {c.storyteller.name}
+          Stories from {c.storyteller.name}
         </p>
         <h1 className="mb-5 mt-4 max-w-2xl font-serif text-4xl leading-tight sm:text-5xl">
-          For {c.recipient.name},<br />
-          from a life worth sharing.
+          {c.recipient.name},<br />
+          these stories are for you.
         </h1>
         <p className="max-w-2xl text-lg leading-relaxed text-ink-500">
           Four stories, the values behind them, and encouragement to carry into
-          your own life. The whole collection is here for you now.
+          your own life. All four stories are here for you now.
         </p>
         <div className="mt-7 flex flex-wrap gap-3">
           <button
@@ -271,28 +293,22 @@ export default function CollectionHome({
                 ?.scrollIntoView({ behavior: "smooth" });
             }}
           >
-            Watch all now
+            Explore all four stories
           </button>
-          <a
-            href="#chapters"
-            className={secondary}
-            onClick={() => setAll(true)}
-          >
-            Read the four chapters
-          </a>
         </div>
         <p className="mt-4 text-sm text-ink-500">
           You do not need to wait for the next postcard. Every card returns to
-          this same collection.
+          these same stories.
         </p>
       </header>
       {c.role === "owner" && (
         <section className="mb-10 rounded-xl border border-warmgray-300 bg-paper-50 p-6">
-          <h2 className="font-serif text-2xl">Your gift’s journey</h2>
+          <h2 className="font-serif text-2xl">Your postcards and emails</h2>
           <p className="my-4 text-sm leading-relaxed">
-            Approval schedules the first card, then months 3, 6 and 9. Confirmed
-            mailing starts the two-week follow-up email. A schedule or print
-            submission does not confirm delivery.
+            The first postcard is scheduled after approval. Three more are
+            planned for months 3, 6 and 9. The follow-up email is planned for
+            two weeks after confirmed mailing. Scheduled or submitted for
+            printing does not mean mailed or delivered.
           </p>
           <ol className="space-y-3">
             {c.deliveries.map((d, i) => (
@@ -304,7 +320,7 @@ export default function CollectionHome({
                   Card {i + 1} · {date(d.scheduledFor)}
                 </span>
                 <span className="font-medium">
-                  {d.status}
+                  {postcardStatus[d.status]}
                   {d.mailedAt ? ` ${date(d.mailedAt)}` : ""}
                 </span>
                 {d.error && (
@@ -315,23 +331,25 @@ export default function CollectionHome({
           </ol>
           {(!c.capabilities.mail || !c.capabilities.email) && (
             <p className="mt-5 rounded-md bg-paper-200 p-4 text-sm">
-              Provider setup is incomplete.{" "}
+              Delivery setup is incomplete.{" "}
               {c.capabilities.mail
                 ? ""
-                : "Postcard delivery needs Lob configuration. "}
-              {c.capabilities.email ? "" : "Email needs Resend configuration. "}
-              Scheduled items have not been sent.
+                : "The team needs to finish postcard setup. "}
+              {c.capabilities.email
+                ? ""
+                : "The team needs to finish email setup. "}
+              Check each item’s status above before expecting delivery.
             </p>
           )}
           <details className="mt-5">
-            <summary>Private recipient link</summary>
+            <summary>Private gift link</summary>
             <p className="mt-3 break-all text-sm">
               {typeof window === "undefined" ? "" : window.location.origin}
               {c.links?.collection}
             </p>
             <p className="mt-2 text-sm">
               The first postcard normally introduces this link. Anyone you share
-              it with can open the collection.
+              it with can open these stories.
             </p>
           </details>
           <details className="mt-5">
@@ -339,7 +357,7 @@ export default function CollectionHome({
             <ul className="mt-3 space-y-2 text-sm">
               {c.notifications.map((n) => (
                 <li key={n.id}>
-                  {n.subject}: {n.status}
+                  {n.subject}: {emailStatus[n.status]}
                   {n.error ? ` (${n.error})` : ""}
                 </li>
               ))}
@@ -348,7 +366,7 @@ export default function CollectionHome({
         </section>
       )}
       <nav
-        aria-label="Story chapters"
+        aria-label="Your four stories"
         className="mb-10 grid gap-3 sm:grid-cols-2"
       >
         {c.chapters.map((ch, i) => (
@@ -357,7 +375,7 @@ export default function CollectionHome({
             href={`/collection/${id}/chapter/${ch.id}?key=${encodeURIComponent(accessKey)}`}
             className="rounded-lg border border-warmgray-300 px-5 py-4"
           >
-            <span className="text-sm text-oxblood">Chapter {i + 1}</span>
+            <span className="text-sm text-oxblood">Story {i + 1}</span>
             <span className="mt-1 block font-serif text-xl">{ch.title}</span>
           </a>
         ))}
@@ -365,8 +383,7 @@ export default function CollectionHome({
       <div id="chapters" className="space-y-12">
         {selected.length === 0 && (
           <p>
-            This chapter could not be found. Choose one of the four chapters
-            above.
+            This story could not be found. Choose one of the four stories above.
           </p>
         )}
         {selected.map((ch) => {
@@ -378,7 +395,7 @@ export default function CollectionHome({
               className="scroll-mt-8 rounded-xl border border-warmgray-300 bg-paper-50 p-5 sm:p-8"
             >
               <p className="text-sm uppercase tracking-widest text-oxblood">
-                Chapter {ch.id.slice(1)}
+                Story {ch.id.slice(1)} of 4
               </p>
               <h2 className="mb-5 mt-3 font-serif text-3xl">{ch.title}</h2>
               {ch.videoMediaId ? (
@@ -397,7 +414,7 @@ export default function CollectionHome({
                 />
               ) : (
                 <p className="mb-6 rounded-md bg-paper-200 p-4 text-sm">
-                  This chapter was shared as a written story.
+                  A written story from {c.storyteller.name}.
                 </p>
               )}
               {normalizedCopy(ch.postcardNote) &&
@@ -416,7 +433,7 @@ export default function CollectionHome({
                   b.scriptureReference) && (
                   <aside className="mt-8 border-l-2 border-oxblood pl-5">
                     <p className="mb-3 text-sm uppercase tracking-widest text-oxblood">
-                      A word for you
+                      A word for {c.recipient.name}
                     </p>
                     {b.encouragement && (
                       <p className="mb-4 text-lg leading-relaxed">
@@ -495,8 +512,8 @@ export default function CollectionHome({
         </label>
       )}
       <footer className="mt-12 border-t border-warmgray-300 py-8 text-sm text-ink-500">
-        This collection is shared through a private link. Keep it with people
-        you trust.
+        Anyone with this private link can open these stories. Share it only with
+        people you trust.
       </footer>
     </main>
   );

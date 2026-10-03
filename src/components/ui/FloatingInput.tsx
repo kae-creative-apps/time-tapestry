@@ -26,11 +26,10 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
           initial={false}
           animate={{
             y: hasValue || isFocused ? -28 : 0,
-            scale: hasValue || isFocused ? 0.85 : 1,
-            color: isFocused ? '#7a2e2e' : hasValue ? '#8a7e6e' : '#a89e8e'
+            scale: hasValue || isFocused ? 0.85 : 1
           }}
           transition={{ duration: 0.2 }}
-          className="pointer-events-none absolute left-4 top-3.5 origin-left font-sans text-sm"
+          className={cn("pointer-events-none absolute left-4 top-3.5 origin-left font-sans text-sm", isFocused ? "text-oxblood" : "text-ink-500")}
         >
           {label}
         </motion.label>
@@ -47,7 +46,7 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
             setIsFocused(false);
             onBlur?.(e);
           }}
-          className="h-14 w-full rounded-md border border-warmgray-300 bg-paper-50 px-4 pt-2 font-sans text-base text-ink outline-none transition-all duration-200 focus:border-oxblood focus:shadow-[0_0_0_3px_rgba(122,46,46,0.12)]"
+          className="h-14 w-full rounded-xl border border-warmgray-300 bg-paper-50 px-4 pt-2 font-sans text-base text-ink outline-none transition-all duration-200 focus:border-oxblood focus:ring-2 focus:ring-oxblood/15"
           {...props}
         />
       </div>

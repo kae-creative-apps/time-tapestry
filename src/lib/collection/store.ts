@@ -23,10 +23,14 @@ function safeId(id: string) {
   return id;
 }
 function requireStorage() {
-  if (process.env.VERCEL && !cloud())
-    throw new Error(
-      "Persistent collection storage is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN.",
+  if (process.env.VERCEL && !cloud()) {
+    console.error(
+      "Collection storage is unavailable. Configure KV_REST_API_URL and KV_REST_API_TOKEN.",
     );
+    throw new Error(
+      "We cannot open or save your stories right now. Keep this page open and try again.",
+    );
+  }
 }
 export async function readRecord<T>(key: string): Promise<T | null> {
   requireStorage();
@@ -127,7 +131,7 @@ export async function mutateCollection(
   if (!locked) throw new Error("Another save is in progress. Please retry.");
   try {
     const c = await getCollection(id);
-    if (!c) throw new Error("Collection not found");
+    if (!c) throw new Error("Your stories could not be found.");
     const next = await update(c);
     next.updatedAt = new Date().toISOString();
     await putCollection(next);

@@ -82,15 +82,15 @@ test("explicit interview control requests still work", () => {
   }
 });
 
-test("faith framing and recipient personalization do not assume a family role", () => {
-  assert.match(getChapterQuestion("q2"), /faith or beliefs/);
+test("new interviews use Christian faith while older framing and recipient names remain supported", () => {
+  assert.match(getChapterQuestion("q2"), /following Jesus shaped/);
   assert.match(
     getChapterQuestion("q2", { faithFraming: "beliefs" }),
     /your beliefs shaped/,
   );
   assert.match(
     getChapterQuestion("q2", { faithFraming: "faith" }),
-    /your faith shaped/,
+    /following Jesus shaped/,
   );
   assert.match(
     getChapterQuestion("q4", { recipientName: "  Morgan  " }),

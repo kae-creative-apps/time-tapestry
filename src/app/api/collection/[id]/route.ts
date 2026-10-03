@@ -104,7 +104,7 @@ export async function POST(
               kind: "review_ready",
               to: c.storyteller.email,
               subject: "Your Time Tapestry story is ready to review",
-              text: "Your four written chapters are ready. Review the wording, encouragement and postcard notes. Recorded answers also need a finished video edit before video approval.",
+              text: "Your four story drafts are ready. Review the wording, encouragement and postcard notes. Recorded answers also need a finished video edit before video approval.",
               url: appOrigin() + linksFor(c).review,
               dueAt: new Date().toISOString(),
               status: "pending",
@@ -115,7 +115,7 @@ export async function POST(
     } else if (b.action === "followup") {
       requireOwner(initial, role);
       const chapter = CHAPTERS.find((ch) => ch.id === b.questionId);
-      if (!chapter) throw new Error("Unknown chapter");
+      if (!chapter) throw new Error("This story could not be found.");
       const count = initial.followUps[chapter.id]?.length || 0;
       if (count < MAX_FOLLOW_UPS) {
         const answers = selectedAnswers(initial, chapter.id);
@@ -211,7 +211,7 @@ export async function POST(
           if (role !== "recipient" || c.status !== "approved")
             throw new Error("Use the recipient link to reply.");
           const chapter = c.chapters.find((ch) => ch.id === b.chapterId);
-          if (!chapter) throw new Error("Unknown chapter");
+          if (!chapter) throw new Error("This story could not be found.");
           const media = b.mediaId ? await getMedia(b.mediaId) : null;
           if (
             b.mediaId &&
@@ -241,7 +241,7 @@ export async function POST(
             kind: "reply_received",
             to: c.storyteller.email,
             subject: `${c.recipient.name} sent you a message`,
-            text: `${c.recipient.name} replied to "${chapter.title}". Open their message on your collection page.`,
+            text: `${c.recipient.name} replied to "${chapter.title}". Open their message on your story page.`,
             url: `${appOrigin()}/collection/${id}?key=${c.ownerKey}#${chapter.id}`,
             dueAt: reply.createdAt,
             status: "pending",
@@ -356,7 +356,7 @@ export async function POST(
         }
         if (b.action === "blessing") {
           if (!CHAPTERS.some((ch) => ch.id === b.questionId))
-            throw new Error("Unknown chapter");
+            throw new Error("This story could not be found.");
           const v = b.value || {};
           const ch = c.chapters.find((ch) => ch.id === b.questionId);
           if (ch) ch.editorialReviewed = false;
@@ -371,7 +371,7 @@ export async function POST(
         if (b.action === "edit_chapter") {
           if (typeof b.content !== "string" || b.content.length > 100000)
             throw new Error(
-              "Keep each written chapter under 100,000 characters. Your draft remains on screen.",
+              "Keep each written story under 100,000 characters. Your draft remains on screen.",
             );
           const ch = c.chapters.find((ch) => ch.id === b.chapterId);
           if (!ch) throw new Error("Chapter not found");
@@ -404,14 +404,14 @@ export async function POST(
             m.role !== "owner" ||
             !m.mimeType.startsWith("video/")
           )
-            throw new Error("Upload a finished chapter video first");
+            throw new Error("Add a finished video for this story first");
           if (
             !Number.isFinite(b.durationSeconds) ||
             b.durationSeconds <= 0 ||
             b.durationSeconds > 3600
           )
             throw new Error(
-              "Finished chapter videos must be one hour or shorter.",
+              "Finished videos must be one hour or shorter.",
             );
           ch.videoMediaId = m.id;
           ch.videoStatus = "ready";

@@ -88,6 +88,83 @@ async function exportPlans() {
   await mkdir(work, { mode: 0o700 }); // New workspace only. Never overwrite another edit.
   await mkdir(path.join(work, "media"), { mode: 0o700 });
   await mkdir(path.join(work, "plans"), { mode: 0o700 });
+  const liveAnswers = c.chapters
+    .flatMap((chapter) => selectedAnswers(c, chapter.id))
+    .filter((take) => take.liveSource?.sourceRanges.length);
+  if (liveAnswers.length) {
+    const mediaIds = [
+      ...new Set(
+        liveAnswers.flatMap((take) =>
+          take.liveSource!.sourceRanges.map((range) => range.mediaId),
+        ),
+      ),
+    ];
+    const originals = [];
+    for (const mediaId of mediaIds) {
+      const media = await getMedia(mediaId);
+      if (!media || media.collectionId !== c.id || media.role !== "owner")
+        throw new Error(
+          "A live conversation original is missing or belongs to another collection",
+        );
+      const bytes = await mediaBytes(media);
+      const ext = media.mimeType.includes("mp4")
+        ? ".mp4"
+        : media.mimeType.includes("ogg")
+          ? ".ogg"
+          : media.mimeType.includes("mpeg")
+            ? ".mp3"
+            : media.mimeType.includes("wav")
+              ? ".wav"
+              : media.mimeType.includes("quicktime")
+                ? ".mov"
+                : ".webm";
+      const relativePath = `media/${mediaId}${ext}`;
+      await writeFile(path.join(work, relativePath), bytes, {
+        flag: "wx",
+        mode: 0o600,
+      });
+      originals.push({
+        mediaId,
+        relativePath,
+        mimeType: media.mimeType,
+        sha256: digest(bytes),
+        archiveRef: `collection-media:${mediaId}`,
+        originalPreserved: true,
+      });
+    }
+    const guidePath = path.join(work, "conversation-source-ranges.json");
+    await writeFile(
+      guidePath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          collectionId: c.id,
+          snapshotSha256: snapshot(c),
+          status: "needs-editor-alignment",
+          instructions: [
+            "These files are complete original recordings, not finished story videos.",
+            "Estimated turn times come from browser events and are not verified speech boundaries. Unaligned turns may reference every recording in their session.",
+            "Listen to each original and create a reviewed edit plan using verified in/out times. Do not repeat the whole recording once per answer.",
+            "Preserve the originals, omit interviewer speech where appropriate, align captions, and review the final video before attaching it to the gift.",
+            "This packet is intentionally not a renderable plan. The standard exporter cannot certify these live conversation edits.",
+          ],
+          originals,
+          answers: liveAnswers.map((take) => ({
+            id: take.id,
+            text: take.text,
+            prompt: take.prompt,
+            ...take.liveSource,
+          })),
+        },
+        null,
+        2,
+      ) + "\n",
+      { flag: "wx", mode: 0o600 },
+    );
+    throw new Error(
+      `Live conversation timing needs editorial alignment. Originals and a source guide were exported to ${guidePath}. No automatic video plan was created.`,
+    );
+  }
   const manifest: Manifest = {
     schemaVersion: 1,
     collectionId: c.id,

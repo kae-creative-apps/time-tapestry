@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Quicksand, Inter } from "next/font/google";
 import "./globals.css";
 import { DemoBanner } from "@/components/DemoBanner";
 
-const fraunces = Fraunces({
+const display = Quicksand({
   subsets: ["latin"],
-  variable: "--font-fraunces",
+  variable: "--font-display",
   display: "swap",
-  axes: ["opsz"],
+  weight: ["500", "600", "700"],
 });
 
 const inter = Inter({
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang="en" className={`${display.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-paper-texture font-sans text-ink antialiased">
         <DemoBanner />
         {children}

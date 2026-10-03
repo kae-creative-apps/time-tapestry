@@ -4,10 +4,28 @@ October 2, 2026. Branch: `codex/four-chapter-legacy`.
 
 The four-chapter family journey is implemented and has passed a local browser walkthrough. It is ready for team review and a controlled rehearsal. Live voice, transcription, cloud media, printing and email still need validation before they appear as working features in the final demo. This is not a production-launch certification.
 
+## Live conversation update, October 2
+
+The default `/record/[id]` route now opens one conversational interview. The former question-by-question recorder remains available through `?classic=1`. The four themes are internal during the live conversation and appear as four stories during review.
+
+Implemented: owner-only ElevenLabs WebRTC token exchange, a versioned interview prompt, private theme switching, typed answers, pause/reconnect, durable transcript outbox, independent recording segments, recoverable local originals, review corrections/exclusions, and projection into the existing four-story generation flow. Corrections preserve originals and a previously excluded answer stays excluded after correction. Reconnecting retains all provider conversation identifiers.
+
+The isolated browser walkthrough used `/share` on port 3109 with synthetic contacts, separate data in `/private/tmp/time-tapestry-live-preview`, and delivery disabled. It passed all four guided written answers, pause, refresh, resume, exclusion followed by correction and explicit inclusion, adding missed words, and four-story generation. The corrected wording and added memory appeared in Story 1. No console errors or warnings appeared. At a 390 × 844 viewport the interview document remained 390 pixels wide.
+
+The archive hook also passed a real Chromium MediaRecorder harness with generated canvas video and a synthetic tone. Rollover segments decoded independently. Pause disabled both tracks, interruption retained the final original, retry reused uploaded media, storage failure preserved a downloadable recording, and finish stopped all tracks. These checks did not use a physical camera or microphone and mocked upload responses.
+
+Final checks for this update: **79 automated tests passed**, TypeScript passed, and the isolated production build passed using `.next-live-build`. The normal preview on port 3107 and its recording data were not restarted or replaced. The new local preview remains on port 3109. These changes have not been deployed.
+
+**Connection boundary:** ElevenLabs credentials are absent from this local preview. The real interviewer voice, provider turn-taking, simultaneous device capture and provider microphone use, Safari/mobile devices, and venue Wi-Fi have not passed a live rehearsal. The interface explicitly labels the typed fallback. Four generated stories currently use the labeled source-text fallback when Gloo is absent. A passing build does not establish live AI quality.
+
+**Editing boundary:** continuous originals have estimated or unaligned transcript timing. Export preserves source recordings and ranges, and refuses to pass them off as precisely cut films. Content editing and final video review remain operator steps. An explicit review of captured words, including the last answer, is required before story generation because final provider transcript delivery is not guaranteed by disconnect timing.
+
+Configure and rehearse with [LIVE_INTERVIEW_SETUP.md](LIVE_INTERVIEW_SETUP.md). The earlier validation below describes the preceding question-by-question build and remains historical evidence for those shared features.
+
 ## What the app now does
 
 1. **Give or request a story.** Guided setup separates the storyteller, requester and recipient. It collects names and email, optional phone, and a US mailing address now or through a private address link later.
-2. **Answer four core questions.** Each section offers video, voice or typing, with up to two optional follow-ups. Questions move from kindness received to faith or beliefs, generosity practiced, and hopes for the recipient. Encouragement and supplied Scripture are optional.
+2. **Answer four core questions.** Each section offers video, voice or typing, with up to two optional follow-ups. Questions move from kindness received to Christian faith and lived values, generosity practiced, and hopes for the recipient. Encouragement and supplied Scripture are optional.
 3. **Keep and choose takes.** The recorder saves chunks locally, retains original recordings, supports replay/rerecording and uploads a selected take. It suggests 2 to 5 minutes and caps each take at 10 minutes. Browser storage can fail or be cleared, so the interface distinguishes local recovery from a completed server backup.
 4. **Prepare four chapters.** Configured Gloo assistance organizes selected answers. Without Gloo, the app shows a labeled source-text draft. Typed answers do not create footage of the storyteller.
 5. **Review one chapter at a time.** Storytellers review wording, postcard notes, encouragement and finished films before approving. Source changes invalidate review. Explicit regeneration retains draft history. Unsaved edits and active video uploads block approval.

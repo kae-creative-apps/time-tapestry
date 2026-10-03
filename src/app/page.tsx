@@ -14,9 +14,9 @@ export default function Home() {
             Leave a legacy you’re proud to share.
           </h1>
           <p className="my-7 max-w-2xl text-xl leading-relaxed text-ink-500">
-            Tell the stories behind the person you became. Make a collection for
-            someone you love, with four chapters, personal videos and postcards
-            that bring your encouragement back into their life.
+            Share the moments that shaped your life and your walk with Jesus.
+            Give someone you love four personal stories, with optional videos and
+            postcards they can return to for encouragement.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
@@ -46,12 +46,12 @@ export default function Home() {
             [
               "02",
               "Make the story yours.",
-              "Choose your takes, review each chapter and add a personal encouragement or Scripture you want to share.",
+              "Choose your recordings, review each story and add encouragement or Scripture you want to share.",
             ],
             [
               "03",
               "Give them reasons to return.",
-              "The first postcard opens the whole collection. Three more follow at months 3, 6 and 9, each returning to a different story.",
+              "The first postcard opens all four stories. Three more follow at months 3, 6 and 9, each returning to a different story.",
             ],
           ].map(([n, title, text]) => (
             <li key={n}>

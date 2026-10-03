@@ -14,7 +14,7 @@ export function useCollection(id: string, accessKey: string) {
       setCollection(b.collection);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Could not load this collection.",
+        e instanceof Error ? e.message : "Could not open these stories. Please try again.",
       );
     }
   }, [endpoint]);

@@ -30,7 +30,6 @@ export default function StartCollection({
       country: "US",
     }),
     [note, setNote] = useState(""),
-    [faith, setFaith] = useState<"faith" | "beliefs">("faith"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const receiver = mode === "share" ? other : recipientIsMe ? me : recipient;
@@ -91,7 +90,6 @@ export default function StartCollection({
             ? undefined
             : { ...address, name: receiver.name },
           invitationNote: note,
-          faithFraming: faith,
         }),
       });
       const data = await res.json();
@@ -126,12 +124,12 @@ export default function StartCollection({
       <p className="mb-8 text-lg leading-relaxed text-ink-500">
         {
           [
-            "Four conversations become a personal story page, four chapters and four postcards.",
+            "One conversation becomes four written stories, a personal story page and four postcards.",
             mode === "share"
               ? "Choose someone you want to share your stories, faith and encouragement with."
               : "We will invite them to speak, type or record their story. They approve everything before sharing.",
-            "The first postcard introduces the complete collection. The next three bring a story back at months 3, 6 and 9.",
-            "Their original recordings stay available. Nothing is shared or printed before the storyteller approves it.",
+            "The first postcard introduces all four stories. The next three bring a story back at months 3, 6 and 9.",
+            "Original recordings stay saved. Stories are only shared and postcards scheduled after the storyteller approves them.",
           ][step]
         }
       </p>
@@ -178,19 +176,9 @@ export default function StartCollection({
                 </label>
               </>
             )}
-            <label className="block">
-              How should we frame the interview?
-              <select
-                className={input}
-                value={faith}
-                onChange={(e) =>
-                  setFaith(e.target.value as "faith" | "beliefs")
-                }
-              >
-                <option value="faith">Christian faith and lived values</option>
-                <option value="beliefs">Beliefs and lived values</option>
-              </select>
-            </label>
+            <p className="text-sm text-ink-500">
+              The interview focuses on Christian faith and lived values.
+            </p>
           </>
         )}
         {step === 2 && (
@@ -206,8 +194,10 @@ export default function StartCollection({
                 Collect the address later
                 <span className="mt-1 block text-sm text-ink-500">
                   The interview can begin now. We will need a confirmed address
-                  before printing. You can send an address request from the
-                  review page.
+                  before printing.{" "}
+                  {mode === "share"
+                    ? "You can request the address when reviewing your stories."
+                    : "The storyteller can request the address when reviewing their stories."}
                 </span>
               </span>
             </label>
@@ -281,9 +271,9 @@ export default function StartCollection({
               </div>
             </dl>
             <p className="text-sm leading-relaxed text-ink-500">
-              A private link gives access to the collection. Keep that link with
-              people you trust. The first postcard reveals the gift; a follow-up
-              email arrives two weeks after confirmed mailing.
+              Anyone with the private gift link can open it, so share it only
+              with people you trust. The first postcard introduces the gift. A
+              follow-up email is scheduled two weeks after confirmed mailing.
             </p>
             <label className="flex items-start gap-3">
               <input type="checkbox" required className="mt-1" />

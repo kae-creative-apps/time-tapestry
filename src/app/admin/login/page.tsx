@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Logo } from "@/components/Logo";
 
 export default function AdminLoginPage() {
   return (
@@ -43,7 +44,8 @@ function LoginForm() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-20">
-      <div className="w-full max-w-sm rounded-lg border border-warmgray-300 bg-paper-50 p-8 shadow-soft">
+      <Logo className="mb-8" />
+      <div className="w-full max-w-sm rounded-2xl border border-warmgray-300 bg-paper-50 p-8">
         <h1 className="mb-2 font-serif text-2xl text-ink">Admin access</h1>
         <p className="mb-6 font-sans text-sm text-ink-500">
           Enter the shared admin secret to continue.
@@ -85,7 +87,8 @@ function LoginForm() {
 function LoginSkeleton() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-20">
-      <div className="w-full max-w-sm rounded-lg border border-warmgray-300 bg-paper-50 p-8 shadow-soft">
+      <Logo className="mb-8" />
+      <div className="w-full max-w-sm rounded-2xl border border-warmgray-300 bg-paper-50 p-8">
         <h1 className="mb-2 font-serif text-2xl text-ink">Admin access</h1>
         <p className="font-sans text-sm text-ink-500">Loading...</p>
       </div>

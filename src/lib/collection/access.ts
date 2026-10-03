@@ -45,6 +45,7 @@ export function publicView(
     ({ dispatch, ...notification }) => notification,
   );
   if (role !== "owner") {
+    view.interviews = undefined;
     view.takes = [];
     view.selectedTakeIds = {};
     view.followUps = {};
@@ -83,13 +84,15 @@ export function publicView(
       email: Boolean(process.env.RESEND_API_KEY),
       media: !process.env.VERCEL || Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       directUpload: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      liveInterview: Boolean(
+        process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID,
+      ),
     },
   };
 }
 export function requireOwner(c: Collection, role: string | null) {
-  if (role !== "owner") throw new Error("The storyteller link is required.");
+  if (role !== "owner")
+    throw new Error("Open your interview link to make changes.");
   if (c.status === "approved")
-    throw new Error(
-      "This approved collection is fixed. Contact support to create a corrected version.",
-    );
+    throw new Error("These approved stories cannot be edited in this pilot.");
 }

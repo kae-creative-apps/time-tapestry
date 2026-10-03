@@ -12,7 +12,7 @@ export function VisualCompanion({ text, isSpeaking }: { text: string; isSpeaking
   };
 
   return (
-    <div className="relative rounded-lg bg-ink p-6 text-paper shadow-lift">
+    <div className="relative rounded-lg bg-ink p-6 text-paper">
       {isSpeaking && (
         <span className="absolute right-4 top-4 flex items-center gap-2 font-sans text-xs text-paper-200">
           <span className="inline-block h-2 w-2 rounded-full bg-paper breathing" />

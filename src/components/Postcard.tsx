@@ -41,7 +41,7 @@ export function Postcard({
     >
       <div
         className={cn(
-          'rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-lift',
+          'rounded-lg border border-warmgray-300 bg-paper-50 p-6',
           'postcard-paper'
         )}
       >

@@ -4,7 +4,7 @@ export const MAX_FOLLOW_UPS = 2;
 export const CHAPTERS = [
   {
     id: "q1",
-    title: "The kindness I received",
+    title: "People who shaped me",
     question:
       "Tell me about a time someone's kindness changed something for you.",
     followUps: [
@@ -14,9 +14,9 @@ export const CHAPTERS = [
   },
   {
     id: "q2",
-    title: "Faith and values in my life",
+    title: "My walk with Jesus",
     question:
-      "Tell me about a time your faith or beliefs shaped a decision you made.",
+      "Tell me about a time following Jesus shaped a choice you made.",
     followUps: [
       "What was happening in your life at the time?",
       "Looking back, what does that decision mean to you now?",
@@ -24,7 +24,7 @@ export const CHAPTERS = [
   },
   {
     id: "q3",
-    title: "The generosity I practiced",
+    title: "Learning to live generously",
     question:
       "Tell me about a time you chose to give your time, attention or resources to someone.",
     followUps: [
@@ -34,7 +34,7 @@ export const CHAPTERS = [
   },
   {
     id: "q4",
-    title: "What I hope you carry",
+    title: "What I want you to know",
     question:
       "Looking back at these stories, what would you like the people you care about to carry into their own lives?",
     followUps: [
@@ -48,7 +48,7 @@ export type ChapterId = (typeof CHAPTERS)[number]["id"];
 
 export type QuestionContext = {
   recipientName?: string;
-  /** Narrow the wording only when the storyteller has chosen this framing. */
+  /** Preserve the framing of older records. New interviews use Christian faith. */
   faithFraming?: "faith" | "beliefs";
 };
 
@@ -59,8 +59,8 @@ export function getChapterQuestion(
   const chapter = CHAPTERS.find(({ id }) => id === chapterId);
   if (!chapter) throw new Error(`Unknown interview chapter: ${chapterId}`);
 
-  if (chapterId === "q2" && context.faithFraming) {
-    return `Tell me about a time your ${context.faithFraming} shaped a decision you made.`;
+  if (chapterId === "q2" && context.faithFraming === "beliefs") {
+    return "Tell me about a time your beliefs shaped a decision you made.";
   }
   const recipientName = context.recipientName?.trim();
   if (chapterId === "q4" && recipientName) {

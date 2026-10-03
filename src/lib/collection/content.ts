@@ -1,14 +1,18 @@
 import { CHAPTERS } from "../interview-state";
 import { chat } from "../gloo-client";
 import type { Collection, ChapterPackage } from "./types";
+import { interviewAnswers } from "./interview";
 
 export function selectedAnswers(c: Collection, chapterId: string) {
-  return c.takes.filter(
-    (t) =>
-      (t.questionId === chapterId ||
-        t.questionId.startsWith(`${chapterId}-f`)) &&
-      c.selectedTakeIds[t.questionId] === t.id,
-  );
+  return [
+    ...c.takes.filter(
+      (t) =>
+        (t.questionId === chapterId ||
+          t.questionId.startsWith(`${chapterId}-f`)) &&
+        c.selectedTakeIds[t.questionId] === t.id,
+    ),
+    ...interviewAnswers(c, chapterId),
+  ];
 }
 export async function draftChapters(c: Collection): Promise<ChapterPackage[]> {
   const chapters: ChapterPackage[] = [];
@@ -20,7 +24,7 @@ export async function draftChapters(c: Collection): Promise<ChapterPackage[]> {
       .join("\n\n");
     if (!source)
       throw new Error(
-        `Add or transcribe an answer for chapter ${chapters.length + 1} before creating your story.`,
+        `Save a written answer or finish transcription for part ${chapters.length + 1} before creating your story.`,
       );
     let content = source;
     let note =
@@ -73,7 +77,9 @@ export async function draftChapters(c: Collection): Promise<ChapterPackage[]> {
       content,
       postcardNote: note,
       sourceTakeIds: answers.map((a) => a.id),
-      videoStatus: answers.some((a) => a.mediaId)
+      videoStatus: answers.some(
+        (a) => a.mediaId || a.liveSource?.sourceRanges.length,
+      )
         ? "awaiting_edit"
         : "not_requested",
       editorialReviewed: false,
@@ -117,7 +123,7 @@ export function approveCollection(
     )
   )
     throw new Error(
-      "Review all four chapters and finish or remove pending video edits before approval.",
+      "Review all four stories and finish or remove pending video edits before approval.",
     );
   if (
     c.chapters.some((ch) => {

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Logo } from './Logo';
 import { usePathname } from 'next/navigation';
 
 export function AdminNav() {
@@ -9,11 +10,12 @@ export function AdminNav() {
 
   return (
     <nav className="border-b border-warmgray-200 bg-paper-50 px-6 py-3">
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <Link href="/admin" className="font-serif text-lg text-oxblood">
-          Time Tapestry Admin
-        </Link>
-        <div className="flex items-center gap-4 font-sans text-sm">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-5">
+        <div className="flex items-center gap-4">
+          <Logo href="/admin" />
+          <span className="rounded-full bg-paper-200 px-3 py-1 text-xs font-medium text-ink-500">Admin</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 font-sans text-sm">
           <Link href="/admin" className="text-ink-500 hover:text-oxblood">
             Dashboard
           </Link>

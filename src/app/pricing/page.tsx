@@ -8,12 +8,12 @@ export default function Pricing() {
         Start with one person’s story.
       </h1>
       <p className="mb-6 text-lg leading-relaxed">
-        The pilot brings four written chapters, optional legacy videos, four
-        postcards and a way to reply together in one collection.
+        The pilot brings four written stories, optional videos, four
+        postcards and a way to reply together in one gift.
       </p>
       <p className="mb-6 leading-relaxed text-ink-500">
-        Pilot pricing and paid fulfillment are still being confirmed. This build
-        does not collect payment. Churches and organizations may eventually
+        Pilot pricing and delivery costs are still being confirmed. You cannot
+        purchase a gift in this pilot yet. Churches and organizations may eventually
         sponsor gifts for families; organization purchasing is not available
         yet.
       </p>

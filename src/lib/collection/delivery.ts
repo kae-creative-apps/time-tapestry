@@ -39,10 +39,14 @@ function escapeHtml(value: string) {
 }
 function originUrl(origin: string) {
   const url = new URL(origin);
-  if (url.protocol !== "https:" || url.username || url.password)
-    throw new Error(
-      "Set NEXT_PUBLIC_APP_URL to the public HTTPS app origin before delivery.",
+  if (url.protocol !== "https:" || url.username || url.password) {
+    console.error(
+      "Delivery requires NEXT_PUBLIC_APP_URL to be a public HTTPS app origin.",
     );
+    throw new Error(
+      "Delivery is not ready yet because the story link needs a secure HTTPS address.",
+    );
+  }
   return url.origin;
 }
 export function recipientChapterUrl(
@@ -152,7 +156,7 @@ export function notificationSuppressionReason(
   n: Notification,
 ): string | null {
   if (n.kind === "collection_ready")
-    return "The first postcard introduces the gift. Immediate recipient collection emails are disabled.";
+    return "The first postcard introduces the gift, so this email is not sent.";
   if (n.kind === "invitation" && c.status !== "invited")
     return "The storyteller has already started or completed the interview.";
   if (n.kind === "review_ready" && c.status !== "draft")
@@ -163,11 +167,11 @@ export function notificationSuppressionReason(
     return "Postcard status emails go only to the storyteller.";
   if (["postcard_followup", "reply_invitation"].includes(n.kind)) {
     if (c.status !== "approved")
-      return "The collection is not approved for sharing.";
+      return "The stories have not been approved for sharing.";
     if (!c.replyRemindersEnabled)
       return "The recipient turned off follow-up emails.";
     if (c.replies.some((r) => r.chapterId === n.chapterId))
-      return "The recipient has already replied to this chapter.";
+      return "The recipient has already replied to this story.";
     const delivery = c.deliveries.find((d) => d.chapterId === n.chapterId);
     if (!delivery?.mailedAt || delivery.status !== "mailed")
       return "Mailing has not been confirmed or the postcard was returned.";
@@ -191,15 +195,15 @@ export function postcardFollowup(
     chapterId: chapter.id,
     to: c.recipient.email,
     subject: viewed
-      ? "A message back to " + c.storyteller.name
+      ? "Would you like to reply to " + c.storyteller.name + "?"
       : "Did your Time Tapestry postcard reach you?",
     text: viewed
       ? "Thank you for spending time with " +
         c.storyteller.name +
-        "'s story. If you would like, you can send a video or written message from the chapter page. A memory, a question or a thank-you is enough. You can skip this, too."
+        "'s story. If you would like, you can send a video or written message from the story page. A memory, a question or a thank-you is enough. You can skip this, too."
       : "We sent you a postcard from " +
         c.storyteller.name +
-        ". If it has not reached you, here is your story. All four approved chapters and any included videos are available on your private page. If you would like, you can send a video or written message back after you watch or read.",
+        ". If it has not reached you, here is your story. All four approved stories and any included videos are available on your private page. If you would like, you can send a video or written message back after you watch or read.",
     url: recipientChapterUrl(c, chapter.id, origin),
     dueAt: iso(time(delivery.mailedAt) + 14 * DAY),
     status: "pending",
@@ -318,7 +322,7 @@ export function applyLobEvent(
   ) {
     delivery.status = "failed";
     delivery.error =
-      "The postcard provider reported a failed or canceled postcard. Review the provider record before retrying.";
+      "The printing service reported that this postcard failed or was canceled. The Time Tapestry team needs to check before another attempt.";
     delivery.dispatch = { ...delivery.dispatch, reconciliationRequired: true };
     delivery.mailEvent = type;
   } else if (
@@ -358,12 +362,12 @@ export function applyLobEvent(
           subject: "Your Time Tapestry postcard is on its way",
           text:
             'Mailing has been confirmed for "' +
-            (chapter?.title || "your chapter") +
+            (chapter?.title || "your story") +
             '". ' +
             (c.deliveries[0].chapterId === delivery.chapterId
               ? "This first postcard introduces the gift. "
-              : "This postcard returns to your approved collection. ") +
-            "Its QR code opens the approved collection. You can check the remaining postcard schedule on your page.",
+              : "This postcard returns to your approved stories. ") +
+            "Its QR code opens the approved stories. You can check the remaining postcard schedule on your page.",
           url: ownerUrl(c, origin),
           dueAt: iso(now),
           status: "pending",
@@ -413,7 +417,7 @@ export async function postcardArtwork(
 ) {
   const chapter = c.chapters.find((ch) => ch.id === chapterId);
   if (!chapter || !chapter.editorialReviewed || c.status !== "approved")
-    throw new Error("Approve the chapter before mailing.");
+    throw new Error("Approve the story before mailing.");
   const message = c.chapterBlessings[chapterId];
   const copy = [
     chapter.postcardNote,
@@ -470,7 +474,7 @@ export async function postcardArtwork(
     escapeHtml(c.storyteller.name) +
     ", made for " +
     escapeHtml(c.recipient.name) +
-    '.<br>Scan to open all four chapters and the included videos.</div><img class="qr" alt="Open your Time Tapestry" src="' +
+    '.<br>Scan to read all four stories and watch any included videos.</div><img class="qr" alt="Open your stories" src="' +
     qr +
     '"><div class="caption">You can send a video or written message back from the story page.<br>Keep this card and its private link.</div><div class="ink-free"></div></body></html>';
   return { front, back };
@@ -516,14 +520,29 @@ function notificationRequest(c: Collection, n: Notification) {
     url.username ||
     url.password ||
     url.origin !== originUrl(appOrigin())
-  )
-    throw new Error(
+  ) {
+    console.error(
       "Notification links must use the configured HTTPS app origin.",
     );
+    throw new Error(
+      "This email is not ready to send because its link needs to be checked.",
+    );
+  }
+  const actionLabels: Record<Notification["kind"], string> = {
+    invitation: "Start your interview",
+    review_ready: "Review your stories",
+    collection_ready: "See your stories",
+    postcard_mailed: "View postcard status",
+    postcard_followup: "Read the story",
+    reply_invitation: "Send a reply",
+    reply_received: "See their reply",
+    address_request: "Add your mailing address",
+  };
+  const actionLabel = actionLabels[n.kind];
   const preference = ["postcard_followup", "reply_invitation"].includes(n.kind)
-    ? "\nYou can turn off follow-up emails on your collection page."
+    ? "\nYou can turn off follow-up emails on your story page."
     : "";
-  const text = n.text + "\n\nOpen your Time Tapestry: " + n.url + preference;
+  const text = n.text + "\n\n" + actionLabel + ": " + n.url + preference;
   return JSON.stringify({
     from: process.env.RESEND_FROM_EMAIL,
     to: [n.to],
@@ -539,7 +558,9 @@ function notificationRequest(c: Collection, n: Notification) {
         .join("") +
       '<p><a href="' +
       escapeHtml(n.url) +
-      '">Open your Time Tapestry</a></p><p style="font-size:13px">' +
+      '">' +
+      escapeHtml(actionLabel) +
+      '</a></p><p style="font-size:13px">' +
       escapeHtml(preference.trim()) +
       '</p><p style="font-size:13px">Time Tapestry · Stories woven together</p></body></html>',
   });
@@ -579,8 +600,11 @@ async function providerPost(
       },
     );
   } catch {
+    console.error("Delivery request timed out or could not be confirmed.", {
+      provider,
+    });
     throw new ProviderError(
-      "The provider request timed out or could not be confirmed. A retry will use the same saved request.",
+      "We could not confirm whether this was sent. You do not need to send it again.",
       true,
     );
   }
@@ -590,12 +614,12 @@ async function providerPost(
       response.status === 429 ||
       response.status >= 500 ||
       response.status === 409;
+    console.error("Delivery provider request failed.", {
+      provider,
+      status: response.status,
+    });
     throw new ProviderError(
-      "The " +
-        provider +
-        " provider returned HTTP " +
-        response.status +
-        ". Check its request log before changing the approved request.",
+      "We could not confirm whether this was sent. You do not need to send it again.",
       retryable,
     );
   }
@@ -603,8 +627,11 @@ async function providerPost(
   try {
     result = await response.json();
   } catch {
+    console.error("Delivery provider returned an unreadable response.", {
+      provider,
+    });
     throw new ProviderError(
-      "The provider response could not be confirmed. Reuse the saved idempotency key.",
+      "We could not confirm whether this was sent. You do not need to send it again.",
       true,
     );
   }
@@ -612,11 +639,15 @@ async function providerPost(
     typeof result.id !== "string" ||
     !result.id.trim() ||
     (isMail && !/^psc_[a-zA-Z0-9]+$/.test(result.id))
-  )
+  ) {
+    console.error("Delivery provider returned no valid delivery identifier.", {
+      provider,
+    });
     throw new ProviderError(
-      "The provider did not return a valid delivery identifier.",
+      "We could not confirm whether this was sent. You do not need to send it again.",
       true,
     );
+  }
   return result.id;
 }
 function claim(
@@ -668,13 +699,16 @@ async function processPostcard(id: string, now: number, origin: string) {
     process.env.LOB_API_KEY && process.env.LOB_FROM_ADDRESS_ID,
   );
   if (!configured) {
+    console.error(
+      "Postcard delivery requires LOB_API_KEY and LOB_FROM_ADDRESS_ID.",
+    );
     await mutateCollection(id, (c) => {
       const d = c.deliveries.find(
         (item) => item.chapterId === candidate.chapterId,
       );
       if (d && !d.providerId)
         d.error =
-          "Postcard delivery is pending setup. Configure LOB_API_KEY and LOB_FROM_ADDRESS_ID.";
+          "Postcard delivery is not ready yet. This postcard is waiting to send.";
       return c;
     });
     return false;
@@ -707,9 +741,12 @@ async function processPostcard(id: string, now: number, origin: string) {
     const d = nextDuePostcard(c, now);
     if (!d || d.chapterId !== candidate.chapterId) return c;
     if (expiredRetryWindow(d.dispatch, now)) {
+      console.error(
+        "Postcard retry window expired. Reconcile the saved request with Lob before retrying.",
+      );
       d.status = "failed";
       d.error =
-        "The safe retry window has ended. Reconcile this request with Lob before sending again.";
+        "We could not confirm whether this postcard was sent. The Time Tapestry team needs to check before another attempt.";
       d.dispatch = { ...d.dispatch, reconciliationRequired: true };
       return c;
     }
@@ -788,14 +825,20 @@ async function processNotification(
       return c;
     }
     if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+      console.error(
+        "Email delivery requires RESEND_API_KEY and a verified RESEND_FROM_EMAIL.",
+      );
       n.error =
-        "Email delivery is pending setup. Configure RESEND_API_KEY and a verified RESEND_FROM_EMAIL.";
+        "Email delivery is not ready yet. This email is waiting to send.";
       return c;
     }
     if (expiredRetryWindow(n.dispatch, now)) {
+      console.error(
+        "Email retry window expired. Reconcile the saved request with Resend before retrying.",
+      );
       n.status = "failed";
       n.error =
-        "The safe retry window has ended. Reconcile this email with Resend before sending again.";
+        "We could not confirm whether this email was sent. The Time Tapestry team needs to check before another attempt.";
       n.dispatch = { ...n.dispatch, reconciliationRequired: true };
       return c;
     }

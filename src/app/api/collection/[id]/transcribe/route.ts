@@ -12,25 +12,25 @@ export async function POST(
     const c = await getCollection(id);
     if (!c || roleFor(c, req.nextUrl.searchParams.get("key") || "") !== "owner")
       return NextResponse.json(
-        { error: "Storyteller access required" },
+        { error: "Open your interview link to continue." },
         { status: 403 },
       );
     if (!process.env.OPENAI_API_KEY)
       return NextResponse.json(
         {
           error:
-            "Transcription is not configured yet. Your recording is saved. You can type or paste its words below.",
+            "We cannot turn recordings into text right now. You can type or paste the words from your recording below.",
         },
         { status: 503 },
       );
     const b = await req.json();
     const m = await getMedia(b.mediaId);
     if (!m || m.collectionId !== id || m.role !== "owner")
-      throw new Error("Recording not found");
+      throw new Error("Your recording could not be found. Please try again.");
     const bytes = await mediaBytes(m);
     if (bytes.byteLength > 25 * 1024 * 1024)
       throw new Error(
-        "This video needs audio extraction in the editing worker before transcription. Your original is saved. Add its words manually for now.",
+        "This recording is too large to turn into text here. Your original is saved. Type or paste its words below to continue.",
       );
     const extension = m.mimeType.includes("mp4")
       ? "mp4"
@@ -56,7 +56,7 @@ export async function POST(
         error:
           e instanceof Error
             ? e.message
-            : "Transcription failed. Your recording remains saved.",
+            : "We could not turn this recording into text. Please try again, or type or paste its words below.",
       },
       { status: 400 },
     );

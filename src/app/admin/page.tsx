@@ -157,7 +157,7 @@ export default function AdminDashboardPage() {
           <StatCard label="Postcards scheduled" value={stats.postcardsSent} />
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-warmgray-300 bg-paper-50 shadow-soft">
+        <div className="overflow-x-auto rounded-lg border border-warmgray-300 bg-paper-50">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead className="border-b border-warmgray-300 bg-paper-200">
               <tr>
@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-warmgray-300 bg-paper-50 p-4 text-center shadow-soft">
+    <div className="rounded-lg border border-warmgray-300 bg-paper-50 p-4 text-center">
       <p className="font-serif text-2xl text-oxblood">{value}</p>
       <p className="font-sans text-xs uppercase tracking-wide text-ink-500">
         {label}

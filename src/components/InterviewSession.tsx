@@ -313,7 +313,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
           Time Tapestry weaves your story into keepsakes your family can hold onto.
         </p>
         <div className="mb-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </div>
@@ -322,7 +322,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Your story, woven into a keepsake page with audio narration across four chapters.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             </div>
@@ -331,7 +331,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Record a short message at the end... your face, your voice, your advice.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </div>
@@ -340,7 +340,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Sent one at a time over five weeks, each one carrying a piece of the story.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </div>
@@ -526,7 +526,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
                   value={textAnswer}
                   onChange={(e) => setTextAnswer(e.target.value)}
                   placeholder="Type your answer here..."
-                  className="w-full rounded-md border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink shadow-inner placeholder:text-warmgray-500 focus:border-oxblood focus:outline-none focus:ring-2 focus:ring-oxblood/20"
+                  className="w-full rounded-md border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink placeholder:text-warmgray-500 focus:border-oxblood focus:outline-none focus:ring-2 focus:ring-oxblood/20"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button onClick={submitTextAnswer} className="w-full sm:flex-1" loading={uploading}>

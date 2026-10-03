@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/Logo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -35,24 +36,110 @@ function TakeCard({
   index,
   disabled,
   mediaUrl,
+  transcriptionAvailable,
+  automaticTranscriptionActive,
+  retrying,
   onSelect,
   onTranscript,
+  onRetryTranscription,
 }: {
   take: AnswerTake;
   selected: boolean;
   index: number;
   disabled: boolean;
   mediaUrl?: string;
+  transcriptionAvailable: boolean;
+  automaticTranscriptionActive: boolean;
+  retrying: boolean;
   onSelect: () => void;
   onTranscript: (text: string) => Promise<void>;
+  onRetryTranscription: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(take.text);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const hasWords = Boolean(take.text.trim());
+  const recorded = take.kind !== "text";
+  const transcribing =
+    transcriptionAvailable &&
+    (retrying ||
+      (take.transcriptionStatus === "pending" && automaticTranscriptionActive));
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   useEffect(() => {
-    if (!editing) setText(take.text);
-  }, [take.text, editing]);
+    if (!editingRef.current) setText(take.text);
+  }, [take.text]);
+
+  const editor = (
+    <div className="space-y-3">
+      <label
+        className="block text-sm font-medium text-ink-700"
+        htmlFor={`transcript-${take.id}`}
+      >
+        {hasWords ? "Your words" : "Your answer"}
+      </label>
+      <textarea
+        id={`transcript-${take.id}`}
+        maxLength={30000}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={5}
+        className="w-full text-base"
+      />
+      <p className="text-sm text-ink-400">
+        {!recorded
+          ? "Update this answer before it becomes part of your written story."
+          : hasWords
+            ? "Correct names or details before these words become your written story. Your original recording stays saved."
+            : "Write the answer you want included in your written story. It will stay with this saved recording, which will not be replaced."}
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          className={secondary}
+          disabled={disabled || !text.trim() || saving}
+          onClick={async () => {
+            setSaving(true);
+            setError("");
+            try {
+              await onTranscript(text.trim());
+              setEditing(false);
+            } catch (error) {
+              setError(
+                error instanceof Error
+                  ? error.message
+                  : "Your words could not be saved. Please try again.",
+              );
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          {saving ? "Saving…" : "Save words"}
+        </button>
+        {hasWords && (
+          <button
+            type="button"
+            className="min-h-12 px-3 text-ink-400"
+            disabled={saving}
+            onClick={() => {
+              setText(take.text);
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-oxblood">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <article
       className={`space-y-4 rounded-lg border p-5 ${selected ? "border-oxblood bg-paper-50" : "border-warmgray-300"}`}
@@ -103,94 +190,95 @@ function TakeCard({
             aria-label={`Play voice take ${index + 1}`}
           />
         ))}
-      {take.text && !editing && (
-        <p className="whitespace-pre-wrap text-base leading-7 text-ink-700">
-          {take.text}
-        </p>
-      )}
-      {!take.text && !editing && (
-        <p className="text-sm text-ink-400">
-          {take.transcriptionStatus === "pending"
-            ? "The transcript is being prepared. Your original recording is saved."
-            : "Add the words from this recording so they can be included in your written chapter."}
-        </p>
-      )}
-      {editing ? (
-        <div className="space-y-3">
-          <label
-            className="block text-sm font-medium text-ink-700"
-            htmlFor={`transcript-${take.id}`}
-          >
-            Your words
-          </label>
-          <textarea
-            id={`transcript-${take.id}`}
-            maxLength={30000}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={5}
-            className="w-full text-base"
-          />
-          <p className="text-sm text-ink-400">
-            Correct names or transcription mistakes. This changes the written
-            transcript, while your original recording stays saved.
+      {recorded ? (
+        <>
+          <p className="text-sm text-ink-400" role="status">
+            {hasWords
+              ? "Your words are ready for your written story."
+              : !transcriptionAvailable
+                ? "Your recording is saved. Automatic transcription is unavailable in this demo."
+                : transcribing
+                  ? "Turning your recording into words automatically. Your original recording is saved."
+                  : take.transcriptionStatus === "failed"
+                    ? "Automatic transcription did not finish. Your recording is saved."
+                    : "Your recording is saved. Its written words are not ready yet."}
           </p>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className={secondary}
-              disabled={!text.trim() || saving}
-              onClick={async () => {
-                setSaving(true);
-                setError("");
-                try {
-                  await onTranscript(text.trim());
-                  setEditing(false);
-                } catch (error) {
-                  setError(
-                    error instanceof Error
-                      ? error.message
-                      : "The transcript could not be saved.",
-                  );
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            >
-              {saving ? "Saving…" : "Save words"}
-            </button>
-            <button
-              type="button"
-              className="min-h-12 px-3 text-ink-400"
-              onClick={() => {
-                setText(take.text);
-                setEditing(false);
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-oxblood">
-              {error}
-            </p>
+          {!hasWords && !transcribing && (
+            <div className="space-y-3">
+              <p className="text-sm text-ink-400">
+                We need the words from this answer before we can create your
+                written story.
+              </p>
+              {transcriptionAvailable && (
+                <button
+                  type="button"
+                  className={secondary}
+                  disabled={disabled || editing || !take.mediaId}
+                  onClick={onRetryTranscription}
+                >
+                  Try again
+                </button>
+              )}
+            </div>
           )}
-        </div>
+          {(hasWords || !transcribing) && (
+            <details
+              className="rounded-md border border-warmgray-300 px-4 py-2"
+              onToggle={(event) => {
+                if (!hasWords) setEditing(event.currentTarget.open);
+              }}
+            >
+              <summary className="cursor-pointer py-2 text-sm font-medium text-oxblood">
+                {hasWords ? "Review the words" : "Type this answer instead"}
+              </summary>
+              <div className="pb-2 pt-3">
+                {editing || !hasWords ? (
+                  editor
+                ) : (
+                  <>
+                    <p className="whitespace-pre-wrap text-base leading-7 text-ink-700">
+                      {take.text}
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-3 text-sm font-medium text-oxblood underline underline-offset-4"
+                      disabled={disabled}
+                      onClick={() => setEditing(true)}
+                    >
+                      Correct names or details
+                    </button>
+                  </>
+                )}
+              </div>
+            </details>
+          )}
+        </>
       ) : (
-        <button
-          type="button"
-          className="text-sm font-medium text-oxblood underline underline-offset-4"
-          disabled={disabled}
-          onClick={() => setEditing(true)}
-        >
-          {take.text ? "Correct these words" : "Add a transcript"}
-        </button>
+        <>
+          {editing ? (
+            editor
+          ) : (
+            <>
+              <p className="whitespace-pre-wrap text-base leading-7 text-ink-700">
+                {take.text}
+              </p>
+              <button
+                type="button"
+                className="text-sm font-medium text-oxblood underline underline-offset-4"
+                disabled={disabled}
+                onClick={() => setEditing(true)}
+              >
+                Edit this answer
+              </button>
+            </>
+          )}
+        </>
       )}
       {mediaUrl && (
         <a
           href={mediaUrl}
           download
-          className="ml-4 inline-flex items-center text-sm text-oxblood underline underline-offset-4"
+          className="inline-flex items-center text-sm text-oxblood underline underline-offset-4"
         >
           Download original
         </a>
@@ -240,7 +328,7 @@ function ChapterBlessing({
       .catch(() => {
         if (active)
           setError(
-            "Device drafts are unavailable. Save these words before leaving the chapter.",
+            "Device drafts are unavailable. Save these words before leaving this part.",
           );
       })
       .finally(() => {
@@ -261,24 +349,24 @@ function ChapterBlessing({
     )
       .then(() =>
         setMessage(
-          "Draft saved on this device. Save for this chapter when you are ready.",
+          "Draft saved on this device. Save for this part when you are ready.",
         ),
       )
       .catch(() =>
         setError(
-          "Device drafts are unavailable. Save these words before leaving the chapter.",
+          "Device drafts are unavailable. Save these words before leaving this part.",
         ),
       );
   }
   return (
     <details className="rounded-lg border border-warmgray-300 p-5">
       <summary className="cursor-pointer font-medium text-ink-700">
-        Add a personal encouragement or Scripture, optional
+        A word of encouragement, optional
       </summary>
       <div className="mt-5 space-y-4">
         <p className="text-sm text-ink-400">
-          Include something you want them to carry from this chapter. You will
-          review it before it is shared.
+          Add encouragement or a Scripture passage you want to share with this
+          story. You will review it before sharing.
         </p>
         <label className="block text-sm font-medium text-ink-700">
           Your encouragement
@@ -347,7 +435,7 @@ function ChapterBlessing({
                 `${questionId}-blessing`,
                 "",
               ).catch(() => undefined);
-              setMessage("Saved for this chapter.");
+              setMessage("Saved for this part.");
             } catch (error) {
               setError(
                 error instanceof Error
@@ -359,7 +447,7 @@ function ChapterBlessing({
             }
           }}
         >
-          {saving ? "Saving…" : "Save for this chapter"}
+          {saving ? "Saving…" : "Save for this part"}
         </button>
         {message && (
           <p role="status" className="text-sm text-ink-700">
@@ -397,6 +485,10 @@ export default function Interview({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [recorderBusy, setRecorderBusy] = useState(false);
+  const [transcribingTakeId, setTranscribingTakeId] = useState<string | null>(
+    null,
+  );
+  const transcriptionRequest = useRef<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
   const [notice, setNotice] = useState("");
@@ -417,7 +509,7 @@ export default function Interview({
           faithFraming: collection?.faithFraming,
         })
       : (followUps[followUpIndex] ?? chapter.question);
-  const allBusy = busy || recorderBusy;
+  const allBusy = busy || recorderBusy || Boolean(transcribingTakeId);
   const questionTakes =
     collection?.takes
       .filter((take) => take.questionId === questionId)
@@ -649,6 +741,72 @@ export default function Interview({
     [cancelSpeech],
   );
 
+  async function retryTranscription(take: AnswerTake) {
+    // SavedRecorder owns the automatic first request. This is an explicit retry only.
+    if (
+      !collection?.capabilities.transcription ||
+      recorderBusy ||
+      transcriptionRequest.current ||
+      !take.mediaId
+    )
+      return;
+    transcriptionRequest.current = take.id;
+    setTranscribingTakeId(take.id);
+    setError("");
+    let savingTranscript = false;
+    try {
+      await act({
+        action: "save_take",
+        take: { ...take, transcriptionStatus: "pending" },
+      });
+      const response = await fetch(`${endpoint}/transcribe${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId: take.audioMediaId ?? take.mediaId }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(
+          result.error ||
+            "Automatic transcription could not finish. Your recording is saved.",
+        );
+      if (typeof result.text !== "string" || !result.text.trim())
+        throw new Error(
+          "No words were found in this recording. You can try again or type the answer you want included.",
+        );
+      savingTranscript = true;
+      await act({
+        action: "save_take",
+        take: {
+          ...take,
+          text: result.text.trim(),
+          transcriptionStatus: "ready",
+        },
+      });
+    } catch (error) {
+      if (savingTranscript) {
+        // The save may have succeeded even if its response was lost. Never
+        // replace possibly saved words with the pre-transcription snapshot.
+        await load().catch(() => undefined);
+      } else {
+        await act({
+          action: "save_take",
+          take: { ...take, transcriptionStatus: "failed" },
+        }).catch(() => undefined);
+      }
+      setError(
+        savingTranscript
+          ? "We could not confirm the written words were saved. Your recording is backed up. Check the status below before trying again."
+          : error instanceof Error
+            ? error.message
+            : "Automatic transcription could not finish. Your recording is saved.",
+      );
+    } finally {
+      transcriptionRequest.current = null;
+      setTranscribingTakeId(null);
+    }
+  }
+
   async function saveText() {
     if (!text.trim()) return;
     setBusy(true);
@@ -665,13 +823,13 @@ export default function Interview({
     try {
       await act({ action: "save_take", take });
       setNotice(
-        "Your answer is backed up. You can add detail or move to the next chapter.",
+        "Your answer is backed up. You can add detail or move to the next part.",
       );
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "Your answer could not be backed up. The draft stays on this device.",
+          : "Your answer could not be backed up. Keep this page open and try again.",
       );
     } finally {
       setBusy(false);
@@ -690,7 +848,7 @@ export default function Interview({
         );
       else
         setNotice(
-          "You have answered the follow-ups for this chapter. You can continue when you are ready.",
+          "You have answered the follow-ups for this part. You can continue when you are ready.",
         );
     } catch (error) {
       setError(
@@ -732,7 +890,7 @@ export default function Interview({
           ...new Set(
             pending.map(
               (take) =>
-                `chapter ${take.questionId[1]}, ${take.kind === "voice" ? "Voice only" : "Video"}`,
+                `part ${take.questionId[1]}, ${take.kind === "voice" ? "Voice only" : "Video"}`,
             ),
           ),
         ].join("; ");
@@ -786,7 +944,7 @@ export default function Interview({
   if (collection.role !== "owner")
     return (
       <main className="mx-auto max-w-3xl px-5 py-20">
-        <h1 className="font-serif text-4xl">This link is for the recipient.</h1>
+        <h1 className="font-serif text-4xl">This link cannot be used to record an interview.</h1>
         <p className="mt-5">
           Use the storyteller’s invitation to record the interview.
         </p>
@@ -803,14 +961,14 @@ export default function Interview({
       <main className="mx-auto max-w-3xl px-5 py-20">
         <h1 className="font-serif text-4xl">Your story has been approved.</h1>
         <p className="mt-5">
-          Your approved chapters and original recordings are saved. The shared
+          Your approved story and original recordings are saved. The shared
           version stays unchanged.
         </p>
         <Link
           href={`/collection/${collectionId}${query}`}
           className={`${primary} mt-6 inline-flex items-center`}
         >
-          Open your collection
+          Open your stories
         </Link>
       </main>
     );
@@ -819,31 +977,25 @@ export default function Interview({
     <main className="mx-auto max-w-5xl px-5 pb-20 pt-8 text-ink-700 sm:px-8 sm:pt-12">
       <header className="border-b border-warmgray-300 pb-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <a
-            href="/"
-            className="inline-flex items-center font-serif text-xl text-oxblood"
-          >
-            Time Tapestry
-          </a>
+          <Logo />
           <span className="text-sm text-ink-400">
             {collection.storyteller.name}’s interview
           </span>
         </div>
         <h1 className="mt-6 max-w-2xl font-serif text-4xl leading-tight sm:text-5xl">
-          A story only you can tell.
+          Your stories, in your own words.
         </h1>
         <p className="mt-4 max-w-2xl text-lg leading-8 text-ink-400">
-          Four chapters for {collection.recipient.name}. Answer in your own
-          words, take a break when you need one, and review everything before
-          sharing.
+          Four parts to help you share your life, your walk with Jesus, and what
+          you hope {collection.recipient.name} carries forward. Start with one
+          moment you remember. You can take a break and review everything before sharing.
         </p>
         <div className="mt-6 flex items-center justify-between gap-4 text-sm">
-          <span>{completed} of 4 chapters have a saved answer</span>
-          <span>Your place is saved</span>
+          <span>{completed} of 4 parts are ready for your written story</span>
         </div>
         <div
           role="progressbar"
-          aria-label="Chapters with saved answers"
+          aria-label="Parts ready for your written story"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
@@ -856,7 +1008,7 @@ export default function Interview({
         </div>
       </header>
       <nav
-        aria-label="Interview chapters"
+        aria-label="Interview parts"
         className="mt-7 grid grid-cols-2 gap-2 sm:grid-cols-4"
       >
         {CHAPTERS.map((item, index) => {
@@ -877,7 +1029,7 @@ export default function Interview({
               <span
                 className={`block text-xs font-semibold ${index === chapterIndex ? "text-oxblood" : "text-ink-400"}`}
               >
-                {answered ? "✓ " : ""}CHAPTER {index + 1}
+                {answered ? "✓ " : ""}PART {index + 1}
               </span>
               <span className="mt-1 block text-sm leading-5">{item.title}</span>
             </button>
@@ -914,6 +1066,7 @@ export default function Interview({
           ))}
         </div>
         <p className="mt-7 text-sm font-semibold uppercase tracking-wide text-oxblood">
+          Part {chapterIndex + 1} of 4 ·{" "}
           {followUpIndex === null
             ? chapter.title
             : "A little more about that memory"}
@@ -1010,7 +1163,7 @@ export default function Interview({
               />
               <p className="text-sm text-ink-400" role="status">
                 {draftStatus ||
-                  "You can write as much or as little as you need."}
+                  "Start with one memory. Include the details you want them to remember."}
               </p>
               <button
                 type="button"
@@ -1077,6 +1230,10 @@ export default function Interview({
                 index={index}
                 selected={collection.selectedTakeIds[questionId] === take.id}
                 disabled={allBusy}
+                transcriptionAvailable={collection.capabilities.transcription}
+                automaticTranscriptionActive={recorderBusy}
+                retrying={transcribingTakeId === take.id}
+                onRetryTranscription={() => void retryTranscription(take)}
                 mediaUrl={
                   take.mediaId
                     ? `${endpoint}/media/${take.mediaId}${query}`
@@ -1144,8 +1301,8 @@ export default function Interview({
               onClick={() => void goTo(chapterIndex + 1)}
             >
               {collection.selectedTakeIds[chapter.id]
-                ? "Next chapter"
-                : "Skip this chapter for now"}
+                ? "Next part"
+                : "Come back to this part"}
             </button>
           ) : (
             <button
@@ -1154,20 +1311,21 @@ export default function Interview({
               disabled={allBusy || completed < 4}
               onClick={() => void generate()}
             >
-              {busy ? "Preparing your chapters…" : "Prepare my four chapters"}
+              {busy ? "Creating story drafts…" : "Create my story drafts"}
             </button>
           )}
         </div>
         {chapterIndex === CHAPTERS.length - 1 && completed < 4 && (
           <p className="mt-3 text-sm text-ink-400">
-            Save an answer with written words or a transcript in each chapter
-            before preparing your story. You can return to any chapter above.
+            We need the words from each answer to create your written story.
+            Check any recording still waiting for transcription, or save a typed
+            answer. You can return to any part above.
           </p>
         )}
         <p className="mt-6 text-sm leading-6 text-ink-400">
           Need a break? Finish saving your take, then return using this same
           link. Device drafts stay in this browser. Recordings marked Backed up
-          are saved to your collection.
+          are saved with your interview.
         </p>
       </section>
     </main>

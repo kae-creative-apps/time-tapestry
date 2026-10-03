@@ -43,15 +43,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        whileHover={{ scale: disabled || loading ? 1 : 1.02 }}
-        whileTap={{ scale: disabled || loading ? 1 : 0.98 }}
+        whileTap={{ scale: disabled || loading ? 1 : 0.99 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
         className={cn(
-          'relative inline-flex min-h-[48px] items-center justify-center gap-2 overflow-hidden rounded-md px-6 py-2.5 font-sans text-sm font-medium tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50',
+          'relative inline-flex min-h-[48px] items-center justify-center gap-2 overflow-hidden rounded-xl px-6 py-3 font-sans text-base font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50',
           isPrimary &&
-            'bg-oxblood text-paper shadow-soft hover:bg-oxblood-600 hover:shadow-lift hover:shadow-oxblood/20',
+            'bg-oxblood text-paper hover:bg-oxblood-600',
           variant === 'secondary' &&
-            'border border-oxblood bg-transparent text-oxblood hover:bg-oxblood-700/10 hover:text-oxblood-700 active:bg-oxblood-700/20',
+            'border border-warmgray-300 bg-paper-50 text-oxblood hover:border-oxblood hover:bg-paper-100 active:bg-paper-200',
           className
         )}
         disabled={disabled || loading}

@@ -29,7 +29,7 @@ export default function AddressPage({
         <div className="rounded-lg border border-warmgray-300 p-6">
           <h2 className="font-serif text-xl">Your address is saved.</h2>
           <p className="mt-3">
-            The first postcard will introduce your story collection after it is
+            The first postcard will introduce your gift after it is
             approved.
           </p>
           <details className="mt-6">

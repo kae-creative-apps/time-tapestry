@@ -9,10 +9,10 @@ export default function Privacy() {
       </h1>
       <div className="space-y-6 leading-relaxed">
         <p>
-          The new collection flow stores names, email addresses, optional phone
+          This pilot stores names, email addresses, optional phone
           numbers, postcard addresses, interview answers, recordings, written
-          chapters and recipient replies. Approved stories are shared through a
-          private link. Anyone who has that link can open the shared collection,
+          stories and recipient replies. Approved stories are shared through a
+          private link. Anyone who has that link can open the shared stories,
           so keep it with people you trust.
         </p>
         <h2 className="font-serif text-2xl">Recordings and review</h2>
@@ -23,8 +23,8 @@ export default function Privacy() {
           is not a permanent backup. You can download individual takes.
         </p>
         <p>
-          The storyteller reviews the chapters, videos and postcard messages
-          before publication. Original recordings are kept separately from
+          The storyteller reviews the stories, videos and postcard messages
+          before sharing. Original recordings are kept separately from
           edited videos. This pilot does not yet offer self-service account
           deletion, complete data export or link revocation.
         </p>
@@ -48,7 +48,7 @@ export default function Privacy() {
         <p>
           The first postcard introduces the gift. A follow-up email is scheduled
           two weeks after confirmed mailing. Recipients can turn off postcard
-          follow-up invitations on their collection page. Sending a reply
+          follow-up invitations on their story page. Sending a reply
           notifies the storyteller by email.
         </p>
       </div>

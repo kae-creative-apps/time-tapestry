@@ -19,6 +19,54 @@ export type AnswerTake = {
   createdAt: string;
   audioMediaId?: string;
   transcriptionStatus?: "pending" | "ready" | "failed";
+  liveSource?: {
+    sessionId: string;
+    turnId: string;
+    chapterId: InterviewChapterId;
+    timing: "estimated" | "unaligned";
+    sourceRanges: Array<{
+      segmentId: string;
+      mediaId: string;
+      inMs?: number;
+      outMs?: number;
+    }>;
+  };
+};
+export type InterviewChapterId = "q1" | "q2" | "q3" | "q4";
+export type InterviewStatus = "active" | "paused" | "completed" | "interrupted";
+export type InterviewTurn = {
+  id: string;
+  sequence: number;
+  role: "agent" | "user";
+  text: string;
+  capturedAt: string;
+  chapterId?: InterviewChapterId;
+  startMs?: number;
+  endMs?: number;
+  timing: "estimated" | "unaligned";
+  supersedesTurnId?: string;
+};
+export type InterviewSegment = {
+  id: string;
+  localTakeId?: string;
+  mediaId: string;
+  audioMediaId?: string;
+  startMs: number;
+  durationMs: number;
+  kind: "voice" | "video";
+  createdAt: string;
+};
+export type InterviewSession = {
+  id: string;
+  provider: "elevenlabs" | "guided";
+  providerConversationId?: string;
+  providerConversationIds?: string[];
+  status: InterviewStatus;
+  startedAt: string;
+  endedAt?: string;
+  turns: InterviewTurn[];
+  segments: InterviewSegment[];
+  excludedTurnIds: string[];
 };
 export type ChapterPackage = {
   id: string;
@@ -110,6 +158,7 @@ export type Collection = {
     }
   >;
   takes: AnswerTake[];
+  interviews?: InterviewSession[];
   selectedTakeIds: Record<string, string>;
   followUps: Record<string, string[]>;
   explicitTakeSelections?: Record<string, boolean>;
@@ -148,6 +197,7 @@ export type CollectionView = Omit<
     email: boolean;
     media: boolean;
     directUpload: boolean;
+    liveInterview: boolean;
   };
 };
 export type StoredMedia = {
