@@ -25,6 +25,9 @@ const child = spawn(process.execPath, [path.join(root, "node_modules/next/dist/b
     BLOB_READ_WRITE_TOKEN: "",
     COLLECTION_EMAIL_ENABLED: "false",
     COLLECTION_DELIVERY_ENABLED: "false",
+    // The server binds only to loopback. Hosted human-verification setup is not
+    // available here; application auth, rate limits and quotas still apply.
+    SECURITY_LOCAL_BYPASS: "true",
     NEXT_PUBLIC_APP_URL: `http://localhost:${port}`,
   },
 });

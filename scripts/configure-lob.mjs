@@ -155,15 +155,28 @@ async function readHiddenKey() {
   }
 }
 
-async function browserPrompt(file, previous, allowLive) {
+export const LOB_SETUP_LIFETIME_MS = 4 * 60 * 60_000;
+
+/** Start a localhost-only setup session. The options support deterministic lifecycle tests. */
+export async function startLobBrowserSetup(file, allowLive = false, {
+  lifetimeMs = LOB_SETUP_LIFETIME_MS,
+  now = Date.now,
+  scheduleExpiry = setTimeout,
+} = {}) {
+  const previous = await snapshot(file);
+  const expiresAt = new Date(now() + lifetimeMs);
+  const expiryLabel = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium", timeStyle: "long",
+  }).format(expiresAt);
   const route = `/setup/${randomUUID()}`;
   const csrf = randomUUID();
   const nonce = randomUUID();
   let origin = "";
   let busy = false;
   let completed = false;
+  let confirmation = "";
   const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect Lob locally</title><style nonce="${nonce}">body{font:18px system-ui;max-width:520px;margin:10vh auto;padding:24px;line-height:1.5;color:#211c18;background:#faf8f5}input,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;margin-top:12px}button{cursor:pointer}small{display:block;margin-top:18px}</style><h1>Connect Lob locally</h1>${body}</html>`;
-  const form = page(`<p>Paste your Lob ${allowLive ? "" : "test "}API key below. This form saves it only in this project's local environment file.</p><form method="post" action="${route}" autocomplete="off"><input type="hidden" name="csrf" value="${csrf}"><label for="key">Lob ${allowLive ? "" : "test "}API key</label><input id="key" name="key" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="none" maxlength="256" required autofocus><button type="submit">Save API key</button></form><small>${allowLive ? "" : "This setup accepts test_ keys only. "}Delivery settings stay unchanged. Saving a key does not send postcards or contact Lob.</small>`);
+  const form = page(`<p>Paste your Lob ${allowLive ? "" : "test "}API key below. This form saves it only in this project's local environment file.</p><form method="post" action="${route}" autocomplete="off"><input type="hidden" name="csrf" value="${csrf}"><label for="key">Lob ${allowLive ? "" : "test "}API key</label><input id="key" name="key" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="none" maxlength="256" required autofocus><button type="submit">Save API key</button></form><small>${allowLive ? "" : "This setup accepts test_ keys only. "}Delivery settings stay unchanged. Saving a key does not send postcards or contact Lob.</small><small>This local form stays open until <time datetime="${expiresAt.toISOString()}">${expiryLabel}</time>, unless this helper or computer is stopped. If it expires, reopen the helper to get a new link.</small>`);
   const server = createServer(async (request, response) => {
     response.setHeader("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`);
     // Keep the origin available to native form POSTs without sharing the private path.
@@ -174,11 +187,16 @@ async function browserPrompt(file, previous, allowLive) {
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     const reply = (status, text) => { response.writeHead(status); response.end(text); };
     if (request.headers.host !== origin.slice("http://".length) || request.url !== route) return reply(404, "Not found.");
-    if (completed || busy) return reply(409, "This form has already been used or is saving.");
-    if (request.method === "GET") return reply(200, form);
+    if (request.method === "GET") return reply(200, completed ? confirmation : form);
     if (request.method !== "POST") return reply(405, "Method not allowed.");
     if (!request.headers.origin || request.headers.origin === "null") return reply(403, page(`<p>Your browser did not identify this local setup page when submitting. Nothing was saved.</p><p>Reopen the setup link in a regular browser tab and try again.</p><a href="${route}">Return to setup</a>`));
     if (request.headers.origin !== origin) return reply(403, page("<p>This submission did not come from the local setup page. Nothing was saved. Reopen the original setup link and try again.</p>"));
+    if (completed) {
+      request.resume();
+      response.setHeader("Location", route);
+      return reply(303, "Key already saved. Return to the confirmation page.");
+    }
+    if (busy) return reply(409, page("<p>Your key is being saved. Wait a moment, then reload this page.</p>"));
     const contentType = request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
     if (contentType !== "application/x-www-form-urlencoded") return reply(415, page(`<p>The browser sent an unsupported form format. Nothing was saved.</p><a href="${route}">Return to setup</a>`));
     let bytes = 0;
@@ -202,8 +220,9 @@ async function browserPrompt(file, previous, allowLive) {
       ownsWrite = true;
       await saveKey(file, previous, key);
       completed = true;
-      reply(200, page(`<p>Your Lob ${key.startsWith("test_") ? "test" : "live"} key is saved with owner-only file permissions.</p><p>Delivery settings are unchanged. No provider request was sent. Restart the local preview to load the key.</p><p>You can close this tab.</p>`));
-      server.close();
+      confirmation = page(`<p>Your Lob ${key.startsWith("test_") ? "test" : "live"} key is saved with owner-only file permissions.</p><p>Delivery settings are unchanged. No provider request was sent. Restart the local preview to load the key.</p><p>You can close this tab. This confirmation remains available until <time datetime="${expiresAt.toISOString()}">${expiryLabel}</time>.</p>`);
+      response.setHeader("Location", route);
+      reply(303, "Key saved. Return to the confirmation page.");
     } catch {
       if (!response.headersSent) reply(400, page("<p>The key could not be saved safely. Restart the setup helper and try again.</p>"));
     } finally {
@@ -212,15 +231,15 @@ async function browserPrompt(file, previous, allowLive) {
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
-  const expiry = setTimeout(() => { server.close(); server.closeAllConnections(); }, 15 * 60_000);
-  expiry.unref();
+  const expiry = scheduleExpiry(() => { server.close(); server.closeAllConnections(); }, lifetimeMs);
+  expiry.unref?.();
   server.once("close", () => clearTimeout(expiry));
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
   origin = `http://127.0.0.1:${server.address().port}`;
-  process.stdout.write(`${origin}${route}\n`);
+  return { server, url: `${origin}${route}`, expiresAt, expiryLabel };
 }
 
 async function main() {
@@ -229,7 +248,11 @@ async function main() {
   const browser = args.includes("--browser");
   const allowLive = args.includes("--allow-live");
   const file = fileURLToPath(new URL("../.env.local", import.meta.url));
-  if (browser) return browserPrompt(file, await snapshot(file), allowLive);
+  if (browser) {
+    const setup = await startLobBrowserSetup(file, allowLive);
+    process.stdout.write(`${setup.url}\nLocal setup remains available until ${setup.expiryLabel}. Keep this helper running.\n`);
+    return;
+  }
   if (!process.stdin.isTTY || !process.stdout.isTTY || typeof process.stdin.setRawMode !== "function") {
     throw new Error("Open this helper in an interactive terminal. Piped input is refused.");
   }

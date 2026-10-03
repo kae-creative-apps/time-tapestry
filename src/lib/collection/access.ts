@@ -34,8 +34,14 @@ export function publicView(
   c: Collection,
   role: CollectionView["role"],
 ): CollectionView {
-  const { ownerKey, recipientKey, requesterKey, creationRequestHash, ...view } =
-    structuredClone(c);
+  const {
+    ownerKey,
+    recipientKey,
+    requesterKey,
+    creationRequestHash,
+    privateGenerosityNotes,
+    ...view
+  } = structuredClone(c);
   void creationRequestHash;
   void ownerKey;
   void recipientKey;
@@ -93,6 +99,9 @@ export function publicView(
   }
   return {
     ...view,
+    ...(role === "owner" && privateGenerosityNotes
+      ? { privateGenerosityNotes }
+      : {}),
     role,
     links: role === "owner" ? linksFor(c) : undefined,
     capabilities: {

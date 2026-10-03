@@ -1,6 +1,7 @@
 import type { PostcardProofSnapshot } from "./postcard-proofs";
 import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
+import type { PrivateGenerosityNotes } from "./generosity-notes";
 export type Contact = { name: string; email: string; phone?: string };
 export type PostalAddress = {
   name: string;
@@ -136,6 +137,8 @@ export type Notification = {
   dispatch?: DispatchState;
 };
 export type Collection = {
+  /** Owner-only notebook. Never a source for interviews, stories, films or postcards. */
+  privateGenerosityNotes?: PrivateGenerosityNotes;
   /** Internal binding for safe creation retries. Never returned to clients. */
   creationRequestHash?: string;
   /** Explicit consent to the four-card automatic mailing journey. */

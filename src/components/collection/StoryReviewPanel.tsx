@@ -6,6 +6,7 @@ import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
 import { interviewAnswers } from "@/lib/collection/interview";
 import { AppIcon } from "@/components/icons";
 import { StoryMediaPlayer, StoryOriginalPreview } from "./StoryOriginalPreview";
+import { GenerosityNotes, type GenerosityNotesEditor } from "./GenerosityNotes";
 import {
   emptyStoryBlessing,
   recoverStoryDraft,
@@ -43,6 +44,8 @@ export function StoryReviewPanel({
   locked,
   allowWrittenOnly,
   onState,
+  onNotesSaved,
+  notesEditor,
   act,
   onNext,
   nextLabel = "Next story",
@@ -55,6 +58,8 @@ export function StoryReviewPanel({
   locked: boolean;
   allowWrittenOnly: boolean;
   onState: (id: string, dirty: boolean, ready: boolean) => void;
+  onNotesSaved: () => Promise<unknown>;
+  notesEditor: GenerosityNotesEditor;
   act: (body: unknown) => Promise<CollectionView | null>;
   onNext: () => void;
   nextLabel?: string;
@@ -71,6 +76,7 @@ export function StoryReviewPanel({
   const [deviceStatus, setDeviceStatus] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [notesDirty, setNotesDirty] = useState(false);
   const section = useRef<HTMLElement>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
   // Regenerated source sets use separate retained drafts, never overwriting older edits.
@@ -182,8 +188,8 @@ export function StoryReviewPanel({
   }, [serverSignature, ready]);
 
   useEffect(() => {
-    onState(chapter.id, dirty || uploading, ready);
-  }, [chapter.id, dirty, uploading, ready, onState]);
+    onState(chapter.id, dirty || uploading || notesDirty, ready);
+  }, [chapter.id, dirty, uploading, notesDirty, ready, onState]);
   useEffect(() => {
     if (!ready || (!dirty && !history.length)) return;
     if (dirty && !recovery) setDeviceStatus("Saving a copy on this device…");
@@ -781,6 +787,34 @@ export function StoryReviewPanel({
           </details>
         </div>
       </div>
+      {chapter.id === "q3" && (
+        <GenerosityNotes
+          collection={c}
+          accessKey={accessKey}
+          disabled={busy || uploading || !ready}
+          addDisabled={disabled}
+          onDirty={setNotesDirty}
+          onSaved={onNotesSaved}
+          editor={notesEditor}
+          onAddToStory={(words) => {
+            if (disabled)
+              return "Finish the current story recovery, save or film preparation before adding words.";
+            if (draft.content.includes(words.trim()))
+              return "These words are already in your story draft. Edit the story to change them.";
+            const content = [draft.content.trimEnd(), words.trim()]
+              .filter(Boolean)
+              .join("\n\n");
+            if (content.length > 100000)
+              return "These words would make the story longer than 100,000 characters. Shorten the words you chose or the story before adding them.";
+            change({ content });
+            setEditing(true);
+            setNotice(
+              "Your chosen words are in this draft. Save changes, then review the saved story and any attached film before approving.",
+            );
+            return null;
+          }}
+        />
+      )}
       {history.length > 0 && (
         <details className="mt-6 rounded-2xl border border-warmgray-200 bg-white p-5">
           <summary className="min-h-12 cursor-pointer text-base font-medium">
@@ -912,7 +946,12 @@ export function StoryReviewPanel({
               type="button"
               className={dirty ? portalSecondary : portalPrimary}
               disabled={
-                busy || uploading || !ready || Boolean(recovery) || dirty
+                busy ||
+                uploading ||
+                !ready ||
+                Boolean(recovery) ||
+                dirty ||
+                notesDirty
               }
               onClick={onNext}
             >

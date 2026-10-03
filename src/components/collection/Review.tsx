@@ -10,6 +10,7 @@ import { FilmGenerationPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
 import { ApprovedStories } from "./ApprovedStories";
+import { GenerosityNotes, useGenerosityNotesEditor } from "./GenerosityNotes";
 import { storyOriginals } from "./story-originals";
 import {
   ContactSummary,
@@ -44,6 +45,7 @@ export default function Review({
     load,
   } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState("q1");
+  const notesEditor = useGenerosityNotesEditor();
   const [editorStates, setEditorStates] = useState<
     Record<string, { dirty: boolean; ready: boolean }>
   >({});
@@ -89,6 +91,10 @@ export default function Review({
           : { ...old, [chapterId]: { dirty, ready } },
       ),
     [],
+  );
+  const onApprovedNotesDirty = useCallback(
+    (dirty: boolean) => onEditorState("giving-notes", dirty, true),
+    [onEditorState],
   );
   const dirty = Object.values(editorStates).some((state) => state.dirty);
   const editorsReady =
@@ -230,11 +236,11 @@ export default function Review({
           });
       }}
       onClickCapture={(event) => {
-        if (activeDirty && (event.target as Element).closest("a[href]")) {
+        if (dirty && (event.target as Element).closest("a[href]")) {
           event.preventDefault();
           event.stopPropagation();
           setLocalError(
-            "Save your latest story changes before opening another page. A device copy is kept while you work.",
+            "Save your latest changes before opening another page. Private notes have their own Save privately button.",
           );
         }
       }}
@@ -342,6 +348,16 @@ export default function Review({
         {approved ? (
           <>
             <ApprovedStories collection={c} accessKey={accessKey} />
+            <GenerosityNotes
+              collection={c}
+              accessKey={accessKey}
+              disabled={busy}
+              addDisabled
+              canAddToStory={false}
+              editor={notesEditor}
+              onDirty={onApprovedNotesDirty}
+              onSaved={load}
+            />
             <div id="sharing-and-postcards" className="scroll-mt-6">
               <CollectionSharing collection={c} busy={busy} act={act} />
             </div>
@@ -536,6 +552,8 @@ export default function Review({
                     locked={generatingFilms}
                     allowWrittenOnly={writtenOnly}
                     onState={onEditorState}
+                    onNotesSaved={load}
+                    notesEditor={notesEditor}
                     act={act}
                     onNext={nextStory}
                     nextLabel={

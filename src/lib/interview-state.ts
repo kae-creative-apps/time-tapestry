@@ -26,9 +26,9 @@ export const CHAPTERS = [
     id: "q3",
     title: "What you sowed",
     question:
-      "When you think about the time or money you sowed into others, is there a story you would like someone you love to know?",
+      "When you think about helping others over the years, is there a person or a story that comes to mind?",
     followUps: [
-      "If you would like, tell me about a time you gave money to a person, church or ministry. You do not need to share an amount.",
+      "Were there people or causes you supported financially that you would like your family to know about? Amounts are optional.",
       "What do you hope your family learns from the ways you chose to give?",
     ],
   },

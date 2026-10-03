@@ -51,6 +51,15 @@ type Phase =
   | "interrupted"
   | "finishing"
   | "review";
+type ConnectionStage =
+  "saving" | "preparing" | "devices" | "voice" | "confirming";
+const connectionStageLabels: Record<ConnectionStage, string> = {
+  saving: "Saving your earlier answers",
+  preparing: "Preparing your private interview",
+  devices: "Opening your microphone",
+  voice: "Connecting your interviewer",
+  confirming: "Your interviewer is connected",
+};
 const friendly = (e: unknown) =>
   e instanceof Error ? e.message : "That did not finish. Please try again.";
 type InterviewConnection = "webrtc" | "websocket";
@@ -308,6 +317,10 @@ export default function LiveInterview({
   const microphoneMutedRef = useRef(false);
   const [connectionFailed, setConnectionFailed] = useState(false);
   const [connectionTakingLong, setConnectionTakingLong] = useState(false);
+  const [connectionStage, setConnectionStage] =
+    useState<ConnectionStage>("saving");
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityNotice, setAvailabilityNotice] = useState("");
   const connectionTypeRef = useRef<InterviewConnection>("webrtc");
   const connectionAttempt = useRef(0);
   const [connectionSound, setConnectionSound] = useState(true);
@@ -371,6 +384,13 @@ export default function LiveInterview({
       sessionRef.current =
         c.interviews?.find((s) => s.id === id) ?? sessionRef.current;
   }, []);
+
+  useEffect(() => {
+    // Download code while the person reads the introduction. This neither opens
+    // a device nor creates a provider session or incurs a conversation charge.
+    if (collection?.role === "owner" && collection.capabilities.liveInterview)
+      warmConversation();
+  }, [collection?.role, collection?.capabilities.liveInterview]);
 
   const request = useCallback(
     (path: string, body?: unknown) => {
@@ -578,6 +598,8 @@ export default function LiveInterview({
   async function ensureSession(provider: "elevenlabs" | "guided") {
     await localWrites.current;
     await flush();
+    if (provider === "elevenlabs" && mounted.current)
+      setConnectionStage("preparing");
     let c = collectionRef.current;
     if (!c) throw new Error("Your private interview is still opening.");
     // A refreshed page has no sessionRef, but the server can still remember
@@ -710,6 +732,25 @@ export default function LiveInterview({
     setMicrophoneMuted(muted);
   }
 
+  async function checkAvailability() {
+    if (checkingAvailability || working) return;
+    setCheckingAvailability(true);
+    setAvailabilityNotice("");
+    try {
+      const result = await request("");
+      if (!mounted.current) return;
+      setAvailabilityNotice(
+        result.collection?.capabilities.liveInterview
+          ? "Voice interviews are available. Choose Start my interview when you are ready."
+          : "Voice interviews are still unavailable on this page. You can write or record an answer while the connection is being set up.",
+      );
+    } catch (cause) {
+      if (mounted.current) setAvailabilityNotice(friendly(cause));
+    } finally {
+      if (mounted.current) setCheckingAvailability(false);
+    }
+  }
+
   async function connect(
     connectionType: InterviewConnection = connectionTypeRef.current,
   ) {
@@ -724,6 +765,7 @@ export default function LiveInterview({
     connectionTypeRef.current = connectionType;
     setError("");
     setConnectionFailed(false);
+    setConnectionStage("saving");
     setPhase("connecting");
     setWorking(true);
     intentionalStop.current = false;
@@ -752,6 +794,7 @@ export default function LiveInterview({
       theme.current = config.currentThemeId ?? theme.current;
       await cue?.finished;
       if (!isCurrent()) return;
+      setConnectionStage("devices");
       let capture: MediaStream | null;
       if (archiveRef.current.stream) {
         // A disconnect can still be finalizing its last segment. Wait for that
@@ -775,6 +818,7 @@ export default function LiveInterview({
         devices.microphoneId;
       const { Conversation } = await sdk;
       if (!isCurrent()) return;
+      setConnectionStage("voice");
       connectionEpoch.current = crypto.randomUUID();
       const transport =
         config.connectionType === "websocket"
@@ -861,6 +905,7 @@ export default function LiveInterview({
         return;
       }
       client.current = connected;
+      setConnectionStage("confirming");
       await request("/interview", {
         action: "set_status",
         sessionId: s.id,
@@ -1214,7 +1259,7 @@ export default function LiveInterview({
   );
   const visibleStatus =
     phase === "connecting"
-      ? "Connecting your interviewer"
+      ? connectionStageLabels[connectionStage]
       : phase === "paused"
         ? "Paused"
         : phase === "interrupted"
@@ -1229,7 +1274,9 @@ export default function LiveInterview({
                   : mode === "speaking"
                     ? "Your interviewer is speaking"
                     : "Listening to you"
-              : "Your AI interviewer";
+              : collection && !collection.capabilities.liveInterview
+                ? "Voice interview unavailable"
+                : "Your AI interviewer";
 
   if (!collection)
     return (
@@ -1379,7 +1426,15 @@ export default function LiveInterview({
             >
               <div className="flex h-36 items-center justify-center">
                 <InterviewPresence
-                  state={phase === "connecting" ? "connecting" : mode}
+                  state={
+                    phase === "connecting"
+                      ? "connecting"
+                      : phase === "talking" && !guided
+                        ? mode
+                        : collection.capabilities.liveInterview
+                          ? "paused"
+                          : "unavailable"
+                  }
                 />
               </div>
               <div
@@ -1389,21 +1444,33 @@ export default function LiveInterview({
               >
                 <h2 className="max-w-2xl font-serif text-[1.5rem] leading-[1.4] text-white sm:text-[1.75rem]">
                   {phase === "connecting"
-                    ? "Connecting to your interviewer."
+                    ? `${connectionStageLabels[connectionStage]}.`
                     : question}
                 </h2>
                 <p className="mt-5 max-w-xl text-base leading-7 text-white/[0.85]">
                   {phase === "connecting"
-                    ? connectionTakingLong
-                      ? "We are still connecting. You can begin when she says hello."
-                      : "You can begin when she says hello."
-                    : phase === "ready"
-                      ? "Your AI interviewer will ask one question at a time. You can pause whenever you need to, and review everything before sharing."
-                      : phase === "paused"
-                        ? "The interviewer and recording are paused. Continue when you are ready."
-                        : guided
-                          ? "These are guided questions. Live AI conversation is not being used."
-                          : "There is no perfect answer. Start with a moment you remember."}
+                    ? connectionStage === "devices"
+                      ? kind === "video"
+                        ? "Choose Allow if your browser asks to use your microphone and camera. Check the camera or microphone icon beside the address bar if you do not see the request."
+                        : "Choose Allow if your browser asks to use your microphone. Check the microphone icon beside the address bar if you do not see the request."
+                      : connectionStage === "saving"
+                        ? "We are checking that your earlier answers are saved before you continue."
+                        : connectionStage === "confirming"
+                          ? "You can begin when she says hello. We are saving this connection to your private interview."
+                          : connectionTakingLong
+                            ? connectionStage === "preparing"
+                              ? "Your private interview is still being prepared. You can begin when she says hello."
+                              : "This is taking longer than usual. We are still waiting for the voice connection. You can begin when she says hello."
+                            : "You can begin when she says hello."
+                    : !collection.capabilities.liveInterview && !guided
+                      ? "The voice interviewer is not connected on this page. There is no interview loading in the background."
+                      : phase === "ready"
+                        ? "Your AI interviewer will ask one question at a time. You can pause whenever you need to, and review everything before sharing."
+                        : phase === "paused"
+                          ? "The interviewer and recording are paused. Continue when you are ready."
+                          : guided
+                            ? "These are guided questions. Live AI conversation is not being used."
+                            : "There is no perfect answer. Start with a moment you remember."}
                 </p>
                 {theme.current === "q3" && phase !== "connecting" && (
                   <aside className="mt-6 max-w-2xl rounded-xl border border-white/15 bg-white/[0.08] p-4 text-base leading-7 text-paper">
@@ -1457,9 +1524,26 @@ export default function LiveInterview({
               (phase === "paused" && !sessionRef.current)) && (
               <div className="space-y-5">
                 {!collection.capabilities.liveInterview && (
-                  <p className="rounded-xl bg-sage-100 p-4 text-base leading-7">
-                    Live voice is not connected in this preview. You can write
-                    your answers here or record one answer at a time.
+                  <div className="rounded-xl bg-sage-100 p-4 text-base leading-7">
+                    <p>
+                      You can check again, write your answers here, or record
+                      one answer at a time.
+                    </p>
+                    <button
+                      type="button"
+                      className={`${secondary} mt-3`}
+                      disabled={checkingAvailability || working}
+                      onClick={() => void checkAvailability()}
+                    >
+                      {checkingAvailability
+                        ? "Checking availability…"
+                        : "Check voice availability"}
+                    </button>
+                  </div>
+                )}
+                {availabilityNotice && (
+                  <p role="status" className="text-base leading-7 text-ink-700">
+                    {availabilityNotice}
                   </p>
                 )}
                 {collection.capabilities.liveInterview && (
@@ -1500,19 +1584,21 @@ export default function LiveInterview({
                   </p>
                 )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <button
-                    className={primary}
-                    disabled={
-                      working ||
-                      !journalReady ||
-                      !collection.capabilities.liveInterview
-                    }
-                    onClick={() => void connect()}
-                    onPointerEnter={warmConversation}
-                    onFocus={warmConversation}
-                  >
-                    Start my interview
-                  </button>
+                  {collection.capabilities.liveInterview && (
+                    <button
+                      className={primary}
+                      disabled={
+                        working ||
+                        !journalReady ||
+                        !collection.capabilities.liveInterview
+                      }
+                      onClick={() => void connect()}
+                      onPointerEnter={warmConversation}
+                      onFocus={warmConversation}
+                    >
+                      Start my interview
+                    </button>
+                  )}
                   <button
                     className={secondary}
                     disabled={working || !journalReady}
