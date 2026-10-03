@@ -2,6 +2,8 @@ import { withLegacyAdmin } from "@/lib/legacy-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, updateSession } from "@/lib/session";
 import { createPostcard } from "@/lib/lob-client";
+import { BRAND_COLORS } from "@/lib/brand-art";
+import { appUrl } from "@/lib/resend-client";
 
 async function legacyPOST(req: NextRequest) {
   try {
@@ -27,8 +29,8 @@ async function legacyPOST(req: NextRequest) {
       const chapter = session.story.chapters[item.chapterIndex];
       const postcard = await createPostcard(
         toAddress,
-        `<html><body style="background:#faf6ef;color:#3a3a3a;font-family:Georgia,serif;padding:40px;"><h1>${chapter?.title || "Time Tapestry"}</h1><p>${chapter?.content?.slice(0, 200) || ""}...</p></body></html>`,
-        `<html><body style="background:#faf6ef;color:#3a3a3a;font-family:Georgia,serif;padding:40px;"><p>${session.story.welcomeNote}</p><p>Read the full keepsake at ${process.env.NEXT_PUBLIC_APP_URL}/keepsake/${sessionId}</p></body></html>`,
+        `<html><body style="background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};font-family:Arial,sans-serif;padding:40px;"><img src="${new URL("/brand/time-tapestry-lockup.png", appUrl).href.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" alt="Time Tapestry" width="190" height="57" style="display:block;width:190px;height:auto;margin-bottom:24px;"><h1 style="font-family:'Arial Rounded MT Bold',Arial,sans-serif;">${chapter?.title || "Time Tapestry"}</h1><p>${chapter?.content?.slice(0, 200) || ""}...</p></body></html>`,
+        `<html><body style="background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};font-family:Arial,sans-serif;padding:40px;"><p>${session.story.welcomeNote}</p><p>Read the full keepsake at ${process.env.NEXT_PUBLIC_APP_URL}/keepsake/${sessionId}</p></body></html>`,
         item.sendDate,
       );
       scheduled.push({

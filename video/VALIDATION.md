@@ -2,7 +2,9 @@
 
 Checked October 2, 2026 using generated color frames and a synthetic tone. No family recording was uploaded, no ElevenLabs isolation call was made, and no postcard or email was sent.
 
-## Passed
+The checks below describe the earlier video pipeline test, before the October 2 brand update. The updated SVG closer, palette and title stack have not yet been rendered or visually validated as a completed film. The prior checks are not evidence for that new artwork.
+
+## Previously passed
 
 - Full repository TypeScript check at handoff.
 - Six video-plan tests: draft approval boundary, inclusive one-hour cap, accepted take identity, path traversal, source answer identity, caption bounds and original preservation.
@@ -20,7 +22,8 @@ Checked October 2, 2026 using generated color frames and a synthetic tone. No fa
 - Cloud Blob output upload and playback in the deployed app. The adapter is implemented; the integration test used isolated local storage with cloud credentials removed.
 - Production queue scheduling, retries or operator deployment.
 - Automatic professional content editing or automatic caption alignment. The export produces an honest first assembly for operator editing; current app transcripts are untimed.
-- Final logo approval. The closer is a temporary text wordmark.
+- A fresh render and visual review of the October 2 shared logo, updated colors and title type. The old temporary text wordmark has been replaced in source.
+- Locally bundled Quicksand in video. The current rounded sans title stack can use different available system fonts across render machines.
 - Editorial meaning, emotional pacing or final family approval. Synthetic test footage cannot establish these.
 
 Test media, local original archives and generated renders are under gitignored `video/media`, `video/archive`, `video/output` and `video/workspaces`. The isolated collection fixture was saved under `/private/tmp/time-tapestry-video-integration-test` and was never a live user collection.

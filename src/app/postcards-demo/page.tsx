@@ -68,7 +68,7 @@ export default function PostcardsDemoPage() {
         <Logo className="mb-8" />
         <div className="mb-12 text-center">
           <p className="mb-3 font-sans text-xs uppercase tracking-[0.14em] text-oxblood-400">
-            Time Tapestry Post
+            Postcards to keep
           </p>
           <h1 className="mb-4 font-serif text-3xl text-ink sm:text-4xl">
             A legacy, in the mail

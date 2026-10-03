@@ -46,7 +46,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         whileTap={{ scale: disabled || loading ? 1 : 0.99 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
         className={cn(
-          'relative inline-flex min-h-[48px] items-center justify-center gap-2 overflow-hidden rounded-xl px-6 py-3 font-sans text-base font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50',
+          'relative inline-flex min-h-[48px] items-center justify-center gap-2 overflow-hidden rounded-md px-6 py-3 font-sans text-base font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-oxblood focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50',
           isPrimary &&
             'bg-oxblood text-paper hover:bg-oxblood-600',
           variant === 'secondary' &&

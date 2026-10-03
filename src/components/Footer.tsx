@@ -6,18 +6,18 @@ import Link from "next/link";
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-warmgray-200 py-10 text-center">
+    <footer className="mt-auto border-t border-warmgray-200 bg-paper-50 px-6 py-12 text-center">
       <div className="mb-4 inline-flex">
-        <Logo variant="mark" className="text-ink-500" />
+        <Logo />
       </div>
       <motion.p
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="mb-2 font-sans text-xs uppercase tracking-[0.16em] text-ink-500"
+        className="mb-5 font-sans text-sm text-ink-500"
       >
-        Stories woven together
+        What you gave lives on.
       </motion.p>
       <motion.nav
         initial={{ opacity: 0, y: 10 }}

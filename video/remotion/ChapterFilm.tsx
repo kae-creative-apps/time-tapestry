@@ -1,4 +1,6 @@
 import React from "react";
+import { BrandArtwork } from "../../src/components/BrandArtwork";
+import { BRAND_COLORS } from "../../src/lib/brand-art";
 import { Audio, Video } from "@remotion/media";
 import {
   AbsoluteFill,
@@ -25,8 +27,10 @@ export type ChapterFilmProps = {
   draft: boolean;
 };
 
-const paper = "#faf6ef";
-const ink = "#1a1714";
+const paper = BRAND_COLORS.paper;
+const ink = BRAND_COLORS.espresso;
+const displayFont =
+  '"Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif';
 
 function Title({ plan }: { plan: ChapterVideoPlan }) {
   const frame = useCurrentFrame();
@@ -40,12 +44,20 @@ function Title({ plan }: { plan: ChapterVideoPlan }) {
         gap: 26,
       }}
     >
-      <div style={{ font: "28px Arial", letterSpacing: 6, color: "#7a2e2e" }}>
+      <div
+        style={{
+          font: "28px Arial",
+          letterSpacing: 3,
+          color: BRAND_COLORS.taupe,
+        }}
+      >
         CHAPTER {plan.chapterNumber} OF FOUR
       </div>
       <div
         style={{
-          font: "86px Georgia",
+          fontFamily: displayFont,
+          fontSize: 86,
+          fontWeight: 600,
           lineHeight: 1.12,
           maxWidth: 1500,
           opacity: interpolate(frame, [0, 18], [0, 1], {
@@ -56,14 +68,14 @@ function Title({ plan }: { plan: ChapterVideoPlan }) {
       >
         {plan.title}
       </div>
-      <div style={{ font: "36px Arial", color: "#6b6358" }}>
+      <div style={{ font: "36px Arial", color: BRAND_COLORS.taupe }}>
         {plan.storytellerName}
       </div>
     </AbsoluteFill>
   );
 }
 
-function WordmarkCloser() {
+function BrandCloser() {
   const frame = useCurrentFrame();
   return (
     <AbsoluteFill
@@ -77,23 +89,30 @@ function WordmarkCloser() {
     >
       <div
         style={{
-          font: "104px Georgia",
+          width: 760,
           opacity: interpolate(frame, [0, 22], [0, 1], {
             extrapolateRight: "clamp",
           }),
           translate: `0 ${interpolate(frame, [0, 22], [18, 0], { extrapolateRight: "clamp" })}px`,
         }}
       >
-        time tapestry
+        <BrandArtwork
+          variant="lockup"
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
       </div>
       <div
         style={{
-          width: 230,
-          height: 4,
-          background: "#7a2e2e",
-          scale: `${interpolate(frame, [16, 38], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })} 1`,
+          font: `36px ${displayFont}`,
+          color: BRAND_COLORS.taupe,
+          opacity: interpolate(frame, [16, 38], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          }),
         }}
-      />
+      >
+        Stories woven together
+      </div>
     </AbsoluteFill>
   );
 }
@@ -150,7 +169,9 @@ function StoryClip({
           </div>
           <div
             style={{
-              font: `${clip.kind === "text" ? 55 : 82}px Georgia`,
+              fontFamily: displayFont,
+              fontSize: clip.kind === "text" ? 55 : 82,
+              fontWeight: 500,
               lineHeight: 1.3,
             }}
           >
@@ -176,7 +197,7 @@ function StoryClip({
               textAlign: "center",
               maxWidth: 1500,
               padding: "18px 26px",
-              background: "rgba(26,23,20,0.90)",
+              background: "rgba(67,46,35,0.94)",
               color: "#ffffff",
               borderRadius: 8,
             }}
@@ -230,7 +251,7 @@ export function ChapterFilm({ plan, mediaUrls, draft }: ChapterFilmProps) {
             style={{ width: "100%", height: "100%" }}
           />
         ) : (
-          <WordmarkCloser />
+          <BrandCloser />
         )}
       </Sequence>
       {draft && (

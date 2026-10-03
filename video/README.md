@@ -87,7 +87,7 @@ The output video has a three-second title and four-second closer. The remaining 
 
 ## HyperFrames handoff
 
-The current closer uses a temporary text wordmark because no approved final logo asset is configured. `DESIGN.md` traces its palette to the current app. Replace it with the approved logo and review the result before real delivery. The vendored GSAP runtime retains its upstream license header.
+The closer uses the shared woven t icon and lowercase wordmark from the October 2 brand direction. `DESIGN.md` records the palette and type fallback. Run `node --import tsx scripts/export-brand.ts` from the repository root after any master artwork change; it refreshes the public assets and the HyperFrames SVG copy. The vendored GSAP runtime retains its upstream license header. This source update still needs a new rendered film review before real delivery.
 
 ```sh
 cd video/hyperframes
@@ -107,7 +107,7 @@ Check the actual four-second output with ffprobe and hash it. Add this optional 
 }
 ```
 
-The worker verifies that asset and Remotion appends it once. Without the asset, Remotion uses the explicitly temporary text-wordmark animation built into the template. HyperFrames does not process the family's footage a second time. The titles and footage remain controlled by the Remotion plan.
+The worker verifies that asset and Remotion appends it once. Without the asset, Remotion renders the same master `BrandArtwork` vector in its built-in closer, with the same four-second timing. HyperFrames does not process the family's footage a second time. The titles and footage remain controlled by the Remotion plan.
 
 ## Audio improvement
 

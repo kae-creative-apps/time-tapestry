@@ -56,7 +56,7 @@ p {
   input,
   textarea,
   select {
-    @apply rounded-xl border border-warmgray-300 bg-paper-50 px-4 py-3 font-sans text-base text-ink outline-none transition-colors duration-200;
+    @apply rounded-md border border-warmgray-300 bg-paper-50 px-4 py-3 font-sans text-base text-ink outline-none transition-colors duration-200;
   }
 
   input:focus,

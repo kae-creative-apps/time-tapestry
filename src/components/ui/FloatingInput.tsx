@@ -46,7 +46,7 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
             setIsFocused(false);
             onBlur?.(e);
           }}
-          className="h-14 w-full rounded-xl border border-warmgray-300 bg-paper-50 px-4 pt-2 font-sans text-base text-ink outline-none transition-all duration-200 focus:border-oxblood focus:ring-2 focus:ring-oxblood/15"
+          className="h-14 w-full rounded-md border border-warmgray-300 bg-paper-50 px-4 pt-2 font-sans text-base text-ink outline-none transition-all duration-200 focus:border-oxblood focus:ring-2 focus:ring-oxblood/15"
           {...props}
         />
       </div>

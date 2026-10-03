@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import QRCode from "qrcode";
+import { BRAND_COLORS } from "../brand-art";
 import { addCalendarMonths } from "./content";
 import { appOrigin } from "./access";
 import { getCollection, listCollections, mutateCollection } from "./store";
@@ -450,9 +451,11 @@ export async function postcardArtwork(
     .join(" · ");
   const front =
     '<!doctype html><html><head><meta charset="utf-8"><style>' +
-    "*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:#fbf9f3;color:#192f38;font:12pt/1.25 Georgia,serif}" +
-    ".content{position:absolute;left:.375in;top:.30in;width:5.5in}h1{font-size:21pt;line-height:1.1;margin:.10in 0 .15in}p{margin:0 0 .11in;overflow-wrap:anywhere}.label{font:9pt Arial,sans-serif;letter-spacing:1px}.scripture{font-style:italic}.reference{font-size:10pt}" +
-    '</style></head><body><div class="content"><div class="label">TIME TAPESTRY · STORIES WOVEN TOGETHER</div><h1>' +
+    `*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};font:12pt/1.25 Arial,sans-serif}` +
+    ".content{position:absolute;left:.375in;top:.30in;width:5.5in}.brand{display:block;width:1.15in;height:.344in;object-fit:contain;margin-bottom:.10in}h1{font-family:'Arial Rounded MT Bold',Arial,sans-serif;font-size:21pt;font-weight:600;line-height:1.1;margin:.10in 0 .15in}p{margin:0 0 .11in;overflow-wrap:anywhere}.label{font:9pt Arial,sans-serif;letter-spacing:1px}.scripture{font-style:italic}.reference{font-size:10pt}" +
+    '</style></head><body><div class="content"><img class="brand" alt="Time Tapestry" src="' +
+    escapeHtml(originUrl(origin) + "/brand/time-tapestry-lockup.png") +
+    '"><h1>' +
     escapeHtml(chapter.title) +
     '</h1><p class="label">From ' +
     escapeHtml(c.storyteller.name) +
@@ -467,7 +470,7 @@ export async function postcardArtwork(
   // Lob's official 4x6 template reserves the lower-right 3.2835in x 2.375in.
   const back =
     '<!doctype html><html><head><meta charset="utf-8"><style>' +
-    "*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:white;color:#192f38;font:12pt/1.3 Arial,sans-serif}" +
+    `*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:white;color:${BRAND_COLORS.espresso};font:12pt/1.3 Arial,sans-serif}` +
     ".intro{position:absolute;top:.35in;left:.35in;width:5.5in}.qr{position:absolute;left:.35in;top:1.6in;width:1.5in;height:1.5in}.caption{position:absolute;left:.35in;top:3.1in;width:2.2in;font-size:10pt}" +
     ".ink-free{position:absolute;right:.275in;bottom:.25in;width:3.2835in;height:2.375in;background:white}" +
     '</style></head><body><div class="intro">A story from ' +
@@ -549,20 +552,22 @@ function notificationRequest(c: Collection, n: Notification) {
     subject: n.subject,
     text,
     html:
-      '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#192f38;max-width:600px;margin:32px auto;line-height:1.6"><h1 style="font-size:24px">' +
+      `<!doctype html><html><body style="font-family:Arial,sans-serif;background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};max-width:600px;margin:32px auto;padding:24px;line-height:1.6"><img alt="Time Tapestry" width="190" height="57" style="display:block;width:190px;max-width:100%;height:auto;margin:0 0 32px" src="` +
+      escapeHtml(url.origin + "/brand/time-tapestry-lockup.png") +
+      '"><h1 style="font-family:Arial Rounded MT Bold,Arial,sans-serif;font-size:26px;line-height:1.3">' +
       escapeHtml(n.subject) +
       "</h1>" +
       n.text
         .split("\n")
         .map((p) => "<p>" + escapeHtml(p) + "</p>")
         .join("") +
-      '<p><a href="' +
+      `<p><a style="display:inline-block;background:${BRAND_COLORS.espresso};color:${BRAND_COLORS.paper};padding:14px 22px;border-radius:12px;text-decoration:none" href="` +
       escapeHtml(n.url) +
       '">' +
       escapeHtml(actionLabel) +
       '</a></p><p style="font-size:13px">' +
       escapeHtml(preference.trim()) +
-      '</p><p style="font-size:13px">Time Tapestry · Stories woven together</p></body></html>',
+      `</p><p style="font-size:13px;color:${BRAND_COLORS.taupe};margin-top:32px">Time Tapestry · Stories woven together</p></body></html>`,
   });
 }
 class ProviderError extends Error {
