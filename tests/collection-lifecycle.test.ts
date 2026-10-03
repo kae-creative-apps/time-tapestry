@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import type { Collection } from "../src/lib/collection/types";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 
 /** One continuous journey through real route handlers. Only external transport and rendered-film bytes are fixtures. */
 test("requested gift lifecycle preserves sources, exact approval, private delivery and quarterly replies", async (t) => {
@@ -55,6 +56,9 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
   const { POST: webhook } =
     await import("../src/app/api/collection/webhooks/lob/route");
   const { POST: jobs } = await import("../src/app/api/collection/jobs/route");
+  const postcardProof =
+    await import("../src/app/api/collection/[id]/postcard-proof/route");
+  let recipientCookie = "";
   const req = (
     url: string,
     body?: unknown,
@@ -64,7 +68,13 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       ...(body === undefined
         ? {}
         : { method: "POST", body: JSON.stringify(body) }),
-      headers: { "Content-Type": "application/json", ...extra },
+      headers: {
+        "Content-Type": "application/json",
+        ...(c?.recipientKey && url.includes(c.recipientKey) && recipientCookie
+          ? { cookie: recipientCookie }
+          : {}),
+        ...extra,
+      },
     });
   const params = (id: string) => ({ params: Promise.resolve({ id }) });
   const payload = {
@@ -107,7 +117,11 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     const response = await upload(
       new NextRequest(
         `http://localhost/api/collection/${c.id}/media?key=${key}`,
-        { method: "POST", body: form },
+        {
+          method: "POST",
+          body: form,
+          headers: key === c.recipientKey ? { cookie: recipientCookie } : {},
+        },
       ),
       params(c.id),
     );
@@ -231,6 +245,7 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     assert.equal(created.status, 201);
     const creation = await created.json();
     c = (await store.getCollection(creation.collection.id))!;
+    recipientCookie = await verifiedRecipientCookie(c.recipient.email);
     assert.equal(creation.collection.role, "requester");
     assert.equal(creation.collection.ownerKey, undefined);
     assert.equal(c.status, "invited");
@@ -487,6 +502,28 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     );
     assert.equal(
       (await act({ action: "address", address }, c.recipientKey)).status,
+      200,
+    );
+    assert.equal((await read()).postcardPreparation?.status, "needs_attention");
+    const proofPreviewResponse = await postcardProof.GET(
+      req(`/api/collection/${c.id}/postcard-proof?key=${c.ownerKey}`),
+      params(c.id),
+    );
+    assert.equal(proofPreviewResponse.status, 200);
+    const { proof: publicProof } = await proofPreviewResponse.json();
+    assert.equal(
+      (
+        await postcardProof.POST(
+          req(`/api/collection/${c.id}/postcard-proof?key=${c.ownerKey}`, {
+            action: "approve",
+            firstMailingAt: publicProof.firstMailingAt,
+            proofHash: publicProof.hash,
+            reviewed: true,
+            publicMessageApproved: true,
+          }),
+          params(c.id),
+        )
+      ).status,
       200,
     );
     assert.equal((await read()).postcardProof?.releaseStatus, "held");

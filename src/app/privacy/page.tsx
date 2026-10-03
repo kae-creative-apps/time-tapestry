@@ -11,9 +11,10 @@ export default function Privacy() {
         <p>
           This pilot stores names, email addresses, optional phone numbers,
           postcard addresses, interview answers, recordings, written stories and
-          recipient replies. Approved stories are shared through a private link.
-          Anyone who has that link can open the shared stories, so keep it with
-          people you trust.
+          recipient replies. Recipients must verify the email address selected
+          for them before opening approved stories. A postcard QR code locates
+          the collection but does not unlock it. Your storyteller workspace link
+          remains a private access credential, so keep it for yourself.
         </p>
         <h2 className="font-serif text-2xl">Recordings and review</h2>
         <p>
@@ -66,6 +67,16 @@ export default function Privacy() {
           Access to these records is logged. Server uploads, device copies and
           independent backups are different: an independent cloud backup is not
           configured simply by uploading a recording.
+        </p>
+        <h2 className="font-serif text-2xl">What is visible on a postcard</h2>
+        <p>
+          Postcards are open mail. Their encouragement, printed names and
+          mailing address can be read by postal workers or anyone handling the
+          card. The storyteller reviews and approves these public messages
+          separately. Interview excerpts, financial details, recordings and
+          private blessings are not copied onto postcards automatically. Only
+          include words in the public message that you are comfortable having
+          others read.
         </p>
         <h2 className="font-serif text-2xl">Postcards and email</h2>
         <p>

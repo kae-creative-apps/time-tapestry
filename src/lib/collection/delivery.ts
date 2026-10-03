@@ -148,7 +148,12 @@ export function notificationSuppressionReason(
       return "The stories have not been approved for sharing.";
     if (
       n.to !== c.recipient.email ||
-      n.url !== appOrigin() + linksFor(c).collection
+      ![
+        appOrigin() + linksFor(c).collection,
+        // Already queued mail may retain its old locator. The recipient key no
+        // longer grants access; verified-account authorization is still required.
+        appOrigin() + linksFor(c).collection + `?key=${c.recipientKey}`,
+      ].includes(n.url)
     )
       return "The approved recipient and private story link need to be checked.";
   }
@@ -647,6 +652,9 @@ async function processPostcard(id: string, now: number, origin: string) {
       return current;
     });
   }
+  // Legacy proofs and missing public-print approval remain held without consuming
+  // provider attempts or turning a review requirement into a retry failure.
+  if (snapshot.postcardPreparation?.status !== "ready") return false;
   const candidate = nextDuePostcard(snapshot, now);
   if (!candidate) return false;
   const configured = Boolean(

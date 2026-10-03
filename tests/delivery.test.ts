@@ -158,7 +158,7 @@ test("confirmed mailing shifts later cards and queues one owner update plus a 14
   assert.equal(fallback.to, result.recipient.email);
   assert.equal(fallback.dueAt, "2026-02-17T12:00:00.000Z");
   assert.match(fallback.text, /If it has not reached you/);
-  assert.match(fallback.url, /\/chapter\/q1\?key=recipient-test-key$/);
+  assert.equal(fallback.url, `${origin}/collection/${result.id}/chapter/q1`);
 });
 
 test("duplicate webhooks and distinct tracking events cannot duplicate notifications", () => {
@@ -331,21 +331,29 @@ test("invalid or timestamp-free mail events are rejected without changing the co
   assert.equal(c.notifications.length, 0);
 });
 
-test("print artwork escapes supplied text, includes a real QR PNG and never truncates a long blessing", async () => {
+test("print artwork uses only escaped public copy and a keyless QR, never private blessings", async () => {
   const c = collection();
+  c.postcardPublicMessages = { q1: '<script>alert("test")</script>' };
   c.chapterBlessings.q1 = {
-    encouragement: '<script>alert("test")</script>',
-    scriptureReference: "Supplied reference",
-    scriptureText: "Supplied words.",
-    scriptureTranslation: "Supplied translation",
+    encouragement: "Private encouragement",
+    scriptureReference: "Private reference",
+    scriptureText: "Private words.",
+    scriptureTranslation: "Private translation",
   };
   const artwork = await postcardArtwork(c, "q1", origin);
   assert.match(artwork.back, /data:image\/png;base64,/);
   assert.match(artwork.front, /&lt;script&gt;/);
-  assert.doesNotMatch(artwork.front, /<script>/);
-  assert.match(artwork.front, /Supplied words/);
-  c.chapterBlessings.q1.encouragement = "x".repeat(1001);
-  await assert.rejects(postcardArtwork(c, "q1", origin), /exceeds 1000/);
+  assert.doesNotMatch(
+    artwork.front,
+    /<script>|Private encouragement|Private words/,
+  );
+  assert.doesNotMatch(artwork.front, /An approved note/);
+  assert.equal(
+    recipientChapterUrl(c, "q1", origin),
+    `${origin}/collection/${c.id}/chapter/q1`,
+  );
+  c.postcardPublicMessages.q1 = "x".repeat(241);
+  await assert.rejects(postcardArtwork(c, "q1", origin), /exceeds 240/);
   assert.throws(
     () => recipientChapterUrl(c, "q1", "http://localhost:3000"),
     /HTTPS/,

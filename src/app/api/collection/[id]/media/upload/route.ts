@@ -5,7 +5,7 @@ import { finalizeCloudMedia } from "@/lib/collection/media";
 import { NextRequest, NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getCollection, getMedia, putMedia } from "@/lib/collection/store";
-import { roleFor } from "@/lib/collection/access";
+import { collectionRoleForRequest } from "@/lib/collection/request-access";
 import { mediaTypes } from "@/lib/collection/media";
 export async function POST(
   req: NextRequest,
@@ -19,7 +19,7 @@ export async function POST(
       request: req,
       onBeforeGenerateToken: async (pathname, payload) => {
         const c = await getCollection(id);
-        const role = c && roleFor(c, req.nextUrl.searchParams.get("key") || "");
+        const role = c && (await collectionRoleForRequest(req, c));
         if (
           !c ||
           !role ||

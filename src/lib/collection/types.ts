@@ -140,6 +140,13 @@ export type Collection = {
   creationRequestHash?: string;
   /** Explicit consent to the four-card automatic mailing journey. */
   autoPostcards?: boolean;
+  /** Public print copy, separate from private interview stories and blessings. */
+  postcardPublicMessages?: Partial<Record<string, string>>;
+  postcardPublicConsent?: {
+    version: 2;
+    messagesHash: string;
+    approvedAt: string;
+  };
   schemaVersion: 2;
   id: string;
   createdAt: string;

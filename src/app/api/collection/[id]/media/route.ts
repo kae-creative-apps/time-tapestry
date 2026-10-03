@@ -8,7 +8,7 @@ import { MAX_MEDIA_BYTES } from "@/lib/collection/usage";
 import { SecurityError } from "@/lib/security/policy";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, getMedia } from "@/lib/collection/store";
-import { roleFor } from "@/lib/collection/access";
+import { collectionRoleForRequest } from "@/lib/collection/request-access";
 import { saveLocalMedia, finalizeCloudMedia } from "@/lib/collection/media";
 export async function POST(
   req: NextRequest,
@@ -17,7 +17,7 @@ export async function POST(
   try {
     const { id } = await params;
     const c = await getCollection(id);
-    const role = c && roleFor(c, req.nextUrl.searchParams.get("key") || "");
+    const role = c && (await collectionRoleForRequest(req, c));
     if (!c || !role || role === "requester")
       return NextResponse.json(
         { error: "Recording access denied" },

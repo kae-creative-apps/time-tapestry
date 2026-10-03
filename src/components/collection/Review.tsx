@@ -579,9 +579,9 @@ export default function Review({
                   <p className="mt-4 max-w-3xl text-base leading-8 text-ink-500">
                     Approve only when all four stories and any included films
                     say what you want to share. This saves a fixed version,
-                    opens your private family page, and prepares the four
-                    postcards automatically. If the mailing address is missing,
-                    we’ll ask your recipient for it.
+                    opens your private family page for your verified recipient.
+                    Next, review the separate encouragement printed on your
+                    postcards. Private stories are never printed automatically.
                   </p>
                   <p className="mt-4 text-base font-medium">
                     {reviewedCount} of 4 story reviews saved.
@@ -617,10 +617,11 @@ export default function Review({
                     <AppIcon name="arrowRight" size={18} />
                   </button>
                   <p className="mt-3 text-sm leading-6 text-ink-500">
-                    Approval starts the automatic postcard process and queues a
-                    confirmation email for you. The first postcard introduces
-                    the collection, followed by cards at months 3, 6 and 9.
-                    Approved stories cannot be edited in this pilot.
+                    Approval queues a confirmation email for you when email is
+                    connected. After you approve the public postcard messages
+                    and confirm the address, the four-card mailing can run
+                    automatically. Approved stories cannot be edited in this
+                    pilot.
                   </p>
                 </section>
               </>

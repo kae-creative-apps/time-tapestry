@@ -9,20 +9,20 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import type { Collection } from "../src/lib/collection/types";
 import { interviewAnswers } from "../src/lib/collection/interview";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 
 let create: any, post: any, legacyPost: any, get: any, store: any, content: any;
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const request = (url: string, body?: unknown) =>
-  new NextRequest(
-    `http://localhost${url}`,
-    body === undefined
-      ? undefined
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-  );
+const request = (url: string, body?: unknown, cookie?: string) =>
+  new NextRequest(`http://localhost${url}`, {
+    ...(body === undefined
+      ? {}
+      : { method: "POST", body: JSON.stringify(body) }),
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(cookie ? { cookie } : {}),
+    },
+  });
 before(async () => {
   Object.assign(process.env, {
     NODE_ENV: "test",
@@ -268,6 +268,15 @@ test("recipient and requester cannot append, read transcripts or see archival re
     sessionId,
     turns: [turn(0, "Private interview words.")],
   });
+  const oldRecipientLink = await get(
+    request(`/api/collection/${c.id}?key=${c.recipientKey}`),
+    params(c.id),
+  );
+  assert.equal(oldRecipientLink.status, 404);
+  const denied = await oldRecipientLink.json();
+  assert.equal(denied.collection, undefined);
+  assert.ok(!JSON.stringify(denied).includes("Private interview words"));
+  const recipientCookie = await verifiedRecipientCookie(c.recipient.email);
   for (const key of [c.recipientKey, c.requesterKey]) {
     assert.equal(
       (
@@ -280,9 +289,12 @@ test("recipient and requester cannot append, read transcripts or see archival re
       403,
     );
     const result = await get(
-      request(`/api/collection/${c.id}?key=${key}`),
+      key === c.recipientKey
+        ? request(`/api/collection/${c.id}`, undefined, recipientCookie)
+        : request(`/api/collection/${c.id}?key=${key}`),
       params(c.id),
     );
+    assert.equal(result.status, 200);
     const json = await result.json();
     assert.equal(json.collection.interviews, undefined);
     assert.ok(!JSON.stringify(json).includes("Private interview words"));

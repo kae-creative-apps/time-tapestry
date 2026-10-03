@@ -1,7 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import {
+  createContext,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -15,8 +16,11 @@ import {
   useTransform,
   type MotionValue,
 } from "framer-motion";
-import { BrandArtwork } from "@/components/BrandArtwork";
-import { BrandPattern } from "@/components/BrandPattern";
+import { PostcardFace as PrintedPostcardFace } from "@/components/collection/PostcardFace";
+import {
+  usePostcardSample,
+  type SamplePostcardArtwork,
+} from "./usePostcardSample";
 import styles from "./StoryMorphHero.module.css";
 
 /**
@@ -81,39 +85,18 @@ function cardVariables(card: StoryCard): CSSProperties {
   } as CSSProperties;
 }
 
-function PostcardFace({ card, index }: { card: StoryCard; index: number }) {
+const SampleArtwork = createContext<SamplePostcardArtwork | null>(null);
+
+function PostcardFace({ index }: { card: StoryCard; index: number }) {
+  const artwork = useContext(SampleArtwork);
   return (
-    <div className={`${styles.card} ${styles[card.tone]}`}>
-      {card.tone === "photo" ? (
-        <>
-          <div className={styles.photograph}>
-            <Image
-              src="/brand/story-exchange-branded-v1.png"
-              alt=""
-              fill
-              priority
-              sizes="(min-width: 1024px) 300px, 46vw"
-              className={styles.image}
-            />
-          </div>
-          <div className={styles.photoCaption}>
-            <span>{card.label}</span>
-            <BrandArtwork variant="mark" className={styles.photoMark} />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className={styles.cardTop}>
-            <span className={styles.number}>0{index + 1}</span>
-            <BrandArtwork variant="mark" className={styles.smallMark} />
-          </div>
-          <BrandPattern
-            variant="ribbon"
-            className={styles.cardPattern}
-          />
-          <span className={styles.cardLabel}>{card.label}</span>
-          <BrandArtwork variant="wordmark" className={styles.wordmark} />
-        </>
+    <div className={styles.card}>
+      {artwork && (
+        <PrintedPostcardFace
+          html={artwork.fronts[index]}
+          title={`Illustrative postcard ${index + 1}, from Evelyn to Anna`}
+          trim
+        />
       )}
     </div>
   );
@@ -262,6 +245,7 @@ function MovingCards({
 /** Decorative right-hand hero artwork. A 600 × 540 frame is the intended desktop size. */
 export function StoryMorphVisual({ className = "" }: { className?: string }) {
   const target = useRef<HTMLDivElement>(null);
+  const { artwork } = usePostcardSample();
   const [mode, setMode] = useState<MotionMode>("static");
   const introductionComplete = useRef(false);
   const finishIntroduction = () => {
@@ -291,37 +275,39 @@ export function StoryMorphVisual({ className = "" }: { className?: string }) {
       aria-hidden="true"
     >
       <div className={styles.halo} />
-      <div className={styles.scene}>
-        {mode === "desktop" ? (
-          <MovingCards
-            target={target}
-            enter={!introductionComplete.current}
-            onComplete={finishIntroduction}
-          />
-        ) : (
-          cards.map((card, index) => (
-            <div
-              key={card.label}
-              className={styles.position}
-              style={cardVariables(card)}
-            >
-              {mode === "mobile" ? (
-                <PostcardArrival
-                  card={card}
-                  index={index}
-                  mode={mode}
-                  enter={!introductionComplete.current}
-                  onComplete={finishIntroduction}
-                />
-              ) : (
-                <div className={styles.arrival}>
-                  <PostcardFace card={card} index={index} />
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+      <SampleArtwork.Provider value={artwork}>
+        <div className={styles.scene}>
+          {mode === "desktop" ? (
+            <MovingCards
+              target={target}
+              enter={!introductionComplete.current}
+              onComplete={finishIntroduction}
+            />
+          ) : (
+            cards.map((card, index) => (
+              <div
+                key={card.label}
+                className={styles.position}
+                style={cardVariables(card)}
+              >
+                {mode === "mobile" ? (
+                  <PostcardArrival
+                    card={card}
+                    index={index}
+                    mode={mode}
+                    enter={!introductionComplete.current}
+                    onComplete={finishIntroduction}
+                  />
+                ) : (
+                  <div className={styles.arrival}>
+                    <PostcardFace card={card} index={index} />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </SampleArtwork.Provider>
     </div>
   );
 }

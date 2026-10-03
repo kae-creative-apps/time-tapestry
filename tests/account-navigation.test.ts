@@ -72,9 +72,17 @@ test("private links reject external, script, ambiguous and malformed navigation 
     "https://stories.example.test:444" + path,
     "/api/collection/collection-test-123?key=key",
     "/record/interview-test-123/review?key=key",
-    "/collection/collection-test-123/chapter/q1?key=key",
+    "/record/interview-test-123/address?key=key",
+    "/collection/collection-test-123/address/chapter/q1",
+    "/collection/collection-test-123/address/../review",
+    "/collection/collection-test-123/arbitrary-view",
     "/collection/short?key=key",
-    "/collection/collection-test-123",
+    "/record/interview-test-123",
+    "/collection/collection-test-123/review",
+    "/collection/collection-test-123/chapter/q5",
+    "/collection/collection-test-123/chapter/q1/extra",
+    "/collection/collection-test-123/chapter/q1%2f..",
+    "/collection/collection-test-123/chapter/q1/../q2",
     path + "&key=other-key",
     "/collection/collection-test-123?key=",
     "/collection/collection-test-123?key=%20",
@@ -91,6 +99,62 @@ test("private links reject external, script, ambiguous and malformed navigation 
     "x".repeat(4097),
   ])
     assert.equal(privateCollectionPath(input, origin), null, String(input));
+});
+
+test("recipient collection and chapter locators stay keyless and preserve a verified portal's tab return", () => {
+  const storage = tabStorage();
+  const now = 1000;
+  for (const locator of [
+    "/collection/collection-test-123",
+    "/collection/collection-test-123/chapter/q1",
+    "/collection/collection-test-123/chapter/q4",
+    "/collection/collection-test-123/address",
+  ]) {
+    assert.equal(privateCollectionPath(locator, origin), locator);
+    assert.equal(
+      privateCollectionPath(`${origin}${locator}/`, origin),
+      locator,
+    );
+    assert.equal(
+      privateCollectionPath(
+        `${locator}?next=https://outside.test#private`,
+        origin,
+      ),
+      locator,
+    );
+    rememberCollectionReturn(storage, locator, origin, now);
+    const saved = readCollectionReturn(storage, origin, now + 1);
+    assert.deepEqual(saved, {
+      path: locator,
+      expiresAt: now + COLLECTION_RETURN_TTL_MS,
+    });
+    assert.equal(saved!.path.includes("key="), false);
+    clearCollectionReturn(storage);
+    assert.equal(readCollectionReturn(storage, origin, now + 1), null);
+  }
+  assert.equal(
+    privateCollectionPath(
+      "/collection/collection-test-123/address?key=synthetic-private-key",
+      origin,
+    ),
+    "/collection/collection-test-123/address?key=synthetic-private-key",
+    "Private address links preserve their route and capability",
+  );
+  assert.equal(
+    privateCollectionPath(
+      "/collection/collection-test-123/chapter/q2?key=synthetic-private-key",
+      origin,
+    ),
+    "/collection/collection-test-123/chapter/q2?key=synthetic-private-key",
+    "Existing complete private links retain their key and chapter; the destination enforces access",
+  );
+  assert.equal(
+    privateCollectionPath(
+      "https://outside.test/collection/collection-test-123/chapter/q1",
+      origin,
+    ),
+    null,
+  );
 });
 
 test("return links stay in the supplied tab store, expire and clear on sign out", () => {

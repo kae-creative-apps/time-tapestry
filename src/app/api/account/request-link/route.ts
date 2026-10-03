@@ -5,6 +5,7 @@ import { readJsonBody } from "@/lib/security/http";
 import {
   beginAccountLogin,
   normalizeAccountEmail,
+  normalizeRecipientLocator,
   randomCredential,
   LOGIN_LIFETIME_SECONDS,
 } from "@/lib/accounts/service";
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await readJsonBody(req, 8192);
     const email = normalizeAccountEmail(body.email);
+    const recipientLocator = normalizeRecipientLocator(body.recipientLocator);
     await guardRequest(req, {
       action: "account_login",
       requireHuman: true,
@@ -30,7 +32,12 @@ export async function POST(req: NextRequest) {
       60,
     );
     const nonce = randomCredential(),
-      result = await beginAccountLogin(email, nonce);
+      result = await beginAccountLogin(
+        email,
+        nonce,
+        undefined,
+        recipientLocator,
+      );
     const response = NextResponse.json(result, {
       status: 202,
       headers: accountHeaders,

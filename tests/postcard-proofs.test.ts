@@ -13,6 +13,7 @@ import {
   assertReleasedPostcardProof,
   buildPostcardProof,
   postcardDeliveryReadiness,
+  postcardPublicMessagesHash,
   postcardProofIsCurrent,
   prepareAutomaticPostcards,
   releasePostcardProof,
@@ -20,7 +21,7 @@ import {
 const origin = "https://stories.example.com";
 const now = "2030-01-31T12:00:00.000Z";
 function fixture(): Collection {
-  return {
+  const c: Collection = {
     schemaVersion: 2,
     id: "proof-test-collection",
     createdAt: now,
@@ -68,6 +69,12 @@ function fixture(): Collection {
     approvedAt: now,
     approvedVersion: 1,
   };
+  c.postcardPublicConsent = {
+    version: 2,
+    messagesHash: postcardPublicMessagesHash(c),
+    approvedAt: now,
+  };
+  return c;
 }
 function readiness(enabled: boolean) {
   process.env.COLLECTION_DELIVERY_ENABLED = enabled ? "true" : "false";
@@ -76,6 +83,8 @@ function readiness(enabled: boolean) {
   process.env.LOB_FROM_ADDRESS_ID = "test-only";
   process.env.LOB_WEBHOOK_SECRET = "test-only";
   process.env.CRON_SECRET = "test-only";
+  process.env.RESEND_API_KEY = "test-only-no-provider-call";
+  process.env.RESEND_FROM_EMAIL = "test@example.com";
 }
 before(() => readiness(false));
 test("actual artwork is self-contained, print-fit checked, and quarterly dates clamp month ends", async () => {
@@ -136,6 +145,131 @@ test("legacy digital approval with a saved address does not opt into postcards",
   assert.equal(c.postcardProof, undefined);
   assert.deepEqual(c.deliveries, []);
   readiness(false);
+});
+test("legacy print proofs stay held until explicit public-message review and are archived unchanged", async () => {
+  readiness(true);
+  try {
+    const c = fixture();
+    const legacy = await buildPostcardProof(c, now, origin);
+    legacy.version = 1;
+    delete legacy.accessPolicy;
+    delete legacy.publicMessageHash;
+    legacy.approvedAt = now;
+    legacy.releaseStatus = "released";
+    legacy.cards[0].front = "Legacy private story and bearer QR artwork";
+    c.postcardProof = structuredClone(legacy);
+    c.deliveries = legacy.cards.map((card) => ({
+      chapterId: card.chapterId,
+      scheduledFor: card.scheduledFor,
+      status: "scheduled",
+    }));
+    delete c.postcardPublicConsent;
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardPreparation?.status, "needs_attention");
+    assert.deepEqual(c.postcardProof, legacy);
+    assert.ok(c.deliveries.every((item) => !item.dispatch && !item.providerId));
+    assert.equal(postcardProofIsCurrent(c), false);
+    const reviewed = await buildPostcardProof(c, now, origin);
+    assert.throws(
+      () => approvePostcardProof(c, reviewed, reviewed.hash, now),
+      /public postcard messages/,
+    );
+    c.postcardPublicConsent = {
+      version: 2,
+      messagesHash: postcardPublicMessagesHash(c),
+      approvedAt: now,
+    };
+    approvePostcardProof(c, reviewed, reviewed.hash, now);
+    assert.deepEqual(c.postcardProofHistory?.[0], legacy);
+    assert.deepEqual(c.deliveries, []);
+    releasePostcardProof(c, reviewed.hash, now, origin);
+    assert.equal(c.postcardProof?.version, 2);
+    assert.equal(c.postcardProof?.accessPolicy, "verified_recipient_email");
+    assert.equal(c.deliveries.length, 4);
+  } finally {
+    readiness(false);
+  }
+});
+test("a started legacy provider request is preserved for reconciliation rather than replaced", async () => {
+  readiness(true);
+  try {
+    const c = fixture();
+    const proof = await buildPostcardProof(c, now, origin);
+    c.postcardProof = {
+      ...proof,
+      version: 1,
+      approvedAt: now,
+      releaseStatus: "released",
+    };
+    c.deliveries = [
+      {
+        chapterId: "q1",
+        scheduledFor: now,
+        status: "failed",
+        dispatch: {
+          attempts: 1,
+          requestBody: "saved legacy request",
+          idempotencyKey: "saved-legacy-key",
+        },
+      },
+    ];
+    const saved = structuredClone(c.deliveries);
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardPreparation?.status, "needs_attention");
+    assert.deepEqual(c.deliveries, saved);
+    assert.throws(
+      () => approvePostcardProof(c, proof, proof.hash, now),
+      /already in progress/,
+    );
+    assert.throws(() => assertReleasedPostcardProof(c, origin), /hold/);
+  } finally {
+    readiness(false);
+  }
+});
+test("changed public messages invalidate consent and account email setup is required before release", async () => {
+  readiness(true);
+  try {
+    const c = fixture();
+    c.postcardPublicMessages = { q1: "A changed public encouragement." };
+    const proof = await buildPostcardProof(c, now, origin);
+    assert.throws(
+      () => approvePostcardProof(c, proof, proof.hash, now),
+      /public postcard messages/,
+    );
+    c.postcardPublicConsent = {
+      version: 2,
+      messagesHash: postcardPublicMessagesHash(c),
+      approvedAt: now,
+    };
+    approvePostcardProof(c, proof, proof.hash, now);
+    delete process.env.RESEND_API_KEY;
+    assert.equal(postcardDeliveryReadiness(origin).ready, false);
+    assert.throws(
+      () => releasePostcardProof(c, proof.hash, now, origin),
+      /Recipient email verification/,
+    );
+    assert.deepEqual(c.deliveries, []);
+  } finally {
+    readiness(false);
+  }
+});
+test("a released schedule waits without altering jobs if recipient email verification becomes unavailable", async () => {
+  readiness(true);
+  try {
+    const c = await prepareAutomaticPostcards(fixture(), now, origin);
+    const saved = JSON.stringify(c.deliveries);
+    delete process.env.RESEND_API_KEY;
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardPreparation?.status, "waiting_for_setup");
+    assert.equal(JSON.stringify(c.deliveries), saved);
+    assert.equal(c.postcardProof?.releaseStatus, "released");
+    readiness(true);
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardPreparation?.status, "ready");
+    assert.equal(JSON.stringify(c.deliveries), saved);
+  } finally {
+    readiness(false);
+  }
 });
 test("ready automatic setup releases exactly four saved dates and is idempotent", async () => {
   readiness(true);
@@ -213,26 +347,13 @@ test("proof payloads and archived private addresses are excluded from recipient 
     assert.equal(view.postcardPreparation, undefined);
   }
 });
-test("long postcard text, names and unsupported glyphs are held instead of clipped", async () => {
-  for (const field of [
-    "note",
-    "name",
-    "title",
-    "scripture",
-    "glyph",
-  ] as const) {
+test("long public postcard copy, names and unsupported glyphs are held instead of clipped", async () => {
+  for (const field of ["message", "name", "glyph"] as const) {
     const c = fixture();
-    if (field === "note") c.chapters[0].postcardNote = "W".repeat(900);
+    if (field === "message") c.postcardPublicMessages = { q1: "W".repeat(240) };
     if (field === "name") c.storyteller.name = "W".repeat(120);
-    if (field === "title") c.chapters[0].title = "W".repeat(120);
-    if (field === "scripture")
-      c.chapterBlessings.q1 = {
-        encouragement: "",
-        scriptureText: "W".repeat(800),
-        scriptureReference: "",
-        scriptureTranslation: "",
-      };
-    if (field === "glyph") c.chapters[0].postcardNote = "A personal note 😀";
+    if (field === "glyph")
+      c.postcardPublicMessages = { q1: "A personal note 😀" };
     assert.throws(() => assertPostcardTextFits(c, "q1"), /print|postcard/);
     await prepareAutomaticPostcards(c, now, origin);
     assert.equal(c.postcardPreparation?.status, "needs_attention");
@@ -275,6 +396,7 @@ test("proof endpoint rejects recipient access and stale preview approval without
         firstMailingAt: now,
         proofHash: "stale",
         reviewed: true,
+        publicMessageApproved: true,
       }),
     }),
     context,

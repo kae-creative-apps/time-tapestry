@@ -1,5 +1,17 @@
 import metrics from "./postcard-font-metrics.json";
 import type { Collection } from "./types";
+import {
+  publicPostcardMessage,
+  PUBLIC_POSTCARD_MESSAGE_LIMIT,
+} from "./postcard-public-message";
+import {
+  POSTCARD_LAYOUT,
+  POSTCARD_BACK_CAPTION,
+  POSTCARD_BACK_INSTRUCTION,
+  postcardFirstName,
+  postcardMessageTypography,
+  type PublicPostcardContent,
+} from "./postcard-design";
 
 // Metrics are maximum advances at weights 300/400/500/600/700 from the bundled
 // Quicksand font, checked against all 229 base advances in the bundled WOFF2.
@@ -41,56 +53,83 @@ function lines(text: string, pixels: number, width: number, spacing = 0) {
   return count;
 }
 export const postcardFontSha256 = metrics.fontSha256;
-export function assertPostcardTextFits(c: Collection, chapterId: string) {
-  const chapter = c.chapters.find((item) => item.id === chapterId);
-  if (!chapter) throw new PostcardLayoutError("Postcard story not found.");
-  const blessing = c.chapterBlessings[chapterId];
-  const attribution = [
-    blessing?.scriptureReference,
-    blessing?.scriptureTranslation,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const width = 512;
-  let frontHeight =
-    33.024 + 19.2 + lines(chapter.title, 28, width) * 30.8 + 14.4;
-  frontHeight += lines(`From ${c.storyteller.name}`, 12, width, 1) * 15 + 10.56;
-  for (const paragraph of [
-    chapter.postcardNote,
-    blessing?.encouragement,
-    blessing?.scriptureText,
-  ]) {
-    if (paragraph)
-      frontHeight += lines(paragraph, 44 / 3, width) * 17.6 + 10.56;
-  }
-  if (attribution)
-    frontHeight += lines(attribution, 40 / 3, width) * 17.6 + 10.56;
-  if (frontHeight > 350)
+export function postcardPrintContent(
+  c: Collection,
+  chapterId: string,
+): PublicPostcardContent {
+  return {
+    recipientFirstName: postcardFirstName(c.recipient.name, "friend"),
+    storytellerFirstName: postcardFirstName(
+      c.storyteller.name,
+      "your loved one",
+    ),
+    publicMessage: publicPostcardMessage(c, chapterId),
+  };
+}
+
+export function assertPublicPostcardFits(content: PublicPostcardContent) {
+  const layout = POSTCARD_LAYOUT;
+  if (
+    !content.publicMessage.trim() ||
+    content.publicMessage.length > PUBLIC_POSTCARD_MESSAGE_LIMIT
+  )
     throw new PostcardLayoutError(
-      `The postcard wording for “${chapter.title}” needs a shorter print revision before mailing. The approved story remains saved.`,
+      `Public postcard encouragement needs 1 to ${PUBLIC_POSTCARD_MESSAGE_LIMIT} characters before printing.`,
     );
-  const introLines =
-    lines(
-      `A story from ${c.storyteller.name}, made for ${c.recipient.name}.`,
-      16,
-      width,
-    ) +
-    lines(
-      "Scan to read all four stories and watch any included videos.",
-      16,
-      width,
+  const type = postcardMessageTypography(content.publicMessage);
+  // The shared renderer preserves explicit line breaks. Count those here too.
+  const messageLines = content.publicMessage
+    .split(/\r?\n/)
+    .reduce(
+      (total, line) =>
+        total + Math.max(1, lines(line, type.size, layout.front.width - 12)),
+      0,
     );
-  if (introLines * 20.8 > 108)
+  const frontHeight =
+    lines(`Dear ${content.recipientFirstName},`, 18, layout.front.width - 12) *
+      24 +
+    18 +
+    messageLines * type.lineHeight +
+    20 +
+    lines(`From ${content.storytellerFirstName}`, 16, layout.front.width - 12) *
+      22;
+  if (frontHeight > layout.front.bottom - layout.front.y)
+    throw new PostcardLayoutError(
+      "The public postcard message needs a shorter print revision before mailing. Your private story remains saved.",
+    );
+  const introHeight =
+    lines(
+      `A story from ${content.storytellerFirstName}`,
+      20,
+      layout.backIntro.width - 12,
+    ) *
+      26 +
+    8 +
+    lines(POSTCARD_BACK_INSTRUCTION, 14, layout.backIntro.width - 12) * 20;
+  if (introHeight > layout.backIntro.bottom - layout.backIntro.y)
     throw new PostcardLayoutError(
       "The postcard names need a print layout check before mailing.",
     );
-  const captionLines =
-    lines("Read, watch and send a reply on your story page.", 40 / 3, 195) +
-    lines("Keep this card private.", 40 / 3, 195);
-  if ((captionLines * 52) / 3 > 84)
+  const captionHeight =
+    lines(POSTCARD_BACK_CAPTION, 13, layout.caption.width - 8) * 17;
+  if (captionHeight > layout.caption.bottom - layout.caption.y)
     throw new PostcardLayoutError(
-      "The postcard reply caption does not fit its print area.",
+      "The postcard sign-in caption does not fit its print area.",
     );
+}
+
+export function assertPostcardTextFits(c: Collection, chapterId: string) {
+  if (!c.chapters.some((chapter) => chapter.id === chapterId))
+    throw new PostcardLayoutError("Postcard story not found.");
+  const explicitMessage = c.postcardPublicMessages?.[chapterId];
+  if (
+    explicitMessage &&
+    explicitMessage.trim().length > PUBLIC_POSTCARD_MESSAGE_LIMIT
+  )
+    throw new PostcardLayoutError(
+      `Public postcard copy exceeds ${PUBLIC_POSTCARD_MESSAGE_LIMIT} characters. Create a shorter print revision before mailing.`,
+    );
+  assertPublicPostcardFits(postcardPrintContent(c, chapterId));
   if (c.address) {
     const a = c.address;
     const addressLines = [

@@ -1,4 +1,4 @@
-import AddressPage from "@/components/collection/AddressPage";
+import { RecipientAccessGate } from "@/components/account/RecipientAccessGate";
 export default async function Page({
   params,
   searchParams,
@@ -8,5 +8,5 @@ export default async function Page({
 }) {
   const { id } = await params;
   const { key } = await searchParams;
-  return <AddressPage id={id} accessKey={key || ""} />;
+  return <RecipientAccessGate id={id} view="address" accessKey={key || ""} />;
 }

@@ -1,15 +1,21 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { collectionRequest } from "@/lib/collection/client-request";
 import type { CollectionView } from "@/lib/collection/types";
 import type { PostcardProofSnapshot } from "@/lib/collection/postcard-proofs";
+import {
+  publicPostcardMessage,
+  PUBLIC_POSTCARD_MESSAGE_LIMIT,
+} from "@/lib/collection/postcard-public-message";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
+import { PostcardFace } from "./PostcardFace";
 
 type ProofResponse = {
   proof: PostcardProofSnapshot;
   approvedProof: PostcardProofSnapshot | null;
   current: boolean;
   readiness: { ready: boolean; reasons: string[] };
+  publicMessages: Record<string, string>;
 };
 const dateLabel = (value: string) =>
   new Date(value).toLocaleDateString(undefined, {
@@ -18,56 +24,6 @@ const dateLabel = (value: string) =>
     year: "numeric",
     timeZone: "UTC",
   });
-function ProofFace({
-  html,
-  title,
-  onFit,
-}: {
-  html: string;
-  title: string;
-  onFit: (fits: boolean) => void;
-}) {
-  const container = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const resize = new ResizeObserver(([entry]) =>
-      setScale(entry.contentRect.width / 600),
-    );
-    if (container.current) resize.observe(container.current);
-    return () => resize.disconnect();
-  }, []);
-  return (
-    <div
-      ref={container}
-      className="relative aspect-[600/408] w-full overflow-hidden border border-warmgray-300 bg-white"
-    >
-      <iframe
-        title={title}
-        sandbox="allow-same-origin"
-        referrerPolicy="no-referrer"
-        srcDoc={html}
-        className="absolute left-0 top-0 border-0"
-        style={{
-          width: 600,
-          height: 408,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
-        }}
-        onLoad={async (event) => {
-          const doc = event.currentTarget.contentDocument;
-          if (!doc) return onFit(false);
-          await doc.fonts.ready;
-          const content = doc.querySelector(".content");
-          onFit(
-            Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) <=
-              410 &&
-              (!content || content.getBoundingClientRect().bottom <= 384),
-          );
-        }}
-      />
-    </div>
-  );
-}
 export function PostcardProof({
   collection: c,
   accessKey,
@@ -84,11 +40,23 @@ export function PostcardProof({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+  const [messages, setMessages] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      c.chapters.map((chapter) => [
+        chapter.id,
+        publicPostcardMessage(c, chapter.id),
+      ]),
+    ),
+  );
+  const [savedMessages, setSavedMessages] = useState(messages);
+  const [publicApproved, setPublicApproved] = useState(false);
+  const [notice, setNotice] = useState("");
   const endpoint = `/api/collection/${encodeURIComponent(c.id)}/postcard-proof?key=${encodeURIComponent(accessKey)}`;
   const version = JSON.stringify([
     c.address,
     c.addressConfirmed,
     c.postcardProof?.hash,
+    c.postcardPublicMessages,
   ]);
   useEffect(() => {
     setFits({});
@@ -101,7 +69,12 @@ export function PostcardProof({
       signal: controller.signal,
     })
       .then((body) => {
-        if (!controller.signal.aborted) setResult(body);
+        if (!controller.signal.aborted) {
+          setResult(body);
+          setMessages(body.publicMessages);
+          setSavedMessages(body.publicMessages);
+          setPublicApproved(false);
+        }
       })
       .catch((cause) => {
         if (!controller.signal.aborted)
@@ -127,18 +100,88 @@ export function PostcardProof({
     proof && result?.current && result.approvedProof?.hash === proof.hash,
   );
   const overflow = Object.values(fits).some((value) => !value);
+  const dirty = JSON.stringify(messages) !== JSON.stringify(savedMessages);
+  const allChecked = Boolean(
+    proof &&
+    proof.cards.every(
+      (item) =>
+        fits[`${item.chapterId}:front`] && fits[`${item.chapterId}:back`],
+    ),
+  );
+  async function saveMessages() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await collectionRequest<{
+        publicMessages: Record<string, string>;
+      }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ action: "save_messages", messages }),
+      });
+      setSavedMessages(response.publicMessages);
+      setPublicApproved(false);
+      setNotice(
+        "Your public messages are saved. Review all four cards below, then approve them for mailing.",
+      );
+      setReload((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The postcard messages could not be saved.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function approvePublicCards() {
+    if (!proof || dirty || !publicApproved || !allChecked || overflow) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await collectionRequest<{
+        readiness: { ready: boolean };
+      }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "approve",
+          proofHash: proof.hash,
+          firstMailingAt: proof.firstMailingAt,
+          reviewed: true,
+          publicMessageApproved: true,
+        }),
+      });
+      setNotice(
+        response.readiness.ready
+          ? "Your postcards are approved for automatic mailing."
+          : "Your public postcards are approved. Mailing will wait until delivery and secure recipient sign-in are connected.",
+      );
+      setReload((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The postcards could not be approved.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <details
       className="mt-6 border-t border-warmgray-200 pt-5"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-        See the postcard print preview
+        Review the words on your postcards
       </summary>
       <p className="mt-3 max-w-3xl text-base leading-8 text-ink-500">
-        Your story approval starts postcard preparation automatically once the
-        address is ready. This optional view shows the front and back prepared
-        for printing. There is nothing else to approve or schedule here.
+        A postcard is open mail. Anyone handling it can read the words and names
+        printed on it. These short messages are separate from your private
+        stories, recordings and personal encouragement. The QR code asks your
+        recipient to verify their email before opening the stories.
       </p>
       {disabled && (
         <p role="status" className="mt-4 text-base text-ink-500">
@@ -146,6 +189,14 @@ export function PostcardProof({
         </p>
       )}
       <PortalError message={error} />
+      {notice && (
+        <p
+          role="status"
+          className="mt-4 rounded-xl bg-sage-50 p-4 text-base leading-7"
+        >
+          {notice}
+        </p>
+      )}
       {error && (
         <button
           type="button"
@@ -154,6 +205,64 @@ export function PostcardProof({
         >
           Try opening the print preview again
         </button>
+      )}
+      {open && !disabled && (
+        <>
+          <div className="mt-5 rounded-2xl border border-warmgray-300 bg-white p-5">
+            <h3 className="text-xl font-semibold">
+              A little encouragement in the mail
+            </h3>
+            <p className="mt-2 text-base leading-7 text-ink-500">
+              Keep the suggested words or write your own. You can add a short
+              Scripture and its reference here if you want it printed. Leave
+              financial details and personal stories on the private story page.
+            </p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              {c.chapters.map((item, index) => (
+                <div key={item.id}>
+                  <label
+                    className="block text-base font-semibold"
+                    htmlFor={`public-postcard-${item.id}`}
+                  >
+                    Card {index + 1}: public message
+                  </label>
+                  <textarea
+                    id={`public-postcard-${item.id}`}
+                    rows={4}
+                    maxLength={PUBLIC_POSTCARD_MESSAGE_LIMIT}
+                    disabled={busy}
+                    value={messages[item.id] || ""}
+                    onChange={(event) => {
+                      setMessages((old) => ({
+                        ...old,
+                        [item.id]: event.target.value,
+                      }));
+                      setPublicApproved(false);
+                    }}
+                    className="mt-2 w-full rounded-xl border border-warmgray-300 bg-white p-4 text-lg leading-7 text-espresso focus:outline-espresso"
+                  />
+                  <p className="mt-1 text-sm text-ink-500">
+                    {(messages[item.id] || "").length} of{" "}
+                    {PUBLIC_POSTCARD_MESSAGE_LIMIT} characters
+                  </p>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={busy || !dirty}
+              className={`${portalSecondary} mt-4`}
+              onClick={() => void saveMessages()}
+            >
+              Save postcard words
+            </button>
+            {dirty && (
+              <p role="status" className="mt-3 text-base">
+                Save your changes to update the print preview.
+              </p>
+            )}
+          </div>
+        </>
       )}
       {busy && !proof && (
         <p role="status" className="mt-5 text-base">
@@ -216,7 +325,7 @@ export function PostcardProof({
               <div className="grid gap-5 xl:grid-cols-2">
                 <div>
                   <p className="mb-2 text-base font-medium">Front</p>
-                  <ProofFace
+                  <PostcardFace
                     html={card.front}
                     title={`Card ${active + 1} front print preview`}
                     onFit={(value) => setFit(`${card.chapterId}:front`, value)}
@@ -224,7 +333,7 @@ export function PostcardProof({
                 </div>
                 <div>
                   <p className="mb-2 text-base font-medium">Back</p>
-                  <ProofFace
+                  <PostcardFace
                     html={card.back}
                     title={`Card ${active + 1} back print preview`}
                     onFit={(value) => setFit(`${card.chapterId}:back`, value)}
@@ -247,11 +356,11 @@ export function PostcardProof({
                 {c.links?.collection && (
                   <a
                     className={portalSecondary}
-                    href={`${c.links.collection.split("?")[0]}/chapter/${card.chapterId}?${c.links.collection.split("?")[1]}`}
+                    href={`/collection/${encodeURIComponent(c.id)}/chapter/${encodeURIComponent(card.chapterId)}?key=${encodeURIComponent(accessKey)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Open this card’s story link
+                    Preview this card’s story
                   </a>
                 )}
               </div>
@@ -273,8 +382,41 @@ export function PostcardProof({
             {result?.approvedProof?.releaseStatus === "released" &&
             result.current
               ? "The postcards are on the automatic mailing schedule."
-              : "Mailing has not been released. Delivery setup is handled by the Time Tapestry team."}
+              : "Mailing is on hold until the public messages are approved and delivery is ready."}
           </p>
+          {!saved && (
+            <div className="mt-5 rounded-2xl border border-espresso/20 bg-paper p-5">
+              <label className="flex min-h-12 cursor-pointer items-start gap-3 text-base leading-7">
+                <input
+                  type="checkbox"
+                  checked={publicApproved}
+                  disabled={busy || dirty}
+                  onChange={(event) => setPublicApproved(event.target.checked)}
+                  className="mt-1.5 h-6 w-6 shrink-0 accent-espresso"
+                />
+                <span>
+                  I reviewed all four cards, the address and the dates. I
+                  approve the printed messages and names for anyone handling the
+                  mail to read.
+                </span>
+              </label>
+              <button
+                type="button"
+                className={`${portalPrimary} mt-4`}
+                disabled={
+                  busy || dirty || !publicApproved || !allChecked || overflow
+                }
+                onClick={() => void approvePublicCards()}
+              >
+                {busy ? "Saving…" : "Approve postcards for automatic mailing"}
+              </button>
+              {!allChecked && (
+                <p className="mt-3 text-base leading-7">
+                  Open each of the four card previews above before approving.
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
     </details>

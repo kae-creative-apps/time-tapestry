@@ -7,7 +7,7 @@ Tayloe resumed after reboot on October 3. The shutdown turn was interrupted befo
 - `/private/tmp/time-tapestry-live-preview` and the isolated `/private/tmp/tt-journey-qa.sHwaLz` were cleared during reboot. The later server-side preview collections and media in those folders have not been recovered.
 - Earlier data in `.data/collections` survived. A quiescent, hash-verified local snapshot was completed at `.data/backups/2026-10-03-resume-01`: 339 private files, 35,169,469 bytes. This is another copy on the same Mac, not an independent cloud backup.
 - A filesystem recovery search found no alternate runtime backup or local Time Machine snapshot. The new `/recover-recordings` route recovered two original videos and one written draft from the in-app browser at port 3109. Downloads were copied and hash-verified into `.data/backups/browser-recovery-2026-10-03-3109`. Port 3112 had no browser recordings/drafts. No complete collection reconstruction or complete recovery is claimed.
-- Use `NEXT_DIST_DIR=.next-voice-pattern-audit npm run preview:local`. This production build passed along with typecheck and 224 tests. The launcher always uses permanent project `.data/collections`, disables outbound email/postcards and excludes cloud storage credentials. Run one preview at a time. Port defaults to 3109; `PORT` can select another historical origin for browser recovery. Current QA preview uses port 3112.
+- Use `NEXT_DIST_DIR=.next-postcard-privacy npm run preview:local`. This production build passed along with typecheck and 246 tests. The launcher always uses permanent project `.data/collections`, disables outbound email/postcards and excludes cloud storage credentials. Run one preview at a time. Port defaults to 3109; `PORT` can select another historical origin for browser recovery. Current QA preview uses port 3112.
 - Store QA logs in `.data/qa-evidence`, not temporary system folders.
 
 ## Current decisions
@@ -29,6 +29,13 @@ Tayloe resumed after reboot on October 3. The shutdown turn was interrupted befo
 - The pre-reboot 214-test result is historical. Use the newer durable verification notes in `QA_2026-10-03.md`.
 - Earlier isolated browser tests passed written-story setup/reload/review/approval, synthetic film playback/replies, mobile layout, and church contrast. Restored hero was visually checked after the final build.
 
+## Personal postcards and recipient privacy
+
+- Website preview, stacked hero cards, owner print proofs and mail artwork now share one renderer. The print includes first names, a separately approved short public message (up to 240 characters), a small signature and the exact approved thread pattern. Private interview excerpts and personal blessings are never automatically printed.
+- QR codes and new recipient links are locators without access keys. Intended recipients must verify their email before stories, films, recordings or address forms open. Old recipient keys no longer authorize. Owner and requester private workspace links retain their existing capability access.
+- Four public messages require separate, explicit print approval. Legacy unsent proofs are held for new consent; started provider requests remain unchanged for reconciliation. Email sign-in must be configured before mailing can proceed.
+- The 1090px browser check verified the new front/back, actual hero cards and generic locked recipient screen. Viewport override still did not apply, so no new 390px visual verification is claimed. Lob-rendered PDFs and printed QR readability remain unverified.
+
 ## Resume here
 
 1. Confirm git state and remote on branch `codex/four-chapter-legacy` in this repository. The existing PR is https://github.com/kae-creative-apps/time-tapestry/pull/1. Check fresh CI with the Code Review connector, not a CLI CI fallback.
@@ -45,7 +52,7 @@ Tayloe resumed after reboot on October 3. The shutdown turn was interrupted befo
 - Local ElevenLabs credentials are present. Never print or commit them. Real microphone/camera and venue-network rehearsal remain separate from this isolated QA.
 - Vercel deployment is failing with a cron-plan limitation: the repository uses a five-minute cron; Hobby permits daily cron. A user question is pending about compatible hosting/external scheduling versus a slower daily queue. Do not silently change the cadence or purchase a plan.
 - No real emails or postcards were sent during this audit. Actual mail proofs, printed QR scans, provider delivery and a real customer film quality review are still unverified.
-- Latest request is to connect Lob. User explicitly chose test only. A one-use password form was opened through `node scripts/configure-lob.mjs --browser`; it saves only a test key to ignored `.env.local`. If the form expires, relaunch it. Key save and Lob connectivity are pending verification. The legacy admin postcard sender was retired and the public debugger webhook secret is rejected. Do not enable production mailing. Code and instructions belong in GitHub; private credentials and recordings do not.
+- Lob setup remains pending. The actual `.env.local` was checked again and `LOB_API_KEY` is absent. User explicitly chose test only. A one-use password form was opened through `node scripts/configure-lob.mjs --browser`; it saves only a test key to ignored `.env.local`. If the form expires, relaunch it. Key save and Lob connectivity are pending verification. The legacy admin postcard sender was retired and the public debugger webhook secret is rejected. Do not enable production mailing. Code and instructions belong in GitHub; private credentials and recordings do not.
 - The latest full dependency advisory check reported zero known production vulnerabilities. This is not a guarantee of complete security.
 
 ## Local process cleanup

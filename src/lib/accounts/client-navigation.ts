@@ -2,7 +2,7 @@ const returnKey = "time-tapestry:account-return:v1";
 export const COLLECTION_RETURN_TTL_MS = 30 * 60 * 1000;
 type TabStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-/** A capability stays on this origin and can open only a collection or interview. */
+/** Local navigation only. Collection locators still require server authorization. */
 export function privateCollectionPath(
   input: unknown,
   origin: string,
@@ -15,7 +15,8 @@ export function privateCollectionPath(
     ? value.split(/[?#]/)[0]
     : /^https?:\/\/[^/?#]+([^?#]*)/i.exec(value)?.[1];
   // Check the raw path as well: URL parsing otherwise normalizes dot segments.
-  const route = /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(\/review)?\/?$/;
+  const route =
+    /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(?:\/(review|address|chapter\/q[1-4]))?\/?$/;
   const matched = rawPath && route.exec(rawPath);
   if (!matched || (matched[3] && matched[1] !== "collection")) return null;
   try {
@@ -27,12 +28,18 @@ export function privateCollectionPath(
       url.username ||
       url.password ||
       !route.test(url.pathname) ||
-      url.searchParams.getAll("key").length !== 1
+      url.searchParams.getAll("key").length > 1
     )
       return null;
-    const key = url.searchParams.get("key") || "";
+    const key = url.searchParams.get("key");
+    const view = matched[3] && matched[3] !== "review" ? `/${matched[3]}` : "";
+    const path = `/${matched[1]}/${matched[2]}${view}`;
+    if (key === null)
+      return matched[1] === "collection" && matched[3] !== "review"
+        ? path
+        : null;
     if (!/^[a-zA-Z0-9_-]{1,512}$/.test(key)) return null;
-    return `/${matched[1]}/${matched[2]}?key=${encodeURIComponent(key)}`;
+    return `${path}?key=${encodeURIComponent(key)}`;
   } catch {
     return null;
   }

@@ -35,8 +35,12 @@ test("protected delivery automation separates email from printing and sends only
     await import("../src/lib/collection/store");
   const { processDeliveryJobs, notificationSuppressionReason } =
     await import("../src/lib/collection/delivery");
-  const { buildPostcardProof, approvePostcardProof, releasePostcardProof } =
-    await import("../src/lib/collection/postcard-proofs");
+  const {
+    buildPostcardProof,
+    approvePostcardProof,
+    releasePostcardProof,
+    postcardPublicMessagesHash,
+  } = await import("../src/lib/collection/postcard-proofs");
   const { queueFilmsReady } =
     await import("../src/lib/collection/notifications");
   const { GET: run } = await import("../src/app/api/collection/jobs/route");
@@ -65,6 +69,11 @@ test("protected delivery automation separates email from printing and sends only
       editorialReviewed: true,
       generatedWith: "source_text",
     }));
+    c.postcardPublicConsent = {
+      version: 2,
+      messagesHash: postcardPublicMessagesHash(c),
+      approvedAt: c.createdAt,
+    };
     return c;
   };
   const originalFetch = globalThis.fetch;
@@ -106,6 +115,25 @@ test("protected delivery automation separates email from printing and sends only
       status: "pending" as const,
     };
     assert.equal(notificationSuppressionReason(c, digital), null);
+    assert.equal(digital.url, `https://example.com/collection/${c.id}`);
+    assert.equal(linksFor(c).address, `/collection/${c.id}/address`);
+    assert.equal(
+      notificationSuppressionReason(c, {
+        ...digital,
+        url: `${digital.url}?key=${c.recipientKey}`,
+      }),
+      null,
+      "A previously queued recipient link remains a locator requiring email verification",
+    );
+    for (const url of [
+      `${digital.url}?key=another-recipient-key`,
+      `${digital.url}?key=${c.recipientKey}&extra=1`,
+      `https://outside.example/collection/${c.id}?key=${c.recipientKey}`,
+    ])
+      assert.match(
+        notificationSuppressionReason(c, { ...digital, url })!,
+        /recipient/,
+      );
     assert.match(
       notificationSuppressionReason({ ...c, status: "draft" }, digital)!,
       /not been approved/,
@@ -233,6 +261,31 @@ test("protected delivery automation separates email from printing and sends only
       printCount,
     );
 
+    const legacy = approveCollection(draft(), today);
+    const legacyProof = await buildPostcardProof(legacy, today);
+    approvePostcardProof(legacy, legacyProof, legacyProof.hash);
+    releasePostcardProof(legacy, legacyProof.hash);
+    legacy.postcardProof!.version = 1;
+    delete legacy.postcardProof!.accessPolicy;
+    delete legacy.postcardProof!.publicMessageHash;
+    delete legacy.postcardPublicConsent;
+    legacy.deliveries[0].scheduledFor = new Date(
+      Date.now() - 86400000,
+    ).toISOString();
+    const legacySnapshot = JSON.stringify(legacy.postcardProof);
+    const legacySchedule = JSON.stringify(legacy.deliveries);
+    await writeRecord(legacy.id, legacy);
+    await processDeliveryJobs();
+    await processDeliveryJobs();
+    const heldLegacy = (await getCollection(legacy.id))!;
+    assert.equal(heldLegacy.postcardPreparation?.status, "needs_attention");
+    assert.equal(JSON.stringify(heldLegacy.postcardProof), legacySnapshot);
+    assert.equal(JSON.stringify(heldLegacy.deliveries), legacySchedule);
+    assert.equal(
+      calls.filter((call) => call.url.includes("lob.com")).length,
+      printCount,
+    );
+
     const mismatched = approveCollection(draft(), today);
     const another = await buildPostcardProof(mismatched, today);
     approvePostcardProof(mismatched, another, another.hash);
@@ -276,9 +329,12 @@ test("protected delivery automation separates email from printing and sends only
       printCount,
     );
     assert.equal(
-      (await getCollection(stale.id))!.deliveries[0].dispatch
-        ?.reconciliationRequired,
-      true,
+      (await getCollection(stale.id))!.postcardPreparation?.status,
+      "needs_attention",
+    );
+    assert.equal(
+      (await getCollection(stale.id))!.deliveries[0].dispatch?.attempts,
+      1,
     );
 
     await mutateCollection(c.id, (current) => {

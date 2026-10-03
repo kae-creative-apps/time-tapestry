@@ -7,6 +7,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import type { Collection } from "../src/lib/collection/types";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 
 const adminSecret = "legacy-regression-test-secret";
 let directory: string;
@@ -209,7 +210,12 @@ async function post(c: Collection, body: unknown, key = c.ownerKey) {
   return collectionPost(
     new NextRequest(`http://localhost/api/collection/${c.id}?key=${key}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(key === c.recipientKey
+          ? { cookie: await verifiedRecipientCookie(c.recipient.email) }
+          : {}),
+      },
       body: JSON.stringify(body),
     }),
     { params: Promise.resolve({ id: c.id }) },

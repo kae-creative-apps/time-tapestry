@@ -1,4 +1,4 @@
-import CollectionHome from "@/components/collection/CollectionHome";
+import { RecipientAccessGate } from "@/components/account/RecipientAccessGate";
 export default async function Page({
   params,
   searchParams,
@@ -8,5 +8,7 @@ export default async function Page({
 }) {
   const { id, chapterId } = await params;
   const { key } = await searchParams;
-  return <CollectionHome id={id} chapterId={chapterId} accessKey={key || ""} />;
+  return (
+    <RecipientAccessGate id={id} chapterId={chapterId} accessKey={key || ""} />
+  );
 }

@@ -5,6 +5,12 @@ export type Account = {
   createdAt: string;
   verifiedAt: string;
 };
+export type RecipientLocator = {
+  collectionId: string;
+} & (
+  | { chapterId?: "q1" | "q2" | "q3" | "q4"; view?: never }
+  | { view: "address"; chapterId?: never }
+);
 export type EmailVerification = {
   recordType: "account-email-verification";
   email: string;
@@ -13,6 +19,7 @@ export type EmailVerification = {
   expiresAt: string;
   usedAt?: string;
   cancelledAt?: string;
+  recipientLocator?: RecipientLocator;
 };
 export type AccountSession = {
   recordType: "account-session";

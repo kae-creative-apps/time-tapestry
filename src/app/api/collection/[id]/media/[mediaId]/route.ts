@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { getCollection, getMedia } from "@/lib/collection/store";
-import { roleFor } from "@/lib/collection/access";
+import { collectionRoleForRequest } from "@/lib/collection/request-access";
 import {
   mediaAllowed,
   assertPrivateBlobUrl,
@@ -17,9 +17,15 @@ export async function GET(
     const { id, mediaId } = await params;
     const c = await getCollection(id),
       m = await getMedia(mediaId);
-    const role = c && roleFor(c, req.nextUrl.searchParams.get("key") || "");
+    const role = c && (await collectionRoleForRequest(req, c));
     if (!c || !m || !role || !mediaAllowed(c, role, m))
-      return new NextResponse("Recording not found", { status: 404 });
+      return new NextResponse("Recording not found", {
+        status: 404,
+        headers: {
+          "Cache-Control": "private, no-store",
+          "Referrer-Policy": "no-referrer",
+        },
+      });
     const range = req.headers.get("range");
     const headers: Record<string, string> = {
       "Content-Type": m.mimeType,

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       req.cookies.get(REQUEST_COOKIE)?.value,
     );
     const response = NextResponse.json(
-      { ok: true, nextUrl: "/account" },
+      { ok: true, nextUrl: result.nextUrl },
       { headers: accountHeaders },
     );
     response.cookies.set(ACCOUNT_COOKIE, result.sessionToken, {

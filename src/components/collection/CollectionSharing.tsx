@@ -91,11 +91,18 @@ export function CollectionSharing({
               <PrivateLink
                 path={c.links.collection}
                 label={`Link to share with ${c.recipient.name}`}
-                description="Anyone with this link can open the approved stories. Share it only with the people you choose."
+                description="This link opens a locked page. Your recipient verifies their email before reading or watching the approved stories."
               />
             )}
-            <a href={c.links?.collection} className={`${portalPrimary} mt-5`}>
-              Preview their collection
+            <a
+              href={
+                ownerKey
+                  ? `/collection/${encodeURIComponent(c.id)}?key=${encodeURIComponent(ownerKey)}`
+                  : c.links?.collection
+              }
+              className={`${portalPrimary} mt-5`}
+            >
+              Open your approved collection
               <AppIcon name="arrowUpRight" size={19} />
             </a>
           </div>
@@ -135,8 +142,8 @@ export function CollectionSharing({
         </summary>
         <p className="mt-3 max-w-3xl text-base leading-7 text-ink-500">
           {automaticPostcards
-            ? "Your digital collection is already available. Once the mailing address is saved, your approval starts postcard preparation automatically. The first card introduces all four stories, with three more planned for months 3, 6 and 9."
-            : "Your approved digital collection is available by private link. Postcards have not been selected for this collection."}
+            ? "Your digital collection is ready for your verified recipient. Confirm the address and approve the public postcard messages below. Then mailing can run automatically when delivery is connected, with the first card followed by cards at months 3, 6 and 9."
+            : "Your approved digital collection requires recipient email verification. Postcards have not been selected for this collection."}
         </p>
         {c.postcardPreparation && (
           <p

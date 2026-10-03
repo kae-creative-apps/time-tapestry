@@ -45,7 +45,7 @@ function SavedPrivateLink() {
     const path = privateCollectionPath(value, window.location.origin);
     if (!path) {
       setError(
-        "Paste a private interview or collection link from this Time Tapestry site, including its key.",
+        "Paste the complete interview, collection or postcard link from this Time Tapestry site.",
       );
       return;
     }
@@ -56,11 +56,11 @@ function SavedPrivateLink() {
   return (
     <form onSubmit={open} className="space-y-4 text-left">
       <label htmlFor={inputId} className="block text-lg font-semibold text-ink">
-        Open a saved private link
+        Open a saved story link
       </label>
       <p id={`${inputId}-help`} className="text-base leading-7 text-ink-500">
-        Paste the interview or collection link you saved. It opens that
-        collection directly.
+        Paste the Time Tapestry link you saved. Recipient collections require a
+        verified email before stories can open.
       </p>
       <input
         id={inputId}
@@ -80,7 +80,7 @@ function SavedPrivateLink() {
         aria-describedby={`${inputId}-help${error ? ` ${inputId}-error` : ""}`}
         aria-invalid={Boolean(error)}
         className={portalField}
-        placeholder="Paste your private link"
+        placeholder="Paste your story link"
       />
       {error && (
         <p
@@ -592,12 +592,12 @@ export function AccountHome() {
             ) : (
               <div className="mb-7 rounded-2xl border border-sage-200 bg-sage-50 p-5">
                 <h2 className="text-xl font-semibold">
-                  Use your saved private link.
+                  Email sign-in is unavailable.
                 </h2>
                 <p className="mt-3 text-base leading-7 text-ink-500">
                   {session?.emailLoginAvailable === false
-                    ? "Email sign-in is not available on this site yet. You can open the private interview or collection link you saved."
-                    : "We could not check email sign-in. You can still open a saved private link below."}
+                    ? "Recipient stories need verified email access. Please try again when email sign-in is available."
+                    : "We could not check email sign-in. Please check your connection and try again."}
                 </p>
               </div>
             )}
@@ -621,8 +621,9 @@ export function AccountHome() {
               <SavedPrivateLink />
             </div>
             <p className="mt-6 flex items-start gap-2 text-sm leading-6 text-ink-500">
-              <AppIcon name="shield" size={17} className="mt-1" />A private link
-              opens its collection. Your full library requires a verified email.
+              <AppIcon name="shield" size={17} className="mt-1" />
+              Recipient collections and your full library require a verified
+              email. Keep private storyteller and requester links secure.
             </p>
           </div>
           <p className="text-base leading-7 text-ink-500 lg:col-span-2">

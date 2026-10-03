@@ -253,7 +253,7 @@ test("verified email accounts require single-use, browser-bound proof and keep p
     );
     assert.equal(
       await service.accountCollectionPath(recipient.account, mine.id),
-      `/collection/${mine.id}?key=${mine.recipientKey}`,
+      `/collection/${mine.id}`,
     );
     const requesterToken = await start("requester@example.test");
     const requester = await service.confirmAccountLogin(requesterToken, nonce);

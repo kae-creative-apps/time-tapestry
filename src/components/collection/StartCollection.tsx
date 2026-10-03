@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HumanVerification } from "@/components/security/HumanVerification";
-import Image from "next/image";
 import { Logo } from "@/components/Logo";
-import { BrandPattern } from "@/components/BrandPattern";
+import { PostcardPreview } from "@/components/marketing/PostcardPreview";
 import type { Contact, PostalAddress } from "@/lib/collection/types";
 import {
   readStartDraft,
@@ -205,25 +204,15 @@ export default function StartCollection({
     <main className="brand-page-shell mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-8">
       <Logo className="[&_svg]:h-11" />
       <div className="mt-7 grid items-start gap-6 lg:grid-cols-[.85fr_1.15fr] lg:gap-9">
-        <aside
-          aria-hidden="true"
-          className="overflow-hidden rounded-2xl lg:sticky lg:top-8"
-        >
-          <div className="relative h-36 bg-sage-100 sm:h-48 lg:h-[31rem]">
-            <Image
-              src="/brand/story-exchange-branded-v1.png"
-              alt=""
-              fill
-              sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-cover object-center"
-            />
-          </div>
-          <div className="relative hidden h-44 overflow-hidden bg-paper lg:block">
-            <BrandPattern
-              variant="weave"
-              className="h-full w-full"
-            />
-          </div>
+        <aside className="hidden rounded-2xl bg-paper p-6 lg:sticky lg:top-8 lg:block">
+          <h2 className="font-display text-2xl font-semibold leading-snug">
+            A personal note, in the mail.
+          </h2>
+          <p className="mb-6 mt-3 text-sm leading-relaxed text-ink-500">
+            A little encouragement they can hold. A private story page they can
+            return to.
+          </p>
+          <PostcardPreview layout="both" />
         </aside>
         <section className="rounded-2xl border border-warmgray-200 bg-white p-6 shadow-soft sm:p-9">
           <p className="brand-eyebrow text-oxblood">

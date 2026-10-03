@@ -66,7 +66,16 @@ export function VerifyAccount() {
           result.error ||
             "Sign-in could not finish. Please request a new link.",
         );
-      window.location.replace("/account");
+      const nextUrl = result.nextUrl;
+      // The server derives this from stored route parts. Refuse any broader path.
+      window.location.replace(
+        typeof nextUrl === "string" &&
+          /^\/collection\/[a-zA-Z0-9_-]{8,80}(?:\/(?:chapter\/q[1-4]|address))?$/.test(
+            nextUrl,
+          )
+          ? nextUrl
+          : "/account",
+      );
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Sign-in could not finish.",
@@ -107,7 +116,7 @@ export function VerifyAccount() {
               disabled={working}
               className={`${portalPrimary} mt-7 w-full`}
             >
-              {working ? "Opening your account…" : "Open my account"}
+              {working ? "Opening your stories…" : "Continue to my stories"}
               <AppIcon name="arrowRight" size={19} />
             </button>
           </>

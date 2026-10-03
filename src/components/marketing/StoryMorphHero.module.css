@@ -52,129 +52,10 @@
   border: 1px solid #ffffff25;
   border-radius: 5px;
   color: #432e23;
+  background: #fbfaf8;
   box-shadow:
     0 2px 3px #20120914,
     0 18px 32px -10px #2012095c;
-}
-
-.paper {
-  background: #fbfaf8;
-}
-
-.sage {
-  color: #fbfaf8;
-  background: linear-gradient(135deg, #a6a58f, #838773);
-}
-
-.clay {
-  background: #c18f7b;
-}
-
-.cardTop {
-  position: absolute;
-  z-index: 2;
-  inset: 9% 7% auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.number {
-  padding-top: 2px;
-  font-size: 9px;
-  font-size: clamp(7px, 1.45cqw, 10px);
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  opacity: 0.65;
-}
-
-.smallMark {
-  width: 8%;
-  height: auto;
-}
-
-.cardPattern {
-  position: absolute;
-  width: 86%;
-  right: -30%;
-  top: -8%;
-  opacity: 0.13;
-}
-
-.sage .cardPattern {
-  width: 130%;
-  right: -43%;
-  top: -13%;
-  opacity: 0.15;
-  transform: rotate(-9deg);
-}
-
-.clay .cardPattern {
-  right: -39%;
-  top: -4%;
-  opacity: 0.17;
-}
-
-.cardLabel {
-  position: absolute;
-  inset: 41% auto auto 7%;
-  font-family: var(--font-display), sans-serif;
-  font-size: 25px;
-  font-size: clamp(15px, 4.3cqw, 28px);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.045em;
-}
-
-.clay .cardLabel {
-  font-size: 23px;
-  font-size: clamp(12px, 3.7cqw, 25px);
-}
-
-.wordmark {
-  position: absolute;
-  bottom: 9%;
-  left: 7%;
-  width: 23%;
-  height: auto;
-  opacity: 0.8;
-}
-
-.photo {
-  padding: 3%;
-  border-color: #ffffff70;
-  background: #fbfaf8;
-}
-
-.photograph {
-  position: absolute;
-  inset: 5% 4% 23%;
-  overflow: hidden;
-  background: #756454;
-}
-
-.image {
-  object-fit: cover;
-  object-position: 46% 53%;
-}
-
-.photoCaption {
-  position: absolute;
-  inset: auto 5% 5%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: var(--font-display), sans-serif;
-  font-size: 18px;
-  font-size: clamp(11px, 3cqw, 20px);
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1;
-}
-
-.photoMark {
-  width: 7%;
-  height: auto;
 }
 
 @media (max-width: 1023px) {
@@ -202,14 +83,6 @@
     box-shadow:
       0 2px 3px #20120914,
       0 9px 20px -7px #2012094a;
-  }
-
-  .cardLabel {
-    font-size: clamp(13px, 3.7cqw, 25px);
-  }
-
-  .clay .cardLabel {
-    font-size: clamp(10px, 2.95cqw, 21px);
   }
 }
 

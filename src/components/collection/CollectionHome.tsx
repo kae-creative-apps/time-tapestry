@@ -359,7 +359,9 @@ export default function CollectionHome({
       </PortalShell>
     );
   if (c.role === "owner") return <Review id={id} accessKey={accessKey} />;
-  const collectionPath = `/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`;
+  const collectionPath = c.role === "recipient"
+    ? `/collection/${encodeURIComponent(id)}${c.status === "approved" && /^q[1-4]$/.test(activeChapter) ? `/chapter/${activeChapter}` : ""}`
+    : `/collection/${encodeURIComponent(id)}${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`;
   if (c.role === "requester")
     return (
       <PortalShell collectionPath={collectionPath}>
@@ -670,8 +672,8 @@ export default function CollectionHome({
         </label>
       </details>
       <footer className="mt-10 border-t border-warmgray-200 py-6 text-sm leading-7 text-ink-500">
-        Anyone with this private link can open these approved stories. Share it
-        only with people you trust.
+        Your recipient verifies their email before opening these approved
+        stories. Scanning a postcard alone does not unlock the collection.
       </footer>
     </PortalShell>
   );

@@ -10,6 +10,7 @@ import { secretMatches } from "../collection/access";
 import type { Collection } from "../collection/types";
 import { SecurityError } from "../security/policy";
 import {
+  accountEmailAvailable,
   accountOrigin,
   requireAccountMail,
   sendAccountLink,
@@ -21,6 +22,7 @@ import type {
   AccountSession,
   EmailVerification,
   LibraryItem,
+  RecipientLocator,
 } from "./types";
 export const LOGIN_LIFETIME_SECONDS = 15 * 60;
 export const ACCOUNT_SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -43,18 +45,62 @@ export function emailHint(email: string) {
   const [local, domain] = email.split("@");
   return `${local.slice(0, 1)}${"*".repeat(Math.min(5, Math.max(2, local.length - 1)))}@${domain}`;
 }
+/** Accept route parts only, never a caller-provided redirect or private key. */
+export function normalizeRecipientLocator(
+  value: unknown,
+): RecipientLocator | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new SecurityError("This story link is not valid.", 400);
+  const locator = value as Record<string, unknown>;
+  if (
+    Object.keys(locator).some(
+      (key) => !["collectionId", "chapterId", "view"].includes(key),
+    ) ||
+    typeof locator.collectionId !== "string" ||
+    !/^[a-zA-Z0-9_-]{8,80}$/.test(locator.collectionId) ||
+    (locator.view !== undefined && locator.view !== "address") ||
+    (locator.view !== undefined && locator.chapterId !== undefined) ||
+    (locator.chapterId !== undefined &&
+      (typeof locator.chapterId !== "string" ||
+        !/^q[1-4]$/.test(locator.chapterId)))
+  )
+    throw new SecurityError("This story link is not valid.", 400);
+  if (locator.view === "address")
+    return { collectionId: locator.collectionId, view: "address" };
+  return {
+    collectionId: locator.collectionId,
+    ...(locator.chapterId === undefined
+      ? {}
+      : { chapterId: locator.chapterId as RecipientLocator["chapterId"] }),
+  };
+}
+function recipientReturnPath(locator: RecipientLocator | undefined) {
+  return locator
+    ? `/collection/${locator.collectionId}${locator.view === "address" ? "/address" : locator.chapterId ? `/chapter/${locator.chapterId}` : ""}`
+    : "/account";
+}
 /** Dependencies may be injected by tests only. Public routes never expose the token or nonce. */
 export async function beginAccountLogin(
   emailValue: unknown,
   nonce: string,
   testOptions?: { sendMail?: AccountMailer; now?: number },
+  recipientLocatorValue?: unknown,
 ) {
   if (testOptions && process.env.NODE_ENV !== "test")
     throw new Error("Account test overrides are disabled.");
   const email = normalizeAccountEmail(emailValue);
+  const recipientLocator = normalizeRecipientLocator(recipientLocatorValue);
   if (!validCredential(nonce))
     throw new SecurityError("Please request a new sign-in link.", 400);
-  if (!testOptions?.sendMail) requireAccountMail();
+  if (!testOptions?.sendMail) {
+    if (recipientLocator && !accountEmailAvailable())
+      throw new SecurityError(
+        "Email sign-in is temporarily unavailable. Please try again when email setup is complete.",
+        503,
+      );
+    requireAccountMail();
+  }
   const now = testOptions?.now ?? Date.now(),
     token = randomCredential(),
     tokenId = hash(token);
@@ -64,6 +110,7 @@ export async function beginAccountLogin(
     nonceHash: hash(nonce),
     createdAt: timestamp(now),
     expiresAt: timestamp(now + LOGIN_LIFETIME_SECONDS * 1000),
+    ...(recipientLocator ? { recipientLocator } : {}),
   };
   await writeRecord(tokenKey(token), record);
   try {
@@ -136,6 +183,7 @@ export async function confirmAccountLogin(
     );
   const sessionToken = randomCredential();
   let verified: Account | undefined;
+  let nextUrl = "/account";
   const expiresAt = timestamp(now + ACCOUNT_SESSION_SECONDS * 1000);
   await mutateRecord<EmailVerification>(tokenKey(token), async (record) => {
     if (
@@ -155,6 +203,9 @@ export async function confirmAccountLogin(
         "Open the link in the browser where you requested it, or request a new sign-in link here.",
         400,
       );
+    nextUrl = recipientReturnPath(
+      normalizeRecipientLocator(record.recipientLocator),
+    );
     const id = hash(record.email);
     verified = await mutateRecord<Account>(accountKey(id), (existing) => ({
       recordType: "verified-account",
@@ -172,7 +223,7 @@ export async function confirmAccountLogin(
     await writeRecord(sessionKey(sessionToken), session);
     return { ...record, usedAt: timestamp(now) };
   });
-  return { account: verified!, sessionToken, expiresAt };
+  return { account: verified!, sessionToken, expiresAt, nextUrl };
 }
 export async function accountFromSession(token: unknown, now = Date.now()) {
   if (!validCredential(token)) return null;
@@ -191,7 +242,8 @@ export async function accountFromSession(token: unknown, now = Date.now()) {
     !account ||
     account.recordType !== "verified-account" ||
     account.id !== session.accountId ||
-    !account.verifiedAt
+    !account.verifiedAt ||
+    !Number.isFinite(Date.parse(account.verifiedAt))
   )
     return null;
   return { account, expiresAt: session.expiresAt };
@@ -269,5 +321,7 @@ export async function accountCollectionPath(account: Account, id: string) {
     return c.status === "invited" || c.status === "recording"
       ? `/record/${c.id}?key=${c.ownerKey}`
       : `/collection/${c.id}/review?key=${c.ownerKey}`;
-  return `/collection/${c.id}?key=${role === "recipient" ? c.recipientKey : c.requesterKey}`;
+  return role === "recipient"
+    ? `/collection/${c.id}`
+    : `/collection/${c.id}?key=${c.requesterKey}`;
 }

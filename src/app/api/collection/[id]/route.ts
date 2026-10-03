@@ -8,7 +8,6 @@ import {
 import {
   publicView,
   requireOwner,
-  roleFor,
   linksFor,
   appOrigin,
 } from "@/lib/collection/access";
@@ -28,6 +27,7 @@ import type { AnswerTake, Collection, Reply } from "@/lib/collection/types";
 import { getCollectionUsage } from "@/lib/collection/usage";
 import { guardRequest } from "@/lib/security/request";
 import { assertOrigin } from "@/lib/security/policy";
+import { collectionRoleForRequest } from "@/lib/collection/request-access";
 import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 const noStore = {
   "Cache-Control": "no-store",
@@ -43,11 +43,14 @@ export async function GET(
   try {
     const { id } = await params;
     const c = await getCollection(id);
-    const role = c && roleFor(c, req.nextUrl.searchParams.get("key") || "");
+    const role = c && (await collectionRoleForRequest(req, c));
     if (!c || !role)
       return NextResponse.json(
-        { error: "This private link is not valid." },
-        { status: 404 },
+        {
+          error:
+            "This private collection is unavailable. Verify your email to continue.",
+        },
+        { status: 404, headers: noStore },
       );
     return NextResponse.json(
       {
@@ -73,13 +76,15 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const key = req.nextUrl.searchParams.get("key") || "";
     const initial = await getCollection(id);
-    const role = initial && roleFor(initial, key);
+    const role = initial && (await collectionRoleForRequest(req, initial));
     if (!initial || !role)
       return NextResponse.json(
-        { error: "This private link is not valid." },
-        { status: 404 },
+        {
+          error:
+            "This private collection is unavailable. Verify your email to continue.",
+        },
+        { status: 404, headers: noStore },
       );
     assertOrigin(req);
     await guardRequest(req, { action: "collection_write", resourceId: id });
@@ -244,6 +249,10 @@ export async function POST(
       });
     } else {
       next = await mutateCollection(id, async (c) => {
+        if ((await collectionRoleForRequest(req, c)) !== role)
+          throw new Error(
+            "This private collection is unavailable. Verify your email to continue.",
+          );
         if (b.action === "address") {
           if (role === "requester" && c.requester.email !== c.recipient.email)
             throw new Error("Use the recipient address link.");

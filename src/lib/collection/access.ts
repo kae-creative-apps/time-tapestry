@@ -26,8 +26,8 @@ export function linksFor(c: Collection) {
   return {
     interview: `/record/${c.id}?key=${c.ownerKey}`,
     review: `/collection/${c.id}/review?key=${c.ownerKey}`,
-    collection: `/collection/${c.id}?key=${c.recipientKey}`,
-    address: `/collection/${c.id}/address?key=${c.recipientKey}`,
+    collection: `/collection/${c.id}`,
+    address: `/collection/${c.id}/address`,
   };
 }
 export function publicView(
@@ -47,6 +47,7 @@ export function publicView(
     ({ dispatch, ...notification }) => notification,
   );
   if (role !== "owner") {
+    view.postcardPublicConsent = undefined;
     view.postcardPreparation = undefined;
     view.postcardProof = undefined;
     view.postcardProofHistory = undefined;

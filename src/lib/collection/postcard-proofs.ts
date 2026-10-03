@@ -4,9 +4,14 @@ import { addCalendarMonths } from "./content";
 import { PostcardLayoutError } from "./postcard-fit";
 import { originUrl, postcardArtwork } from "./postcard-artwork";
 import type { Collection, PostalAddress } from "./types";
+import { publicPostcardMessage } from "./postcard-public-message";
+import { accountEmailAvailable } from "../accounts/mail";
+import { CHAPTERS } from "../interview-state";
 
 export type PostcardProofSnapshot = {
-  version: 1;
+  version: 1 | 2;
+  accessPolicy?: "verified_recipient_email";
+  publicMessageHash?: string;
   hash: string;
   sourceHash: string;
   collectionVersion: number;
@@ -35,6 +40,30 @@ export class PostcardProofError extends Error {
 }
 const digest = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+/** Binds explicit public-print consent to every word and name that can appear on the card. */
+export function postcardPublicMessagesHash(c: Collection) {
+  return digest([
+    2,
+    c.id,
+    c.storyteller.name.trim(),
+    c.recipient.name.trim(),
+    CHAPTERS.map(({ id }) => [id, publicPostcardMessage(c, id)]),
+  ]);
+}
+export function postcardPublicConsentIsCurrent(c: Collection) {
+  return Boolean(
+    c.postcardPublicConsent?.version === 2 &&
+    c.postcardPublicConsent.approvedAt &&
+    c.postcardPublicConsent.messagesHash === postcardPublicMessagesHash(c),
+  );
+}
+function requirePublicConsent(c: Collection) {
+  if (!postcardPublicConsentIsCurrent(c))
+    throw new PostcardProofError(
+      "Review the public postcard messages and confirm that anyone handling the card may read them before mailing.",
+      409,
+    );
+}
 const addressValue = (address: PostalAddress) => ({
   name: address.name.trim(),
   line1: address.line1.trim(),
@@ -84,10 +113,13 @@ function sourceHash(c: Collection, origin: string) {
       "Confirm a complete US mailing address before preparing postcards.",
     );
   return digest([
+    2,
+    "verified_recipient_email",
     c.id,
     c.approvedVersion || 1,
     origin,
-    c.recipientKey,
+    c.recipient.email.trim().toLowerCase(),
+    postcardPublicMessagesHash(c),
     c.storyteller.name,
     c.recipient.name,
     address,
@@ -107,6 +139,8 @@ function proofHash(
 ) {
   return digest([
     proof.version,
+    proof.accessPolicy || "legacy_bearer_link",
+    proof.publicMessageHash || "",
     proof.sourceHash,
     proof.collectionVersion,
     proof.origin,
@@ -133,14 +167,16 @@ export async function buildPostcardProof(
   const cards = await Promise.all(
     c.chapters.map(async (chapter, index) => ({
       chapterId: chapter.id,
-      title: chapter.title,
-      note: chapter.postcardNote,
+      title: `Postcard ${index + 1}`,
+      note: publicPostcardMessage(c, chapter.id),
       scheduledFor: addCalendarMonths(first, index * 3),
       ...(await postcardArtwork(c, chapter.id, secureOrigin)),
     })),
   );
   const proof = {
-    version: 1 as const,
+    version: 2 as const,
+    accessPolicy: "verified_recipient_email" as const,
+    publicMessageHash: postcardPublicMessagesHash(c),
     sourceHash: source,
     collectionVersion: c.approvedVersion || 1,
     origin: secureOrigin,
@@ -159,6 +195,9 @@ export function postcardProofIsCurrent(
   try {
     return Boolean(
       proof &&
+      proof.version === 2 &&
+      proof.accessPolicy === "verified_recipient_email" &&
+      proof.publicMessageHash === postcardPublicMessagesHash(c) &&
       proof.hash === proofHash(proof) &&
       proof.sourceHash === sourceHash(c, originUrl(origin)),
     );
@@ -180,7 +219,12 @@ export function approvePostcardProof(
       "The wording, address or schedule changed. Open the current proof and review it again.",
       409,
     );
-  if (c.postcardProof?.hash === proof.hash && c.postcardProof.approvedAt)
+  requirePublicConsent(c);
+  if (
+    c.postcardProof?.hash === proof.hash &&
+    c.postcardProof.approvedAt &&
+    postcardProofIsCurrent(c, c.postcardProof, proof.origin)
+  )
     return c;
   if (
     c.deliveries.some(
@@ -219,6 +263,8 @@ export function postcardDeliveryReadiness(origin = appOrigin()) {
     reasons.push("Mailing confirmation is not configured.");
   if (!process.env.CRON_SECRET)
     reasons.push("The delivery worker is not configured.");
+  if (!accountEmailAvailable())
+    reasons.push("Recipient email verification is not configured.");
   try {
     const url = new URL(originUrl(origin));
     const host = url.hostname.toLowerCase();
@@ -240,6 +286,7 @@ export function assertReleasedPostcardProof(
   c: Collection,
   origin = appOrigin(),
 ): PostcardProofSnapshot {
+  requirePublicConsent(c);
   const proof = c.postcardProof;
   if (
     !proof?.approvedAt ||
@@ -262,6 +309,7 @@ export function releasePostcardProof(
     throw new PostcardProofError(
       "Confirm the recipient mailing address before scheduling postcards.",
     );
+  requirePublicConsent(c);
   const proof = c.postcardProof;
   if (
     !proof?.approvedAt ||
@@ -331,12 +379,19 @@ export async function prepareAutomaticPostcards(
     );
   if (
     c.postcardProof?.releaseStatus === "released" &&
-    postcardProofIsCurrent(c, c.postcardProof, origin)
-  )
+    postcardProofIsCurrent(c, c.postcardProof, origin) &&
+    postcardPublicConsentIsCurrent(c)
+  ) {
+    if (!postcardDeliveryReadiness(origin).ready)
+      return state(
+        "waiting_for_setup",
+        "The approved postcards are on hold until mailing and recipient email verification are ready.",
+      );
     return state(
       "ready",
       "The approved postcards are on the automatic mailing schedule.",
     );
+  }
   if (
     c.deliveries.some(
       (delivery) =>
@@ -346,6 +401,11 @@ export async function prepareAutomaticPostcards(
     return state(
       "needs_attention",
       "A mailing is already in progress. The team will check it before preparing another print version.",
+    );
+  if (!postcardPublicConsentIsCurrent(c))
+    return state(
+      "needs_attention",
+      "Review the public postcard messages and confirm that anyone handling the card may read them. Your private stories stay behind email verification.",
     );
   try {
     // If setup held a previous schedule in the past, start a fresh quarterly schedule when ready.

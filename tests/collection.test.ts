@@ -5,16 +5,20 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 let create: any, post: any, get: any, store: any;
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const request = (url: string, body?: unknown) =>
+const request = (url: string, body?: unknown, cookie?: string) =>
   new NextRequest(
     `http://localhost${url}`,
     body === undefined
-      ? undefined
+      ? { headers: cookie ? { cookie } : {} }
       : {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(cookie ? { cookie } : {}),
+          },
           body: JSON.stringify(body),
         },
   );
@@ -68,7 +72,13 @@ async function make() {
 }
 async function act(c: any, body: unknown, key = c.ownerKey) {
   const r = await post(
-    request(`/api/collection/${c.id}?key=${key}`, body),
+    request(
+      `/api/collection/${c.id}?key=${key}`,
+      body,
+      key === c.recipientKey
+        ? await verifiedRecipientCookie(c.recipient.email)
+        : undefined,
+    ),
     params(c.id),
   );
   return { status: r.status, body: await r.json() };
@@ -120,7 +130,11 @@ test("address link cannot expose drafts or owner/private dispatch payloads", asy
     value: { encouragement: "Private draft" },
   });
   const r = await get(
-    request(`/api/collection/${c.id}?key=${c.recipientKey}`),
+    request(
+      `/api/collection/${c.id}?key=${c.recipientKey}`,
+      undefined,
+      await verifiedRecipientCookie(c.recipient.email),
+    ),
     params(c.id),
   );
   const b = await r.json();
