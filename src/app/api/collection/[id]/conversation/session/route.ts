@@ -56,7 +56,10 @@ export async function POST(
         { error: "Open your interview link to continue." },
         { status: 403, headers },
       );
-    await guardRequest(req, { action: "ai_session", resourceId: id });
+    const guard = await guardRequest(req, {
+      action: "ai_session",
+      resourceId: id,
+    });
     let sessionId: string | undefined;
     let connectionType: "webrtc" | "websocket" = "webrtc";
     if (req.body) {
@@ -99,6 +102,7 @@ export async function POST(
       sessionId,
       undefined,
       connectionType,
+      guard.reserveProviderBudget,
     );
     return NextResponse.json(session, { headers });
   } catch (error) {

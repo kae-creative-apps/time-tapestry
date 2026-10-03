@@ -123,6 +123,39 @@ export async function listLocalTakes(
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+/** Device recovery does not require a collection link or a server request. */
+export async function listAllLocalTakes(): Promise<LocalTake[]> {
+  const takes = await read<LocalTake[]>("takes", (store) => store.getAll());
+  return takes.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Export keys and raw text together from one read-only storage snapshot. */
+export async function listAllLocalDrafts(): Promise<
+  { key: string; text: string }[]
+> {
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("drafts", "readonly");
+    const store = tx.objectStore("drafts");
+    const keys = store.getAllKeys();
+    const values = store.getAll();
+    tx.oncomplete = () =>
+      resolve(
+        keys.result.flatMap((key, index) =>
+          typeof key === "string" && typeof values.result[index] === "string"
+            ? [{ key, text: values.result[index] as string }]
+            : [],
+        ),
+      );
+    tx.onerror = () =>
+      reject(tx.error ?? new Error("Could not read saved written drafts."));
+    tx.onabort = () =>
+      reject(
+        tx.error ?? new Error("Reading saved written drafts was interrupted."),
+      );
+  });
+}
+
 export async function appendTakeChunk(
   takeId: string,
   index: number,

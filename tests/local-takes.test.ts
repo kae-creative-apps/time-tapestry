@@ -8,6 +8,8 @@ import {
   getTakeBlob,
   getTextDraft,
   listLocalTakes,
+  listAllLocalTakes,
+  listAllLocalDrafts,
   putLocalTake,
   requestRecordingStorage,
   saveTextDraft,
@@ -171,4 +173,84 @@ test("an empty failed recording has no playable content and no false backup", as
   await appendTakeChunk(empty.id, 0, new Blob([]));
   await assert.rejects(getTakeBlob(empty), /No recorded audio or video/);
   assert.equal((await getLocalTake(empty.id))?.state, "recording");
+});
+
+test("device recovery lists every collection read-only and leaves originals intact", async () => {
+  const local = take("device-local", {
+    collectionId: "missing-server-local",
+    state: "local",
+    createdAt: "2026-10-03T14:00:00.000Z",
+  });
+  const backup = take("device-backup", {
+    collectionId: "missing-server-backup",
+    state: "backed_up",
+    createdAt: "2026-10-03T15:00:00.000Z",
+  });
+  const interrupted = take("device-interrupted", {
+    collectionId: "missing-server-interrupted",
+    createdAt: "2026-10-03T16:00:00.000Z",
+  });
+  for (const entry of [local, backup, interrupted]) {
+    await putLocalTake(entry);
+    await appendTakeChunk(entry.id, 0, new Blob([entry.id]));
+  }
+  const transaction = IDBDatabase.prototype.transaction;
+  const modes: (IDBTransactionMode | undefined)[] = [];
+  IDBDatabase.prototype.transaction = function (
+    ...args: Parameters<typeof transaction>
+  ) {
+    modes.push(args[1]);
+    return transaction.apply(this, args);
+  };
+  try {
+    const found = await listAllLocalTakes();
+    assert.deepEqual(
+      found
+        .filter((item) => item.id.startsWith("device-"))
+        .map((item) => item.id),
+      [interrupted.id, backup.id, local.id],
+    );
+    for (const original of [local, backup, interrupted]) {
+      assert.deepEqual(await getLocalTake(original.id), original);
+      assert.equal(await (await getTakeBlob(original)).text(), original.id);
+    }
+    assert.ok(modes.length > 0);
+    assert.ok(modes.every((mode) => mode === "readonly"));
+  } finally {
+    IDBDatabase.prototype.transaction = transaction;
+  }
+});
+
+test("written recovery exports keys and exact saved text without changing drafts", async () => {
+  const values = [
+    ["recovery-one", "q1", "A fictional answer.\nSecond line."],
+    [
+      "recovery-two",
+      "recipient-reply:q4",
+      '{"text":"A fictional unfinished reply","mediaId":"sample"}',
+    ],
+  ] as const;
+  for (const [collection, question, text] of values)
+    await saveTextDraft(collection, question, text);
+  const transaction = IDBDatabase.prototype.transaction;
+  const modes: (IDBTransactionMode | undefined)[] = [];
+  IDBDatabase.prototype.transaction = function (
+    ...args: Parameters<typeof transaction>
+  ) {
+    modes.push(args[1]);
+    return transaction.apply(this, args);
+  };
+  try {
+    const found = await listAllLocalDrafts();
+    for (const [collection, question, text] of values) {
+      assert.deepEqual(
+        found.find((item) => item.key === `${collection}:${question}`),
+        { key: `${collection}:${question}`, text },
+      );
+      assert.equal(await getTextDraft(collection, question), text);
+    }
+    assert.ok(modes.every((mode) => mode === "readonly"));
+  } finally {
+    IDBDatabase.prototype.transaction = transaction;
+  }
 });

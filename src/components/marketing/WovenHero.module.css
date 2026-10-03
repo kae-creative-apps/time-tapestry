@@ -1,0 +1,95 @@
+.stage {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: clamp(340px, 46vw, 620px);
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.halo {
+  position: absolute;
+  inset: 7% -10% 0;
+  background: radial-gradient(
+    ellipse at 52% 47%,
+    rgba(207, 184, 152, 0.11),
+    transparent 64%
+  );
+  pointer-events: none;
+}
+
+.fallback {
+  position: absolute;
+  width: 82%;
+  left: 9%;
+  top: 50%;
+  transform: translateY(-50%) perspective(900px) rotateY(-9deg) rotateZ(-3deg);
+  box-shadow: 14px 29px 40px rgba(19, 11, 6, 0.24);
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.fallback img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fallback::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    97deg,
+    transparent 5%,
+    rgba(94, 66, 41, 0.075) 18%,
+    rgba(255, 255, 255, 0.25) 29%,
+    transparent 36%,
+    rgba(80, 57, 41, 0.09) 58%,
+    rgba(255, 255, 255, 0.3) 71%,
+    rgba(88, 59, 35, 0.06) 93%
+  );
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+  filter: drop-shadow(12px 23px 18px rgba(19, 11, 6, 0.22));
+}
+
+.canvas.ready {
+  opacity: 1;
+}
+.fallback.replaced {
+  opacity: 0;
+}
+
+@media (min-width: 1024px) {
+  .stage {
+    height: 620px;
+  }
+}
+
+@media (max-width: 639px) {
+  .stage {
+    height: 330px;
+  }
+  .fallback {
+    width: 80%;
+    left: 10%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas,
+  .fallback {
+    transition: none;
+  }
+}

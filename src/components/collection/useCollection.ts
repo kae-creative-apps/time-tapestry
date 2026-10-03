@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollectionView } from "@/lib/collection/types";
+import { collectionRequest } from "@/lib/collection/client-request";
 
 export function useCollection(id: string, accessKey: string) {
   const [collection, setCollection] = useState<CollectionView | null>(null);
@@ -9,6 +10,8 @@ export function useCollection(id: string, accessKey: string) {
   const latest = useRef(0);
   const pending = useRef(0);
   const mounted = useRef(true);
+  const current = useRef(collection);
+  current.current = collection;
   const endpoint = `/api/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`;
   useEffect(() => {
     mounted.current = true;
@@ -19,11 +22,12 @@ export function useCollection(id: string, accessKey: string) {
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      // A background status poll must not outrank an in-flight save with an older snapshot.
+      if (pending.current > 0) return current.current;
       const version = ++latest.current;
+      if (!current.current) setError("");
       try {
-        const r = await fetch(endpoint, { cache: "no-store", signal });
-        const b = await r.json();
-        if (!r.ok) throw new Error(b.error);
+        const b = await collectionRequest(endpoint, { signal });
         if (mounted.current && version === latest.current) {
           setCollection(b.collection);
           setError("");
@@ -56,18 +60,16 @@ export function useCollection(id: string, accessKey: string) {
       setBusy(true);
       setError("");
       try {
-        const r = await fetch(endpoint, {
+        const b = await collectionRequest(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const b = await r.json();
-        if (!r.ok) throw new Error(b.error);
         if (mounted.current && version === latest.current)
           setCollection(b.collection);
         return b.collection as CollectionView;
       } catch (e) {
-        if (mounted.current)
+        if (mounted.current && version === latest.current)
           setError(
             e instanceof Error ? e.message : "Could not save. Please retry.",
           );

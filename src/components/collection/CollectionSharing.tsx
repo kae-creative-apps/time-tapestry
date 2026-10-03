@@ -109,6 +109,7 @@ export function CollectionSharing({
                   value={url}
                   size={136}
                   level="M"
+                  marginSize={4}
                   title="QR code for your approved story collection"
                 />
               )}

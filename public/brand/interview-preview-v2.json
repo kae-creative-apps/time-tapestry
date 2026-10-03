@@ -1,0 +1,31 @@
+{
+  "version": "v2",
+  "generatedAt": "2026-10-03T20:32:57.592Z",
+  "voiceId": "EXAVITQu4vr4xnSDxMaL",
+  "modelId": "eleven_multilingual_v2",
+  "settings": {
+    "stability": 0.5,
+    "similarityBoost": 0.75,
+    "speed": 1,
+    "style": 0,
+    "useSpeakerBoost": true
+  },
+  "source": "Configured Time Tapestry ElevenLabs interviewer",
+  "samples": [
+    {
+      "path": "/brand/interview-preview-v2-1.mp3",
+      "text": "Tell me about someone whose kindness has stayed with you. You can begin with one person or one small moment.",
+      "sha256": "a723971a904c14269f9747b4473cb15d3de9391136e9b4301e78dc8711b61c57"
+    },
+    {
+      "path": "/brand/interview-preview-v2-2.mp3",
+      "text": "Can you tell me about a time your faith shaped a choice you made? There is no perfect answer. Tell it in your own words.",
+      "sha256": "13715cd8d2931bf25de1a004132b7fed916c0e1c91f3575a48d5aa5c4a8142e9"
+    },
+    {
+      "path": "/brand/interview-preview-v2-3.mp3",
+      "text": "When you think about the time or money you gave to others, is there a story you would like someone you love to know? The meaning behind your generosity matters. Sharing an amount is your choice.",
+      "sha256": "9c2a5a46e03eacd7282f6829e165a3a3dd9a04bbb762622ea5e401ccaf9ed5ec"
+    }
+  ]
+}

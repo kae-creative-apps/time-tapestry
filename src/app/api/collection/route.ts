@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardRequest } from "@/lib/security/request";
 import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
-import { putCollection } from "@/lib/collection/store";
+import { createCollectionRequest } from "@/lib/collection/create-request";
+import { verifyHuman } from "@/lib/security/human";
 import {
-  prepareCollection,
   collectionCreationResult,
   CollectionInputError,
 } from "@/lib/collection/create";
@@ -11,13 +11,10 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await readJsonBody(req);
-    await guardRequest(req, {
-      action: "create_collection",
-      requireHuman: true,
-      humanToken: body.humanToken,
-    });
-    const collection = prepareCollection(body);
-    await putCollection(collection);
+    await guardRequest(req, { action: "create_collection" });
+    const collection = await createCollectionRequest(body, () =>
+      verifyHuman(req, body.humanToken, "create_collection"),
+    );
     // Sending is performed by the authenticated delivery worker, never represented as sent here.
     return NextResponse.json(collectionCreationResult(collection), {
       status: 201,

@@ -100,7 +100,7 @@ export function MotionPreview() {
               </div>
               <div>
                 <h2 className="text-xl font-medium text-white">{title}</h2>
-                <p className="mt-2 text-base leading-7 text-white/80">
+                <p className="mt-2 text-base leading-7 text-paper">
                   {description}
                 </p>
               </div>

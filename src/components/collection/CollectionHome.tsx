@@ -6,6 +6,8 @@ import { PortalError, PortalShell, isNarratedFilm } from "./PortalUI";
 import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
+import { StoryMediaPlayer } from "./StoryOriginalPreview";
+import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 const primary =
   "brand-button-primary inline-flex min-h-12 items-center justify-center px-5 py-3 disabled:opacity-50";
@@ -45,6 +47,92 @@ function ReplyForm({
     [busy, setBusy] = useState(false),
     [recording, setRecording] = useState(false),
     [sent, setSent] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftNotice, setDraftNotice] = useState("");
+  const [sendError, setSendError] = useState("");
+  const draftKey = `recipient-reply:${chapter.id}`;
+  const draftQueue = useRef<Promise<void>>(Promise.resolve());
+  const persist = useCallback(
+    (value: string) => {
+      const next = draftQueue.current
+        .catch(() => {})
+        .then(() => saveTextDraft(c.id, draftKey, value));
+      draftQueue.current = next;
+      return next;
+    },
+    [c.id, draftKey],
+  );
+  const currentDraft = useRef("");
+  currentDraft.current = JSON.stringify({ text, mediaId, replyId });
+  useEffect(() => {
+    let alive = true;
+    void getTextDraft(c.id, draftKey)
+      .then((value) => {
+        if (!alive || !value) return;
+        const saved = JSON.parse(value);
+        if (
+          typeof saved.text !== "string" ||
+          saved.text.length > 30000 ||
+          typeof saved.mediaId !== "string" ||
+          typeof saved.replyId !== "string"
+        )
+          return;
+        if (c.replies.some((reply) => reply.id === saved.replyId)) return;
+        if (!saved.text.trim() && !saved.mediaId) return;
+        setText(saved.text);
+        setMediaId(saved.mediaId);
+        setReplyId(saved.replyId);
+        setMode(saved.mediaId ? "video" : "text");
+        setDraftNotice(
+          "Your unfinished message was restored from this device. It has not been sent.",
+        );
+      })
+      .catch(() => {
+        if (alive)
+          setDraftNotice(
+            "A device copy is unavailable. Keep this page open until your message is sent.",
+          );
+      })
+      .finally(() => {
+        if (alive) setDraftReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+    // Restore once, never overwrite text in response to a background collection refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id, draftKey]);
+  useEffect(() => {
+    if (!draftReady) return;
+    const timer = setTimeout(
+      () =>
+        void persist(currentDraft.current).catch(() =>
+          setDraftNotice(
+            "A device copy could not be saved. Keep this page open until your message is sent.",
+          ),
+        ),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [text, mediaId, replyId, draftReady, persist]);
+  useEffect(() => {
+    if (!draftReady) return;
+    // Same-app navigation can unmount before the debounce, without a beforeunload event.
+    return () => {
+      void persist(currentDraft.current).catch(() => {});
+    };
+  }, [draftReady, persist]);
+  useEffect(() => {
+    if (!draftReady) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (text.trim() || mediaId || recording || busy) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [text, mediaId, recording, busy, draftReady]);
   const anotherRecording = Boolean(
     recordingChapter && recordingChapter !== chapter.id,
   );
@@ -57,7 +145,10 @@ function ReplyForm({
   );
 
   async function send() {
+    if (busy || recording || !draftReady || (!text.trim() && !mediaId)) return;
     setBusy(true);
+    setSendError("");
+    await persist(currentDraft.current).catch(() => {});
     const next = await act({
       action: "reply",
       chapterId: chapter.id,
@@ -67,11 +158,29 @@ function ReplyForm({
     });
     setBusy(false);
     if (next) {
+      const savedReply = next.replies.find((reply) => reply.id === replyId);
+      if (
+        savedReply &&
+        (savedReply.text.trim() !== text.trim() ||
+          (savedReply.mediaId || "") !== mediaId)
+      ) {
+        setReplyId(crypto.randomUUID());
+        setSendError(
+          "Your earlier message was already saved. Your newer changes are still here. Send them as a new message when you are ready.",
+        );
+        return;
+      }
       setSent(true);
       setText("");
       setMediaId("");
       setMode(null);
       setReplyId(crypto.randomUUID());
+      setDraftNotice("");
+      await persist("").catch(() => {});
+    } else {
+      setSendError(
+        "Your message could not be confirmed. Your words and recording are still here. Check your connection, then try Send again.",
+      );
     }
   }
   return (
@@ -92,7 +201,7 @@ function ReplyForm({
       <div className="mb-5 flex flex-wrap gap-3">
         <button
           className={mode === "video" ? primary : secondary}
-          disabled={recording || anotherRecording}
+          disabled={!draftReady || busy || recording || anotherRecording}
           onClick={() => {
             setMode("video");
             onOpenRecorder(chapter.id);
@@ -102,7 +211,7 @@ function ReplyForm({
         </button>
         <button
           className={mode === "text" ? primary : secondary}
-          disabled={recording}
+          disabled={!draftReady || busy || recording}
           onClick={() => setMode("text")}
         >
           Write a message
@@ -135,6 +244,7 @@ function ReplyForm({
             <textarea
               rows={4}
               maxLength={30000}
+              disabled={busy}
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="mt-2 w-full rounded-md border border-warmgray-300 bg-white p-4 text-base"
@@ -148,7 +258,8 @@ function ReplyForm({
               </p>
               <button
                 type="button"
-                className="mt-3 text-oxblood underline"
+                className="mt-3 min-h-12 text-base text-oxblood underline"
+                disabled={busy}
                 onClick={() => setMediaId("")}
               >
                 Remove video from this reply
@@ -163,6 +274,12 @@ function ReplyForm({
             {busy ? "Sending..." : "Send my message"}
           </button>
         </>
+      )}
+      <PortalError message={sendError} />
+      {draftNotice && (
+        <p role="status" className="mt-4 text-base leading-7 text-ink-500">
+          {draftNotice}
+        </p>
       )}
     </section>
   );
@@ -184,6 +301,7 @@ export default function CollectionHome({
   >(null);
   const [recordingChapter, setRecordingChapter] = useState<string | null>(null);
   const chapters = useRef<HTMLDivElement>(null);
+  const focusSelectedStory = useRef(false);
   // Opening an approved story counts as a visit for readers as well as viewers.
   useEffect(() => {
     if (c?.role !== "recipient" || c.status !== "approved") return;
@@ -211,6 +329,14 @@ export default function CollectionHome({
     chapters.current
       ?.querySelectorAll("article[hidden] video,article[hidden] audio")
       .forEach((media) => (media as HTMLMediaElement).pause());
+    if (focusSelectedStory.current) {
+      focusSelectedStory.current = false;
+      const article = chapters.current?.querySelector<HTMLElement>(
+        "article:not([hidden])",
+      );
+      article?.focus({ preventScroll: true });
+      article?.scrollIntoView({ block: "start" });
+    }
   }, [activeChapter]);
   if (!c)
     return (
@@ -233,9 +359,10 @@ export default function CollectionHome({
       </PortalShell>
     );
   if (c.role === "owner") return <Review id={id} accessKey={accessKey} />;
+  const collectionPath = `/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`;
   if (c.role === "requester")
     return (
-      <PortalShell>
+      <PortalShell collectionPath={collectionPath}>
         <section className="mx-auto max-w-2xl rounded-[28px] border border-warmgray-200 bg-white p-6 sm:p-9">
           <p className="brand-eyebrow text-taupe-600">Your invitation</p>
           <h1 className="mt-4 text-3xl font-medium leading-tight">
@@ -260,7 +387,7 @@ export default function CollectionHome({
     );
   if (c.status !== "approved")
     return (
-      <PortalShell>
+      <PortalShell collectionPath={collectionPath}>
         <section className="mx-auto max-w-2xl rounded-[28px] border border-warmgray-200 bg-white p-6 sm:p-9">
           <p className="brand-eyebrow text-taupe-600">A gift is taking shape</p>
           <h1 className="mt-4 text-3xl font-medium leading-tight">
@@ -279,22 +406,68 @@ export default function CollectionHome({
   const selectedId = c.chapters.some((chapter) => chapter.id === activeChapter)
     ? activeChapter
     : c.chapters[0]?.id;
+  const selectedIndex = c.chapters.findIndex(
+    (chapter) => chapter.id === selectedId,
+  );
+  const filmCount = c.chapters.filter((chapter) => chapter.videoMediaId).length;
+  const openAdjacentStory = (nextId: string) => {
+    if (recordingChapter) return;
+    focusSelectedStory.current = true;
+    setActiveChapter(nextId);
+  };
+  const storyNavigation = (label: string) => (
+    <nav
+      aria-label={label}
+      className="my-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warmgray-300 bg-white p-4 text-espresso sm:p-5"
+    >
+      <p className="w-full text-center text-base font-semibold sm:order-2 sm:w-auto">
+        Story {selectedIndex + 1} of {c.chapters.length}
+      </p>
+      <button
+        type="button"
+        className={`${secondary} flex-1 gap-2 text-base sm:order-1 sm:flex-none`}
+        disabled={Boolean(recordingChapter) || selectedIndex <= 0}
+        onClick={() => openAdjacentStory(c.chapters[selectedIndex - 1].id)}
+      >
+        <AppIcon name="arrowRight" size={20} className="rotate-180" />
+        Previous story
+      </button>
+      <button
+        type="button"
+        className={`${primary} flex-1 gap-2 text-base sm:order-3 sm:flex-none`}
+        disabled={
+          Boolean(recordingChapter) ||
+          selectedIndex < 0 ||
+          selectedIndex >= c.chapters.length - 1
+        }
+        onClick={() => openAdjacentStory(c.chapters[selectedIndex + 1].id)}
+      >
+        Next story <AppIcon name="arrowRight" size={20} />
+      </button>
+    </nav>
+  );
   return (
-    <PortalShell>
+    <PortalShell collectionPath={collectionPath}>
       <header className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] p-6 text-white sm:p-9">
         <BrandPattern
           variant="ribbon"
           className="absolute -right-36 -top-20 -z-10 w-[600px] max-w-none text-white opacity-[0.06]"
         />
-        <p className="brand-eyebrow text-white/75">
+        <p className="brand-eyebrow text-paper">
           Stories from {c.storyteller.name}
         </p>
         <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight text-white sm:text-5xl">
           {c.recipient.name}, these stories are for you.
         </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-8 text-white/85">
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-paper">
           A life is made of many threads. Here are four from{" "}
           {c.storyteller.name}, saved for you to return to in your own time.
+        </p>
+        <p className="mt-6 inline-flex flex-wrap items-center gap-3 rounded-xl bg-paper px-4 py-3 text-base font-semibold text-espresso">
+          <AppIcon name={filmCount ? "video" : "collection"} size={22} />
+          {filmCount > 0
+            ? `${filmCount} ${filmCount === 1 ? "video" : "videos"} available · ${c.chapters.length} written stories`
+            : `${c.chapters.length} written stories to read`}
         </p>
       </header>
       <nav
@@ -310,56 +483,71 @@ export default function CollectionHome({
             onClick={() => {
               setActiveChapter(chapter.id);
             }}
-            className={`min-h-28 rounded-2xl border p-4 text-left transition-colors disabled:opacity-60 ${selectedId === chapter.id ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white hover:border-taupe"}`}
+            className={`min-h-28 rounded-2xl border p-4 text-left transition-colors disabled:opacity-60 ${selectedId === chapter.id ? "border-espresso bg-espresso text-paper" : "border-warmgray-300 bg-white text-espresso hover:border-espresso"}`}
           >
-            <span
-              className={`text-xs font-medium uppercase tracking-[.12em] ${selectedId === chapter.id ? "text-white/70" : "text-taupe-600"}`}
-            >
-              Story {index + 1}
-            </span>
+            <span className="text-base font-medium">Story {index + 1}</span>
             <span className="mt-2 block font-display text-lg font-semibold leading-7">
               {chapter.title}
+            </span>
+            <span className="mt-3 flex items-center gap-2 text-base">
+              <AppIcon
+                name={chapter.videoMediaId ? "play" : "collection"}
+                size={18}
+              />
+              {chapter.videoMediaId ? "Video and story" : "Written story"}
             </span>
           </button>
         ))}
       </nav>
+      {storyNavigation("Move between stories")}
       {recordingChapter && (
         <p role="status" className="mb-5 text-sm leading-7 text-ink-500">
           Finish saving your reply recording before moving to another story.
         </p>
       )}
       <div ref={chapters}>
-        {c.chapters.map((chapter) => {
+        {c.chapters.map((chapter, chapterIndex) => {
           const blessing = c.chapterBlessings[chapter.id];
           return (
             <article
               key={chapter.id}
               hidden={selectedId !== chapter.id}
+              tabIndex={-1}
+              className="scroll-mt-5 focus:outline-none"
               aria-label={chapter.title}
+              onPlayCapture={(event) => {
+                chapters.current
+                  ?.querySelectorAll("video,audio")
+                  .forEach((media) => {
+                    if (media !== event.target)
+                      (media as HTMLMediaElement).pause();
+                  });
+              }}
             >
               <div className="grid items-start gap-7 lg:grid-cols-[1fr_.9fr]">
                 <div className="min-w-0 lg:sticky lg:top-6">
                   <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
                     {chapter.videoMediaId ? (
                       <>
-                        <video
-                          className="aspect-video w-full bg-espresso"
-                          controls
-                          playsInline
+                        <h2 className="px-5 pb-4 pt-5 text-2xl font-semibold text-espresso">
+                          Watch this story
+                        </h2>
+                        <StoryMediaPlayer
+                          key={chapter.videoMediaId}
                           preload={
                             selectedId === chapter.id ? "metadata" : "none"
                           }
-                          aria-label={`Film: ${chapter.title}`}
+                          label={`Story film: ${chapter.title}`}
                           src={url(chapter.videoMediaId)}
                         />
-                        <p className="p-5 text-sm leading-7 text-ink-500">
+                        <p className="p-5 text-base leading-7 text-espresso">
                           {isNarratedFilm(chapter)
                             ? `An AI voice reads ${c.storyteller.name}’s approved story. This is a narrated film, not their original recording.`
                             : `A video shared by ${c.storyteller.name}.`}
                         </p>
                       </>
                     ) : (
-                      <div className="bg-sage-100 p-8">
+                      <div className="bg-paper-200 p-8 text-espresso">
                         <AppIcon
                           name="collection"
                           size={32}
@@ -368,26 +556,16 @@ export default function CollectionHome({
                         <p className="mt-5 font-display text-2xl font-medium">
                           A written story from {c.storyteller.name}.
                         </p>
-                        <p className="mt-3 text-base leading-7 text-ink-500">
+                        <p className="mt-3 text-base leading-7 text-espresso">
                           Take your time with the words below.
                         </p>
                       </div>
                     )}
                   </div>
-                  <ReplyForm
-                    c={c}
-                    chapter={chapter}
-                    accessKey={accessKey}
-                    act={act}
-                    activeRecorderChapter={activeRecorderChapter}
-                    recordingChapter={recordingChapter}
-                    onOpenRecorder={setActiveRecorderChapter}
-                    onRecorderBusyChange={handleRecorderBusyChange}
-                  />
                 </div>
                 <div className="min-w-0 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8">
                   <p className="brand-eyebrow text-taupe-600">
-                    Story {chapter.id.slice(1)} of 4
+                    Story {chapterIndex + 1} of {c.chapters.length}
                   </p>
                   <h2 className="mt-4 text-3xl font-medium leading-tight">
                     {chapter.title}
@@ -399,7 +577,7 @@ export default function CollectionHome({
                         {chapter.postcardNote}
                       </p>
                     )}
-                  <div className="mt-6 whitespace-pre-wrap text-[18px] leading-9 text-ink-600">
+                  <div className="mt-6 whitespace-pre-wrap text-[18px] leading-9 text-espresso">
                     {chapter.content}
                   </div>
                   {blessing &&
@@ -438,11 +616,9 @@ export default function CollectionHome({
                           {date(reply.createdAt)}
                         </p>
                         {reply.mediaId && (
-                          <video
-                            controls
-                            playsInline
-                            preload="none"
-                            className="mt-4 aspect-video w-full rounded-xl bg-espresso"
+                          <StoryMediaPlayer
+                            className="mt-4"
+                            label={`Your reply about ${chapter.title}`}
                             src={url(reply.mediaId)}
                           />
                         )}
@@ -452,11 +628,24 @@ export default function CollectionHome({
                       </section>
                     ))}
                 </div>
+                <div className="min-w-0 lg:col-span-2">
+                  <ReplyForm
+                    c={c}
+                    chapter={chapter}
+                    accessKey={accessKey}
+                    act={act}
+                    activeRecorderChapter={activeRecorderChapter}
+                    recordingChapter={recordingChapter}
+                    onOpenRecorder={setActiveRecorderChapter}
+                    onRecorderBusyChange={handleRecorderBusyChange}
+                  />
+                </div>
               </div>
             </article>
           );
         })}
       </div>
+      {storyNavigation("Continue through the collection")}
       <PortalError message={error} />
       <details className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-5">
         <summary className="min-h-11 cursor-pointer text-base font-medium">

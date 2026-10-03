@@ -1,6 +1,7 @@
 import { ElevenLabsClient, type ElevenLabs } from "@elevenlabs/elevenlabs-js";
 import { roleFor } from "./access";
 import type { Collection } from "./types";
+import { SecurityError } from "../security/policy";
 
 export const INTERVIEW_MAX_DURATION_SECONDS = 45 * 60;
 export const INTERVIEW_THEME_TOOL = "set_interview_theme";
@@ -215,6 +216,7 @@ export async function createInterviewSession(
   sessionId?: string,
   provider?: Provider,
   connectionType: "webrtc" | "websocket" = "webrtc",
+  beforeProvider?: () => Promise<void>,
 ) {
   const role = roleFor(c, key);
   if (!role)
@@ -253,6 +255,11 @@ export async function createInterviewSession(
       await client.getAgent(),
       client.getTool,
     );
+    // Configuration reads do not start a conversation. Reserve only once the
+    // current agent and saved session are valid, before issuing access to it.
+    if (connectionType === "websocket" && !client.getSignedUrl)
+      throw setupError();
+    await beforeProvider?.();
     // A deliberate retry can use WebSocket when the browser's WebRTC signaling
     // connection is unavailable. Both transports require the same owner access
     // and freshly validated agent configuration. Never accept a client URL.
@@ -286,7 +293,11 @@ export async function createInterviewSession(
       currentThemeId: context.currentThemeId,
     };
   } catch (error) {
-    if (error instanceof ConversationSessionError) throw error;
+    if (
+      error instanceof ConversationSessionError ||
+      error instanceof SecurityError
+    )
+      throw error;
     // Provider errors can contain request headers, tokens or private transcript data.
     throw new ConversationSessionError(
       "The live interviewer could not connect. Please try again, or record or type your answer.",

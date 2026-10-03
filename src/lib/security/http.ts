@@ -16,35 +16,44 @@ export function securityErrorResponse(error: unknown) {
     },
   );
 }
-export async function readJsonBody(
+/** Bound actual bytes, not just Content-Length, before parsing or verifying a signature. */
+export async function readRawBody(
   req: Request,
   maxBytes = 64 * 1024,
-): Promise<Record<string, unknown>> {
-  if (Number(req.headers.get("content-length") || 0) > maxBytes)
-    throw new SecurityError(
-      "These details are too large to save in one request.",
-      413,
-    );
+  tooLargeMessage = "These details are too large to save in one request.",
+): Promise<Buffer> {
+  if (Number(req.headers.get("content-length") || 0) > maxBytes) {
+    await req.body?.cancel().catch(() => {});
+    throw new SecurityError(tooLargeMessage, 413);
+  }
   const reader = req.body?.getReader();
   if (!reader) throw new SecurityError("Please provide valid details.", 400);
   let length = 0;
   const chunks: Uint8Array[] = [];
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    length += value.byteLength;
-    if (length > maxBytes) {
-      await reader.cancel();
-      throw new SecurityError(
-        "These details are too large to save in one request.",
-        413,
-      );
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new SecurityError(tooLargeMessage, 413);
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } finally {
+    reader.releaseLock();
   }
+  return Buffer.concat(chunks, length);
+}
+export async function readJsonBody(
+  req: Request,
+  maxBytes = 64 * 1024,
+): Promise<Record<string, unknown>> {
+  const body = await readRawBody(req, maxBytes);
   let value: unknown;
   try {
-    value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    value = JSON.parse(body.toString("utf8"));
   } catch {
     throw new SecurityError("Please provide valid details.", 400);
   }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
 import { interviewAnswers } from "@/lib/collection/interview";
 import { AppIcon } from "@/components/icons";
-import { StoryOriginalPreview } from "./StoryOriginalPreview";
+import { StoryMediaPlayer, StoryOriginalPreview } from "./StoryOriginalPreview";
 import {
   emptyStoryBlessing,
   recoverStoryDraft,
@@ -46,6 +45,7 @@ export function StoryReviewPanel({
   onState,
   act,
   onNext,
+  nextLabel = "Next story",
 }: {
   chapter: ChapterPackage;
   collection: CollectionView;
@@ -57,6 +57,7 @@ export function StoryReviewPanel({
   onState: (id: string, dirty: boolean, ready: boolean) => void;
   act: (body: unknown) => Promise<CollectionView | null>;
   onNext: () => void;
+  nextLabel?: string;
 }) {
   const [draft, setDraft] = useState<Draft>(() => serverDraft(chapter, c));
   const [base, setBase] = useState<Draft>(() => serverDraft(chapter, c));
@@ -321,7 +322,12 @@ export function StoryReviewPanel({
         ? { reviewedFilmSha256: chapter.film.outputSha256 }
         : {}),
     });
-    if (!result) return;
+    if (!result) {
+      setError(
+        "Your changes could not be saved to the collection. They are still here. Check your connection and try Save again.",
+      );
+      return;
+    }
     const next = result.chapters.find((item) => item.id === chapter.id);
     if (!next) return;
     const saved = serverDraft(next, result);
@@ -359,6 +365,15 @@ export function StoryReviewPanel({
     setError("");
     setReviewed(false);
     try {
+      if (!file.type.startsWith("video/"))
+        throw new Error("Choose a video file, such as MP4 or WebM.");
+      if (
+        c.usage &&
+        (file.size > c.usage.maxFileBytes || file.size > c.usage.remainingBytes)
+      )
+        throw new Error(
+          "This video is too large for the available storage. Choose a smaller video.",
+        );
       const duration = await new Promise<number>((resolve, reject) => {
         const video = document.createElement("video");
         const url = URL.createObjectURL(file);
@@ -378,6 +393,7 @@ export function StoryReviewPanel({
       let mediaId = crypto.randomUUID();
       let response: Response;
       if (c.capabilities.directUpload) {
+        const { upload } = await import("@vercel/blob/client");
         await upload(`collections/${c.id}/${mediaId}`, file, {
           access: "private",
           handleUploadUrl: `/api/collection/${c.id}/media/upload?key=${encodeURIComponent(accessKey)}`,
@@ -620,13 +636,9 @@ export function StoryReviewPanel({
                     : "Watch this whole video before approving it for sharing."}
                 </p>
               </div>
-              <video
+              <StoryMediaPlayer
                 key={chapter.videoMediaId}
-                controls
-                playsInline
-                preload="none"
-                className="aspect-video w-full bg-espresso"
-                aria-label={`Attached film for ${chapter.title}`}
+                label={`Your film: ${chapter.title}`}
                 src={mediaPath(c.id, chapter.videoMediaId, accessKey)}
               />
             </section>
@@ -756,6 +768,7 @@ export function StoryReviewPanel({
                 className="mt-3 block w-full text-sm"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
                   if (file) void attach(file);
                 }}
               />
@@ -856,9 +869,9 @@ export function StoryReviewPanel({
         )}
         {!chapter.videoMediaId && !allowWrittenOnly && (
           <p className="mt-2 text-sm leading-6 text-ink-500">
-            You can share your written stories without creating AI films. Choose
-            that option below to review the words, or attach a finished video
-            for review.
+            {locked
+              ? "Your film is being prepared. You can read this story and move to the next one while you wait."
+              : "Your film needs to be ready before this final review. To share only the words, choose written stories in Other ways to share below."}
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
@@ -881,25 +894,29 @@ export function StoryReviewPanel({
             )}
           </div>
           <div className="flex flex-wrap gap-3">
+            {dirty && (
+              <button
+                type="button"
+                disabled={disabled || !dirty || cardLength > 1000}
+                className={portalPrimary}
+                onClick={() => void save()}
+              >
+                {busy
+                  ? "Saving…"
+                  : reviewed
+                    ? "Save story review"
+                    : "Save changes"}
+              </button>
+            )}
             <button
               type="button"
-              disabled={disabled || !dirty || cardLength > 1000}
-              className={portalPrimary}
-              onClick={() => void save()}
-            >
-              {busy
-                ? "Saving…"
-                : reviewed
-                  ? "Save story review"
-                  : "Save changes"}
-            </button>
-            <button
-              type="button"
-              className={portalSecondary}
-              disabled={disabled || dirty}
+              className={dirty ? portalSecondary : portalPrimary}
+              disabled={
+                busy || uploading || !ready || Boolean(recovery) || dirty
+              }
               onClick={onNext}
             >
-              Next story
+              {nextLabel}
               <AppIcon name="arrowRight" size={17} />
             </button>
           </div>

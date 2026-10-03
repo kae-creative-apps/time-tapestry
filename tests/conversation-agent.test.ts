@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import type { ElevenLabs } from "@elevenlabs/elevenlabs-js";
+import { SecurityError } from "../src/lib/security/policy";
 import type { Collection, InterviewSession } from "../src/lib/collection/types";
 import {
   buildInterviewContext,
@@ -492,6 +493,79 @@ test("mocked provider session returns only a short-lived token and actual durati
         return true;
       },
     );
+  } finally {
+    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.ELEVENLABS_AGENT_ID;
+  }
+});
+
+test("session budget is reserved after configuration validation and denial prevents token issuance", async () => {
+  process.env.ELEVENLABS_API_KEY = "synthetic-provider-key";
+  process.env.ELEVENLABS_AGENT_ID = "synthetic-agent";
+  const c = collection();
+  const calls: string[] = [];
+  const provider = {
+    getAgent: async () => {
+      calls.push("configuration");
+      return agent();
+    },
+    getTool: noToolLookup,
+    getToken: async () => {
+      calls.push("token");
+      return {
+        token: "synthetic-token",
+        conversationId: "synthetic-conversation",
+      };
+    },
+  };
+  try {
+    await createInterviewSession(
+      c,
+      c.ownerKey,
+      undefined,
+      provider,
+      "webrtc",
+      async () => {
+        calls.push("budget");
+      },
+    );
+    assert.deepEqual(calls, ["configuration", "budget", "token"]);
+    calls.length = 0;
+    const exhausted = new SecurityError("Synthetic limit", 429, 60);
+    await assert.rejects(
+      createInterviewSession(
+        c,
+        c.ownerKey,
+        undefined,
+        provider,
+        "webrtc",
+        async () => {
+          calls.push("budget");
+          throw exhausted;
+        },
+      ),
+      (error) => error === exhausted,
+    );
+    assert.deepEqual(calls, ["configuration", "budget"]);
+    calls.length = 0;
+    const invalid = agent();
+    invalid.platformSettings!.auth!.enableAuth = false;
+    await assert.rejects(
+      createInterviewSession(
+        c,
+        c.ownerKey,
+        undefined,
+        {
+          ...provider,
+          getAgent: async () => invalid,
+        },
+        "webrtc",
+        async () => {
+          calls.push("budget");
+        },
+      ),
+    );
+    assert.deepEqual(calls, []);
   } finally {
     delete process.env.ELEVENLABS_API_KEY;
     delete process.env.ELEVENLABS_AGENT_ID;

@@ -1,5 +1,7 @@
 # Time Tapestry hackathon QA and handoff
 
+Historical October 2 snapshot. For the current build and verification boundaries, see [October 3 QA](QA_2026-10-03.md).
+
 October 2, 2026. Branch: `codex/four-chapter-legacy`.
 
 The four-chapter family journey is implemented and has passed a local browser walkthrough. It is ready for team review and a controlled rehearsal. Live voice, transcription, cloud media, printing and email still need validation before they appear as working features in the final demo. This is not a production-launch certification.

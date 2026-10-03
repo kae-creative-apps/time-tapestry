@@ -29,6 +29,8 @@ const tokens = (text: string) =>
       .match(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu) ?? []
   ).flatMap((word) => contractions[word] ?? [word]);
 
+export const sourceTokenCount = (text: string) => tokens(text).length;
+
 export function validateSourceWords(
   words: SourceWord[],
   durationMs: number,
@@ -56,12 +58,16 @@ export function validateSourceWords(
 }
 
 /** Semi-global token alignment. Source timestamps alone determine the edit. */
-export function matchSourceWords(reference: string, words: SourceWord[]) {
+export function matchSourceWords(
+  reference: string,
+  words: SourceWord[],
+  options: { allowShort?: boolean } = {},
+) {
   const query = tokens(reference);
   const source = words.flatMap((word, wordIndex) =>
     tokens(word.text).map((text) => ({ text, wordIndex })),
   );
-  if (query.length < 4)
+  if (query.length < (options.allowShort ? 1 : 4))
     throw new Error(
       "A recorded answer is too short to match uniquely. Its original remains available for recovery.",
     );
@@ -188,7 +194,7 @@ export function captionsForWords(words: SourceWord[]): SourceCaption[] {
       captions.push({
         text: group.map((word) => word.text).join(" "),
         startMs: group[0].startMs,
-        endMs: group.at(-1)!.endMs,
+        endMs: Math.max(...group.map((word) => word.endMs)),
         timestampMs: null,
         confidence: null,
       });
@@ -197,6 +203,7 @@ export function captionsForWords(words: SourceWord[]): SourceCaption[] {
   for (const word of words) {
     if (
       group.length &&
+      word.startMs >= Math.max(...group.map((item) => item.endMs)) &&
       (group.map((item) => item.text).join(" ").length + word.text.length >
         72 ||
         word.endMs - group[0].startMs > 4500 ||
@@ -230,19 +237,84 @@ export function cutsForMatchedWords(
       last >= 0 && last + 1 < sameFile.length
         ? sameFile[last + 1].startMs
         : durations.get(mediaId)!;
-    if (before > group[0].startMs || after < group.at(-1)!.endMs)
+    const groupEnd = Math.max(...group.map((word) => word.endMs));
+    if (before > group[0].startMs || after < groupEnd)
       throw new Error(
         "Overlapping source words need review before a cut can preserve the complete words.",
       );
     return {
       mediaId,
       inMs: Math.max(0, before, group[0].startMs - 140),
-      outMs: Math.min(
-        durations.get(mediaId)!,
-        after,
-        group.at(-1)!.endMs + 180,
-      ),
+      outMs: Math.min(durations.get(mediaId)!, after, groupEnd + 180),
       captions: captionsForWords(group),
     };
   });
+}
+
+/** Deduplicate only text proven to be from an overlapping capture interval.
+ * Message arrival times are never used. A pause or a repeated later memory
+ * has no capture overlap, so it remains intact.
+ */
+export function sessionWordTimeline(
+  segments: { mediaId: string; startMs: number }[],
+  wordsByMedia: Map<string, SourceWord[]>,
+  durations: Map<string, number>,
+) {
+  const ordered = [...segments].sort((a, b) => a.startMs - b.startMs);
+  const allWords: SourceWord[] = [],
+    matchableWords: SourceWord[] = [];
+  const seen = new Set<string>();
+  let previous: (typeof ordered)[number] | undefined;
+  for (const segment of ordered) {
+    if (seen.has(segment.mediaId)) continue;
+    seen.add(segment.mediaId);
+    const words = wordsByMedia.get(segment.mediaId) ?? [];
+    allWords.push(...words);
+    let skip = 0;
+    if (previous && words.length) {
+      const previousWords = wordsByMedia.get(previous.mediaId) ?? [];
+      const overlapEnd =
+        previous.startMs + (durations.get(previous.mediaId) ?? 0);
+      if (overlapEnd > segment.startMs) {
+        // Two matching timed words are required. A single common word is not
+        // sufficient evidence to erase an utterance at a recording boundary.
+        for (
+          let count = Math.min(30, previousWords.length, words.length);
+          count >= 2;
+          count--
+        ) {
+          const tail = previousWords.slice(-count),
+            head = words.slice(0, count);
+          if (
+            head.every((word, index) => {
+              const prior = tail[index];
+              return (
+                tokens(word.text).join(" ") === tokens(prior.text).join(" ") &&
+                word.endMs + segment.startMs <= overlapEnd + 150 &&
+                prior.startMs + previous!.startMs >= segment.startMs - 150 &&
+                Math.abs(
+                  word.startMs +
+                    segment.startMs -
+                    prior.startMs -
+                    previous!.startMs,
+                ) <= 300 &&
+                Math.abs(
+                  word.endMs +
+                    segment.startMs -
+                    prior.endMs -
+                    previous!.startMs,
+                ) <= 300
+              );
+            })
+          ) {
+            skip = count;
+            break;
+          }
+        }
+      }
+    }
+    matchableWords.push(...words.slice(skip));
+    previous = segment;
+  }
+  return { allWords, matchableWords };
 }

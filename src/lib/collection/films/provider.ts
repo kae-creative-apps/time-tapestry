@@ -1,68 +1,18 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import type { FilmVoice } from "./types";
+import { reserveProviderBudget } from "../../security/request";
+import {
+  interviewerVoiceConfigured,
+  resolveInterviewerVoice,
+} from "../../elevenlabs-client";
 
 export function filmsAvailable() {
-  return Boolean(
-    process.env.ELEVENLABS_API_KEY?.trim() &&
-    process.env.ELEVENLABS_AGENT_ID?.trim(),
-  );
+  return interviewerVoiceConfigured();
 }
-
-const finite = (value: unknown, fallback: number, min: number, max: number) =>
-  typeof value === "number" &&
-  Number.isFinite(value) &&
-  value >= min &&
-  value <= max
-    ? value
-    : fallback;
 
 /** Only the configured interviewer's voice is used. No storyteller voice cloning. */
 export async function resolveFilmVoice(): Promise<FilmVoice> {
-  if (!filmsAvailable())
-    throw new Error(
-      "Film narration needs the configured ElevenLabs interviewer. Your written stories and originals are saved.",
-    );
-  const modelId =
-    process.env.STORY_FILM_TTS_MODEL?.trim() || "eleven_multilingual_v2";
-  if (
-    ![
-      "eleven_multilingual_v2",
-      "eleven_turbo_v2_5",
-      "eleven_flash_v2_5",
-    ].includes(modelId)
-  )
-    throw new Error(
-      "Choose a supported REST narration model for STORY_FILM_TTS_MODEL.",
-    );
-  const agentId = process.env.ELEVENLABS_AGENT_ID!.trim();
-  const client = new ElevenLabsClient({
-    apiKey: process.env.ELEVENLABS_API_KEY!.trim(),
-    timeoutInSeconds: 20,
-    maxRetries: 0,
-  });
-  let agent;
-  try {
-    agent = await client.conversationalAi.agents.get(agentId);
-  } catch {
-    throw new Error(
-      "The interviewer voice could not be verified. Please try again before generating films.",
-    );
-  }
-  const tts = agent.conversationConfig.tts;
-  if (!tts?.voiceId)
-    throw new Error("The configured interviewer has no narration voice.");
-  return {
-    agentId,
-    voiceId: tts.voiceId,
-    modelId,
-    settings: {
-      stability: finite(tts.stability, 0.5, 0, 1),
-      similarityBoost: finite(tts.similarityBoost, 0.8, 0, 1),
-      speed: finite(tts.speed, 1, 0.7, 1.2),
-      style: 0,
-      useSpeakerBoost: true,
-    },
-  };
+  return resolveInterviewerVoice();
 }
 
 export async function narrateFilmChunk(
@@ -80,6 +30,8 @@ export async function narrateFilmChunk(
     timeoutInSeconds: 180,
     maxRetries: 0,
   });
+  // Called only for an uncached, validated chunk; ready audio is reused upstream.
+  await reserveProviderBudget("render_film");
   try {
     const result = await client.textToSpeech.convertWithTimestamps(
       voice.voiceId,

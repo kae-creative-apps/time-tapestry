@@ -34,6 +34,9 @@ export default function AddressForm({
 }) {
   const [a, setA] = useState<PostalAddress>(initial || empty);
   const [base, setBase] = useState(signature(initial || empty));
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const current = signature(initial || empty);
   const dirty = signature(a) !== current;
   useEffect(() => {
@@ -49,12 +52,29 @@ export default function AddressForm({
   return (
     <form
       className="space-y-5 text-base"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
-        void onSave(a);
+        if (busy || saving) return;
+        setSaving(true);
+        setNotice("");
+        setError("");
+        try {
+          const saved = await onSave(a);
+          if (saved) setNotice("Your mailing address is saved and confirmed.");
+          else
+            setError(
+              "Your address could not be saved. Your changes are still here. Please try again.",
+            );
+        } catch {
+          setError(
+            "Your address could not be saved. Your changes are still here. Please try again.",
+          );
+        } finally {
+          setSaving(false);
+        }
       }}
     >
-      <fieldset disabled={busy} className="space-y-5">
+      <fieldset disabled={busy || saving} className="space-y-5">
         <legend className="sr-only">US mailing address</legend>
         {(
           [
@@ -73,7 +93,10 @@ export default function AddressForm({
               maxLength={key === "postalCode" ? 30 : 200}
               className="mt-2 min-h-12 w-full rounded-xl border border-warmgray-300 bg-white px-4 py-3 text-base"
               value={a[key] || ""}
-              onChange={(event) => setA({ ...a, [key]: event.target.value })}
+              onChange={(event) => {
+                setNotice("");
+                setA({ ...a, [key]: event.target.value });
+              }}
             />
           </label>
         ))}
@@ -83,10 +106,10 @@ export default function AddressForm({
             : "US delivery. This saves the address. Postcard delivery has not been selected for this collection."}
         </p>
         <button
-          disabled={busy}
+          disabled={busy || saving}
           className="brand-button-primary min-h-12 px-5 py-3 disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save and confirm address"}
+          {busy || saving ? "Saving…" : "Save and confirm address"}
         </button>
         {dirty && (
           <p role="status" className="text-base text-ink-500">
@@ -94,6 +117,16 @@ export default function AddressForm({
           </p>
         )}
       </fieldset>
+      {error && (
+        <p role="alert" className="text-base leading-7 text-oxblood">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="text-base leading-7 text-sage-700">
+          {notice}
+        </p>
+      )}
     </form>
   );
 }

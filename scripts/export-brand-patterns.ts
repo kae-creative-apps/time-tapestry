@@ -1,21 +1,35 @@
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { BrandPattern } from "../src/components/BrandPattern";
 
 const sharp = createRequire(`${process.cwd()}/package.json`)("sharp");
 async function main() {
   await mkdir("public/brand", { recursive: true });
+  const approved = {
+    ribbon: "approved-interlocking-pattern_v39.svg",
+    weave: "approved-flowing-thread_v39.svg",
+  } as const;
+  const inlinePatterns: Record<string, { viewBox: string; body: string }> = {};
   for (const variant of ["ribbon", "weave"] as const) {
-    const svg = renderToStaticMarkup(createElement(BrandPattern, { variant }))
-      .replace('fill="none"', 'fill="none" color="#432e23"')
-      .replaceAll("var(--weave-secondary, #939480)", "#939480")
-      .replaceAll("var(--weave-gap, #fbfaf8)", "#fbfaf8");
+    // Keep the original paths and colors. These are copies, never redrawn motifs.
+    const svg = await readFile(
+      `public/brand/patterns/${approved[variant]}`,
+      "utf8",
+    );
+    const viewBox = svg.match(/\bviewBox="([^"]+)"/)?.[1];
+    const body = svg.trim().match(/^<svg\b[^>]*>([\s\S]*)<\/svg>$/)?.[1];
+    if (!viewBox || !body)
+      throw new Error(`Invalid approved pattern: ${approved[variant]}`);
+    inlinePatterns[variant] = { viewBox, body };
     const base = `public/brand/time-tapestry-${variant}`;
     await writeFile(`${base}.svg`, svg);
     await sharp(Buffer.from(svg)).resize(1200).png().toFile(`${base}.png`);
   }
+  await writeFile(
+    "src/lib/brand-patterns.ts",
+    "// Generated from the exact approved public/brand/patterns SVG files.\n" +
+      "// Run scripts/export-brand-patterns.ts to refresh. Do not redraw these paths.\n" +
+      `export const APPROVED_BRAND_PATTERNS = ${JSON.stringify(inlinePatterns, null, 2)} as const;\n`,
+  );
 }
 main().catch((error) => {
   console.error(error);

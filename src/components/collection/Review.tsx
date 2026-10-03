@@ -8,6 +8,9 @@ import { CollectionSharing } from "./CollectionSharing";
 import { OwnerReplies } from "./OwnerReplies";
 import { FilmGenerationPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
+import { StoryMediaPlayer } from "./StoryOriginalPreview";
+import { ApprovedStories } from "./ApprovedStories";
+import { storyOriginals } from "./story-originals";
 import {
   ContactSummary,
   PortalError,
@@ -45,11 +48,39 @@ export default function Review({
     Record<string, { dirty: boolean; ready: boolean }>
   >({});
   const [localError, setLocalError] = useState("");
+  const [approvalError, setApprovalError] = useState("");
+  const [approving, setApproving] = useState(false);
   const [generatingFilms, setGeneratingFilms] = useState(false);
-  const [writtenOnly, setWrittenOnly] = useState(false);
+  const [writtenOnlyChoice, setWrittenOnlyChoice] = useState<boolean | null>(
+    null,
+  );
+  const [hasFilmJob, setHasFilmJob] = useState<boolean | null>(null);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState("");
   const editorTop = useRef<HTMLDivElement>(null);
+  const originalsSection = useRef<HTMLDivElement>(null);
+  const approvalHeading = useRef<HTMLHeadingElement>(null);
+  const hasOriginals = Boolean(
+    c &&
+    (c.chapters.length
+      ? c.chapters.some((chapter) => storyOriginals(c, chapter).length > 0)
+      : c.takes.some((take) => take.kind !== "text" && take.mediaId) ||
+        c.interviews?.some((interview) =>
+          interview.segments.some((segment) => segment.mediaId),
+        )),
+  );
+  const hasAttachedFilms = Boolean(
+    c?.chapters.some((chapter) => chapter.videoMediaId),
+  );
+  // Automatic defaults can follow saved sources; an explicit choice always wins.
+  const writtenOnly =
+    writtenOnlyChoice ??
+    Boolean(
+      c?.chapters.length &&
+      !hasOriginals &&
+      !hasAttachedFilms &&
+      hasFilmJob === false,
+    );
   const onEditorState = useCallback(
     (chapterId: string, dirty: boolean, ready: boolean) =>
       setEditorStates((old) =>
@@ -65,7 +96,7 @@ export default function Review({
     c!.chapters.every((chapter) => editorStates[chapter.id]?.ready);
   const blocked = busy || working || dirty || generatingFilms;
   const activeDirty = Boolean(editorStates[activeChapter]?.dirty);
-  const navigationBlocked = busy || working || activeDirty || generatingFilms;
+  const navigationBlocked = busy || working || activeDirty;
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (dirty) {
@@ -82,15 +113,17 @@ export default function Review({
     setLocalError("");
     const result = await act({
       action: "generate",
-      prepareFilms: true,
-      processingApproved: true,
+      prepareFilms: hasOriginals,
+      processingApproved: hasOriginals,
       ...(regenerate ? { regenerate: true } : {}),
     });
     if (result) {
       setEditorStates({});
       setActiveChapter("q1");
       setNotice(
-        "Your story drafts are saved. We’re preparing films from your original recordings. You can follow progress below.",
+        hasOriginals
+          ? "Your story drafts are saved. Check film preparation below while you read your stories."
+          : "Your four written stories are ready. Read each one and save its review before approving your collection.",
       );
     }
     setWorking(false);
@@ -98,6 +131,8 @@ export default function Review({
   async function approve() {
     if (blocked || !editorsReady) return;
     setLocalError("");
+    setApprovalError("");
+    setApproving(true);
     const result = await act({
       action: "approve",
       deliveryMode: "digital",
@@ -107,14 +142,27 @@ export default function Review({
     if (result) {
       setEditorStates({});
       setNotice("Your approved collection is ready to share.");
+    } else {
+      setApprovalError(
+        "We could not confirm your approval. Your stories are saved. Check your connection and try again.",
+      );
     }
+    setApproving(false);
   }
   function nextStory() {
     if (!c || navigationBlocked) return;
     const index = c.chapters.findIndex(
       (chapter) => chapter.id === activeChapter,
     );
-    setActiveChapter(c.chapters[(index + 1) % c.chapters.length].id);
+    if (index === c.chapters.length - 1) {
+      approvalHeading.current?.focus();
+      approvalHeading.current?.scrollIntoView({
+        behavior: "auto",
+        block: "start",
+      });
+      return;
+    }
+    setActiveChapter(c.chapters[index + 1].id);
     editorTop.current?.scrollIntoView({ behavior: "auto", block: "start" });
   }
   if (!c)
@@ -174,8 +222,15 @@ export default function Review({
 
   return (
     <div
+      onPlayCapture={(event) => {
+        event.currentTarget
+          .querySelectorAll<HTMLMediaElement>("video,audio")
+          .forEach((media) => {
+            if (media !== event.target) media.pause();
+          });
+      }}
       onClickCapture={(event) => {
-        if (dirty && (event.target as Element).closest("a[href]")) {
+        if (activeDirty && (event.target as Element).closest("a[href]")) {
           event.preventDefault();
           event.stopPropagation();
           setLocalError(
@@ -184,13 +239,15 @@ export default function Review({
         }
       }}
     >
-      <PortalShell>
+      <PortalShell
+        collectionPath={`/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`}
+      >
         <header className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] p-6 text-white sm:p-9">
           <BrandPattern
             variant="ribbon"
             className="absolute -right-40 -top-20 -z-10 w-[600px] max-w-none text-white opacity-[0.06]"
           />
-          <p className="brand-eyebrow text-white/70">
+          <p className="brand-eyebrow text-paper">
             {approved ? "Stories woven together" : "Your private workspace"}
           </p>
           <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight text-white sm:text-5xl">
@@ -198,7 +255,7 @@ export default function Review({
               ? `Your stories are ready to share with ${c.recipient.name}.`
               : "Does this sound like you?"}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-white/85">
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-paper">
             {approved
               ? `Your four stories are approved for ${c.recipient.name}. Your private link and delivery status are below.`
               : "Read one story at a time. You can change any names, details or words before you approve it."}
@@ -213,6 +270,43 @@ export default function Review({
             </a>
           )}
         </header>
+        <nav
+          aria-label="Open part of your collection"
+          className="mt-5 flex flex-wrap gap-3"
+        >
+          <a
+            href={approved ? "#saved-stories" : "#story-review"}
+            className={portalPrimary}
+          >
+            <AppIcon name="video" size={19} />
+            {hasAttachedFilms
+              ? `Stories and videos (${c.chapters.filter((chapter) => chapter.videoMediaId).length})`
+              : "Read my stories"}
+          </a>
+          <a
+            href="#original-recordings"
+            className={portalSecondary}
+            onClick={() => {
+              const archive =
+                originalsSection.current?.querySelector("details");
+              if (archive) archive.open = true;
+            }}
+          >
+            Original recordings
+          </a>
+          <a
+            href={
+              approved
+                ? "#sharing-and-postcards"
+                : c.chapters.length
+                  ? "#film-preparation"
+                  : "#story-review"
+            }
+            className={portalSecondary}
+          >
+            {approved ? "Sharing and postcards" : "Video preparation"}
+          </a>
+        </nav>
         <nav aria-label="Collection progress" className="my-7">
           <ol className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
@@ -247,7 +341,10 @@ export default function Review({
 
         {approved ? (
           <>
-            <CollectionSharing collection={c} busy={busy} act={act} />
+            <ApprovedStories collection={c} accessKey={accessKey} />
+            <div id="sharing-and-postcards" className="scroll-mt-6">
+              <CollectionSharing collection={c} busy={busy} act={act} />
+            </div>
             <OwnerReplies
               collection={c}
               accessKey={accessKey}
@@ -258,7 +355,10 @@ export default function Review({
         ) : (
           <>
             {!c.chapters.length ? (
-              <section className="rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8">
+              <section
+                id="story-review"
+                className="scroll-mt-6 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8"
+              >
                 <h2 className="text-2xl font-semibold">
                   Your answers become four stories.
                 </h2>
@@ -279,8 +379,9 @@ export default function Review({
                   ))}
                 </ol>
                 <p className="mt-5 text-base leading-7 text-ink-500">
-                  Preparation uses ElevenLabs to transcribe your original audio
-                  and assemble the films. Nothing is shared until you approve.
+                  {hasOriginals
+                    ? "Preparation uses ElevenLabs to transcribe your original audio and assemble the films. Nothing is shared until you approve."
+                    : "Your typed answers will become four written stories. You can share them without making films. Nothing is shared until you approve."}
                 </p>
                 <button
                   className={`${portalPrimary} mt-6`}
@@ -316,7 +417,24 @@ export default function Review({
                     </button>
                   </section>
                 )}
-                <div ref={editorTop} className="scroll-mt-5">
+                <div id="story-review" ref={editorTop} className="scroll-mt-5">
+                  {writtenOnly && !hasAttachedFilms && (
+                    <p className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7">
+                      Your written stories are ready to review. Read each story,
+                      check its review box and save. Recordings and films are
+                      optional.
+                    </p>
+                  )}
+                  {generatingFilms && (
+                    <p
+                      role="status"
+                      className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7"
+                    >
+                      Your films are being prepared. You can read each saved
+                      story while you wait. Editing and final review will open
+                      when preparation finishes.
+                    </p>
+                  )}
                   <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
                     <h2 className="text-2xl font-semibold">
                       Your four stories
@@ -344,7 +462,7 @@ export default function Review({
                         className={`min-h-28 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed ${activeChapter === chapter.id ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white hover:border-taupe"}`}
                       >
                         <span
-                          className={`text-xs font-medium uppercase tracking-[.12em] ${activeChapter === chapter.id ? "text-white/70" : "text-taupe-600"}`}
+                          className={`text-xs font-medium uppercase tracking-[.12em] ${activeChapter === chapter.id ? "text-paper" : "text-taupe-600"}`}
                         >
                           Story {index + 1}
                         </span>
@@ -352,7 +470,7 @@ export default function Review({
                           {chapter.title}
                         </span>
                         <span
-                          className={`mt-3 flex items-center gap-2 text-xs ${activeChapter === chapter.id ? "text-white/80" : "text-ink-500"}`}
+                          className={`mt-3 flex items-center gap-2 text-xs ${activeChapter === chapter.id ? "text-paper" : "text-ink-600"}`}
                         >
                           {chapter.editorialReviewed &&
                             !editorStates[chapter.id]?.dirty && (
@@ -369,6 +487,43 @@ export default function Review({
                       </button>
                     ))}
                   </nav>
+                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      className={portalSecondary}
+                      disabled={
+                        navigationBlocked ||
+                        !editorsReady ||
+                        activeChapter === c.chapters[0]?.id
+                      }
+                      onClick={() => {
+                        const index = c.chapters.findIndex(
+                          (chapter) => chapter.id === activeChapter,
+                        );
+                        if (index > 0)
+                          setActiveChapter(c.chapters[index - 1].id);
+                      }}
+                    >
+                      Previous story
+                    </button>
+                    <span className="text-base font-medium">
+                      Story{" "}
+                      {c.chapters.findIndex(
+                        (chapter) => chapter.id === activeChapter,
+                      ) + 1}{" "}
+                      of {c.chapters.length}
+                    </span>
+                    <button
+                      type="button"
+                      className={portalSecondary}
+                      disabled={navigationBlocked || !editorsReady}
+                      onClick={nextStory}
+                    >
+                      {activeChapter === c.chapters.at(-1)?.id
+                        ? "Go to approval"
+                        : "Next story"}
+                    </button>
+                  </div>
                 </div>
                 {c.chapters.map((chapter) => (
                   <StoryReviewPanel
@@ -383,9 +538,14 @@ export default function Review({
                     onState={onEditorState}
                     act={act}
                     onNext={nextStory}
+                    nextLabel={
+                      chapter.id === c.chapters.at(-1)?.id
+                        ? "Continue to approval"
+                        : "Next story"
+                    }
                   />
                 ))}
-                <div className="mt-9">
+                <div id="film-preparation" className="mt-9 scroll-mt-6">
                   <FilmGenerationPanel
                     collection={c}
                     accessKey={accessKey}
@@ -399,14 +559,21 @@ export default function Review({
                     onActiveChange={setGeneratingFilms}
                     onComplete={load}
                     writtenOnly={writtenOnly}
-                    onWrittenOnly={setWrittenOnly}
+                    onWrittenOnly={setWrittenOnlyChoice}
+                    hasOriginals={hasOriginals}
+                    onJobPresence={setHasFilmJob}
                   />
                 </div>
                 <section
                   className="mt-7 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8"
                   aria-labelledby="approval-heading"
                 >
-                  <h2 id="approval-heading" className="text-2xl font-semibold">
+                  <h2
+                    ref={approvalHeading}
+                    tabIndex={-1}
+                    id="approval-heading"
+                    className="scroll-mt-5 text-2xl font-semibold"
+                  >
                     Ready to share with {c.recipient.name}?
                   </h2>
                   <p className="mt-4 max-w-3xl text-base leading-8 text-ink-500">
@@ -425,25 +592,35 @@ export default function Review({
                     </p>
                   )}
                   {!filmsReady && !writtenOnly && (
-                    <p className="mt-2 text-sm leading-7 text-ink-500">
-                      Choose the written-story option above, or attach and
-                      review finished videos. AI narration is optional.
+                    <p className="mt-2 text-base leading-7 text-ink-500">
+                      {generatingFilms
+                        ? "Your films are still being prepared. You can return to review them when they are ready."
+                        : "Review your finished films, or choose written stories in Other ways to share above."}
                     </p>
                   )}
+                  {reviewedCount < 4 && !generatingFilms && !dirty && (
+                    <p className="mt-2 text-base leading-7 text-ink-500">
+                      Open each story above, check its review box, then save the
+                      review.
+                    </p>
+                  )}
+                  <PortalError message={approvalError} />
                   <button
                     type="button"
                     disabled={!canApprove}
                     className={`${portalPrimary} mt-5`}
                     onClick={() => void approve()}
                   >
-                    {busy ? "Saving your approval…" : "Approve my collection"}
+                    {approving
+                      ? "Saving your approval…"
+                      : "Approve my collection"}
                     <AppIcon name="arrowRight" size={18} />
                   </button>
                   <p className="mt-3 text-sm leading-6 text-ink-500">
-                    Approval starts the automatic postcard process and emails
-                    you a confirmation. The first postcard introduces the
-                    collection, followed by cards at months 3, 6 and 9. Approved
-                    stories cannot be edited in this pilot.
+                    Approval starts the automatic postcard process and queues a
+                    confirmation email for you. The first postcard introduces
+                    the collection, followed by cards at months 3, 6 and 9.
+                    Approved stories cannot be edited in this pilot.
                   </p>
                 </section>
               </>
@@ -465,9 +642,23 @@ export default function Review({
               />
             </div>
           </details>
-          <SourceArchive collection={c} accessKey={accessKey} />
+          <div
+            id="original-recordings"
+            ref={originalsSection}
+            className="scroll-mt-6"
+          >
+            <SourceArchive collection={c} accessKey={accessKey} />
+          </div>
           {Boolean(c.draftHistory?.length) && (
-            <details className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-6">
+            <details
+              className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-6"
+              onToggle={(event) => {
+                if (!event.currentTarget.open)
+                  event.currentTarget
+                    .querySelectorAll<HTMLMediaElement>("video,audio")
+                    .forEach((media) => media.pause());
+              }}
+            >
               <summary className="min-h-11 cursor-pointer text-lg font-semibold">
                 Earlier saved drafts ({c.draftHistory?.length})
               </summary>
@@ -479,6 +670,12 @@ export default function Review({
                 <details
                   key={version.savedAt}
                   className="mt-4 border-t border-warmgray-200 pt-4"
+                  onToggle={(event) => {
+                    if (!event.currentTarget.open)
+                      event.currentTarget
+                        .querySelectorAll<HTMLMediaElement>("video,audio")
+                        .forEach((media) => media.pause());
+                  }}
                 >
                   <summary className="min-h-11 cursor-pointer font-medium">
                     Draft {index + 1} ·{" "}
@@ -494,11 +691,9 @@ export default function Review({
                         {chapter.content}
                       </p>
                       {chapter.videoMediaId && (
-                        <video
-                          controls
-                          playsInline
-                          preload="none"
-                          className="mt-4 aspect-video w-full rounded-xl bg-espresso"
+                        <StoryMediaPlayer
+                          className="mt-4"
+                          label={`Earlier film: ${chapter.title}`}
                           src={mediaPath(id, chapter.videoMediaId, accessKey)}
                         />
                       )}

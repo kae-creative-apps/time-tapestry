@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SiriOrb } from "@/components/ui/siri-orb";
 import { AppIcon } from "@/components/icons";
 import { Logo } from "@/components/Logo";
+import { ThreadBorder, threadBorderClassName } from "@/components/brand/ThreadBorder";
 
 const questions = [
   {
@@ -89,8 +90,9 @@ export function InterviewPreview() {
           setOpen(true);
           dialog.current?.showModal();
         }}
-        className="inline-flex min-h-14 items-center justify-center gap-4 rounded-full border border-white/50 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+        className={`${threadBorderClassName} inline-flex min-h-14 items-center justify-center gap-4 rounded-full border border-white/50 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4`}
       >
+        <ThreadBorder />
         Preview the interview <AppIcon name="play" size={20} />
       </button>
       <dialog
@@ -154,7 +156,7 @@ export function InterviewPreview() {
             </p>
             <audio
               ref={audio}
-              src={`/brand/interview-preview-${index + 1}.mp3`}
+              src={`/brand/interview-preview-v2-${index + 1}.mp3`}
               preload={open ? "metadata" : "none"}
               onEnded={() => setPlaying(false)}
               onPause={() => setPlaying(false)}

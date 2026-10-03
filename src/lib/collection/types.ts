@@ -136,6 +136,8 @@ export type Notification = {
   dispatch?: DispatchState;
 };
 export type Collection = {
+  /** Internal binding for safe creation retries. Never returned to clients. */
+  creationRequestHash?: string;
   /** Explicit consent to the four-card automatic mailing journey. */
   autoPostcards?: boolean;
   schemaVersion: 2;

@@ -12,7 +12,7 @@ export function Footer() {
       <div className="mx-auto flex max-w-[1250px] flex-col justify-between gap-10 sm:flex-row sm:items-end">
         <div>
           <Logo variant="light" />
-          <p className="mt-5 text-base text-white/80">
+          <p className="mt-5 text-base text-paper">
             What you gave lives on.
           </p>
         </div>
@@ -46,7 +46,7 @@ export function Footer() {
               Privacy
             </Link>
           </nav>
-          <p className="mt-5 text-xs text-white/65 sm:text-right">
+          <p className="mt-5 text-xs text-paper sm:text-right">
             &copy; 2026 time tapestry
           </p>
         </div>

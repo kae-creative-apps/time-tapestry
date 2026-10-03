@@ -2,6 +2,7 @@ import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { createReadStream } from "node:fs";
 import type { SourceWord } from "./word-matching";
 import { validateSourceWords } from "./word-matching";
+import { reserveProviderBudget } from "../../security/request";
 
 export class TransientFilmError extends Error {
   readonly retryable = true;
@@ -22,6 +23,8 @@ export async function transcribeOriginal(
     timeoutInSeconds: 240,
     maxRetries: 0,
   });
+  // Cache and source validation happen before this provider adapter is called.
+  await reserveProviderBudget("render_film");
   try {
     const result = await client.speechToText.convert({
       file: createReadStream(file),

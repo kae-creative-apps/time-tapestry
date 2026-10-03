@@ -1,10 +1,147 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 import { AppIcon } from "@/components/icons";
 import { mediaPath, portalField } from "./PortalUI";
 import { storyOriginals } from "./story-originals";
+
+/** Large controls supplement the native player without replacing its seeking or volume controls. */
+export function StoryMediaPlayer({
+  src,
+  label,
+  kind = "video",
+  className = "",
+  preload = "none",
+}: {
+  src: string;
+  label: string;
+  kind?: "video" | "audio";
+  className?: string;
+  preload?: "none" | "metadata";
+}) {
+  const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), 15000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+  async function play(retry = false) {
+    const player = media.current;
+    if (!player) return;
+    setError("");
+    setLoading(true);
+    if (retry) player.load();
+    try {
+      await player.play();
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setLoading(false);
+      setPlaying(false);
+      setError(
+        "This recording could not play. Check your connection, then try again.",
+      );
+    }
+  }
+  const shared = {
+    ref: media,
+    src,
+    controls: kind === "audio" || started,
+    preload,
+    "aria-label": label,
+    onPlay: () => setPlaying(true),
+    onPlaying: () => {
+      setStarted(true);
+      setPlaying(true);
+      setLoading(false);
+      setError("");
+    },
+    onWaiting: () => setLoading(true),
+    onPause: () => {
+      setPlaying(false);
+      setLoading(false);
+    },
+    onEnded: () => {
+      setPlaying(false);
+      setLoading(false);
+    },
+    onError: () => {
+      setPlaying(false);
+      setLoading(false);
+      setError(
+        "This recording could not load. Check your connection, then try again.",
+      );
+    },
+  };
+  return (
+    <div
+      className={`overflow-hidden rounded-xl border border-warmgray-200 bg-white ${className}`}
+    >
+      <div className={kind === "video" ? "relative bg-espresso" : "p-4 pb-0"}>
+        {kind === "video" ? (
+          <video {...shared} playsInline className="aspect-video w-full" />
+        ) : (
+          <audio {...shared} className="w-full" />
+        )}
+        {kind === "video" && !started && (
+          <div
+            className="brand-gradient-chocolate absolute inset-0 flex flex-col items-center justify-center gap-4 p-5 text-center text-white"
+            aria-hidden="true"
+          >
+            <AppIcon name="video" size={40} />
+            <p className="max-w-sm font-display text-xl font-medium leading-7 text-white">
+              {label}
+            </p>
+            <p className="text-base text-paper">Use Play below to begin.</p>
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <button
+          type="button"
+          className="brand-button-primary inline-flex min-h-14 items-center justify-center gap-3 px-6 py-3 text-lg"
+          aria-label={`${playing ? "Pause" : "Play"}: ${label}`}
+          onClick={() =>
+            playing ? media.current?.pause() : void play(Boolean(error))
+          }
+        >
+          <AppIcon name={playing ? "pause" : "play"} size={23} />
+          {playing ? "Pause" : "Play"}{" "}
+          {kind === "video" ? "video" : "recording"}
+        </button>
+        <p role="status" className="mt-2 text-base leading-7 text-ink-500">
+          {loading
+            ? slow
+              ? "This is taking longer than usual. You can try loading it again."
+              : "Loading your recording…"
+            : ""}
+        </p>
+        {error && (
+          <p role="alert" className="mt-2 text-base leading-7 text-oxblood">
+            {error}
+          </p>
+        )}
+        {(error || slow) && (
+          <button
+            type="button"
+            onClick={() => void play(true)}
+            className="mt-2 min-h-12 text-base font-medium underline underline-offset-4"
+          >
+            Try loading again
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function StoryOriginalPreview({
   collection,
@@ -60,26 +197,12 @@ export function StoryOriginalPreview({
         {selected && (
           <div className="mt-5">
             <p className="mb-3 text-base font-medium">{label}</p>
-            {selected.kind === "video" ? (
-              <video
-                key={selected.mediaId}
-                controls
-                playsInline
-                preload="none"
-                className="aspect-video w-full rounded-xl bg-espresso"
-                aria-label={label}
-                src={mediaPath(collection.id, selected.mediaId, accessKey)}
-              />
-            ) : (
-              <audio
-                key={selected.mediaId}
-                controls
-                preload="none"
-                className="w-full"
-                aria-label={label}
-                src={mediaPath(collection.id, selected.mediaId, accessKey)}
-              />
-            )}
+            <StoryMediaPlayer
+              key={selected.mediaId}
+              kind={selected.kind === "video" ? "video" : "audio"}
+              label={label}
+              src={mediaPath(collection.id, selected.mediaId, accessKey)}
+            />
             <p className="mt-3 text-sm leading-7 text-ink-500">
               {selected.fromInterview
                 ? "This plays the full saved segment. It may include the interviewer and other answers. It has not been trimmed into an edited story."

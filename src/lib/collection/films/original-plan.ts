@@ -404,7 +404,7 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-v1";
+export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-v2";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",

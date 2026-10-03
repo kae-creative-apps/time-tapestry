@@ -3,41 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AutomaticFilmPanel } from "./AutomaticFilmPanel";
 import { AppIcon } from "@/components/icons";
+import { collectionRequest } from "@/lib/collection/client-request";
 import type { CollectionView } from "@/lib/collection/types";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
 
-type FilmStatus =
-  | "queued"
-  | "transcribing"
-  | "matching"
-  | "preparing"
-  | "narrating"
-  | "rendering"
-  | "ready"
-  | "failed"
-  | "stale";
-export type PortalFilmJob = {
-  id: string;
-  mode?: string;
-  status: FilmStatus;
-  error?: string;
-  chapters: {
-    chapterId: string;
-    title: string;
-    status: FilmStatus;
-    progress?: number;
-    error?: string;
-  }[];
-};
-const isActive = (status?: string) =>
-  [
-    "queued",
-    "transcribing",
-    "matching",
-    "preparing",
-    "narrating",
-    "rendering",
-  ].includes(status || "");
+import {
+  claimFilmCompletion,
+  filmJobsByMode,
+  isActiveFilmStatus as isActive,
+  pollFilmStatus,
+  type FilmStatus,
+  type PortalFilmJob,
+} from "./film-status";
+export type { PortalFilmJob } from "./film-status";
 const labels: Record<FilmStatus, string> = {
   queued: "Waiting to begin",
   transcribing: "Listening to the recordings",
@@ -58,6 +36,8 @@ export function FilmGenerationPanel({
   onComplete,
   writtenOnly,
   onWrittenOnly,
+  hasOriginals,
+  onJobPresence,
 }: {
   collection: CollectionView;
   accessKey: string;
@@ -66,9 +46,17 @@ export function FilmGenerationPanel({
   onComplete: () => Promise<unknown>;
   writtenOnly: boolean;
   onWrittenOnly: (value: boolean) => void;
+  hasOriginals: boolean;
+  onJobPresence: (present: boolean) => void;
 }) {
-  const [originalActive, setOriginalActive] = useState(false);
-  const [job, setJob] = useState<PortalFilmJob | null>(null);
+  const [originalWorking, setOriginalWorking] = useState(false);
+  const [rawJob, setRawJob] = useState<PortalFilmJob | null>(null);
+  const { original: originalJob, ai: job } = filmJobsByMode(rawJob);
+  const [automaticAvailable, setAutomaticAvailable] = useState<boolean | null>(
+    null,
+  );
+  const [hasSources, setHasSources] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [availabilityNotice, setAvailabilityNotice] = useState("");
@@ -76,77 +64,82 @@ export function FilmGenerationPanel({
   const [showAi, setShowAi] = useState(false);
   const [scriptsApproved, setScriptsApproved] = useState(false);
   const [revision, setRevision] = useState(0);
-  const previousReady = useRef("");
+  const completedJobs = useRef(new Set<string>());
+  const callbacks = useRef({ onComplete, onJobPresence });
+  callbacks.current = { onComplete, onJobPresence };
+  const stopPolling = useRef<(() => void) | null>(null);
   const activeJob = useRef(false);
   const endpoint = `/api/collection/${encodeURIComponent(c.id)}/films?key=${encodeURIComponent(accessKey)}`;
   const scriptSignature = JSON.stringify(
     c.chapters.map((chapter) => [chapter.id, chapter.title, chapter.content]),
   );
-  const previousScript = useRef(scriptSignature);
-  useEffect(() => {
-    setScriptsApproved(false);
-    if (previousScript.current !== scriptSignature) {
-      previousScript.current = scriptSignature;
-      setRevision((value) => value + 1);
-    }
-  }, [scriptSignature]);
-  const acceptJob = useCallback(
-    (next: PortalFilmJob | null) => {
-      setJob(next);
-      activeJob.current = isActive(next?.status);
-      if (next?.status === "ready" && previousReady.current !== next.id) {
-        previousReady.current = next.id;
-        void onComplete();
-      }
-    },
-    [onComplete],
+  const sourceSignature = JSON.stringify(
+    c.chapters.map((chapter) => [chapter.id, chapter.sourceTakeIds]),
   );
   useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    async function check() {
-      try {
-        const response = await fetch(endpoint, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        const result = await response.json();
-        if (!response.ok)
-          throw new Error(result.error || "Film status could not be loaded.");
-        if (controller.signal.aborted) return;
-        setAvailable(Boolean(result.available));
-        setAvailabilityNotice(result.notice || "");
-        acceptJob(result.job?.mode === "original" ? null : result.job || null);
-        setError(result.error || "");
-        if (isActive(result.job?.status)) timer = setTimeout(check, 10000);
-      } catch (cause) {
-        if (!controller.signal.aborted)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Film status could not be loaded. Please refresh the status.",
-          );
-        if (!controller.signal.aborted && activeJob.current)
-          timer = setTimeout(check, 10000);
-      }
+    setScriptsApproved(false);
+  }, [scriptSignature]);
+  const acceptJob = useCallback((next: PortalFilmJob | null) => {
+    setRawJob(next);
+    activeJob.current = isActive(next?.status);
+    callbacks.current.onJobPresence(Boolean(next));
+    if (claimFilmCompletion(next, completedJobs.current)) {
+      void callbacks.current.onComplete().catch(() => {
+        setError(
+          "Your films are ready, but the collection could not refresh. Please refresh this page.",
+        );
+      });
     }
-    void check();
-    return () => {
-      controller.abort();
-      if (timer) clearTimeout(timer);
-    };
-  }, [endpoint, revision, acceptJob]);
-  const active = working || isActive(job?.status);
+  }, []);
+  const refresh = useCallback(() => {
+    stopPolling.current?.();
+    setRevision((value) => value + 1);
+  }, []);
+  const acceptCreatedJob = useCallback(
+    (next: PortalFilmJob | null) => {
+      // Ignore any older GET that was already in flight when this job was started.
+      stopPolling.current?.();
+      acceptJob(next);
+      setRevision((value) => value + 1);
+    },
+    [acceptJob],
+  );
   useEffect(() => {
-    onActiveChange(active || originalActive);
+    const stop = pollFilmStatus({
+      request: (signal) =>
+        collectionRequest(endpoint, { cache: "no-store", signal }),
+      initiallyActive: activeJob.current,
+      onSnapshot: (result) => {
+        setAvailable(Boolean(result.available));
+        setAutomaticAvailable(Boolean(result.automaticAvailable));
+        setHasSources(Boolean(result.sources?.length));
+        setAvailabilityNotice(result.notice || "");
+        setError(result.error || "");
+        acceptJob(result.job || null);
+      },
+      onError: (cause) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Film status could not be loaded. Please refresh the status.",
+        ),
+      onChecking: setChecking,
+    });
+    stopPolling.current = stop;
+    return stop;
+  }, [endpoint, revision, scriptSignature, sourceSignature, acceptJob]);
+  const active = working || isActive(job?.status);
+  const originalsActive = originalWorking || isActive(originalJob?.status);
+  useEffect(() => {
+    onActiveChange(active || originalsActive);
     if (active) setShowAi(true);
-  }, [active, originalActive, onActiveChange]);
+  }, [active, originalsActive, onActiveChange]);
   async function generate(retry = false) {
-    if (disabled || active || originalActive || !scriptsApproved) return;
+    if (disabled || active || originalsActive || !scriptsApproved) return;
     setWorking(true);
     setError("");
     try {
-      const response = await fetch(endpoint, {
+      const result = await collectionRequest(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -155,11 +148,8 @@ export function FilmGenerationPanel({
           scriptsApproved: true,
         }),
       });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Your films could not be started.");
-      if (result.job) acceptJob(result.job);
-      setRevision((value) => value + 1);
+      if (result.job) acceptCreatedJob(result.job);
+      else refresh();
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -180,7 +170,7 @@ export function FilmGenerationPanel({
           type="checkbox"
           className="mt-1 h-5 w-5 shrink-0"
           checked={scriptsApproved}
-          disabled={disabled || active || originalActive}
+          disabled={disabled || active || originalsActive}
           onChange={(event) => setScriptsApproved(event.target.checked)}
         />
         <span>
@@ -194,7 +184,7 @@ export function FilmGenerationPanel({
         disabled={
           disabled ||
           active ||
-          originalActive ||
+          originalsActive ||
           !scriptsApproved ||
           available !== true
         }
@@ -214,13 +204,22 @@ export function FilmGenerationPanel({
 
   return (
     <div className="space-y-6">
-      <AutomaticFilmPanel
-        collection={c}
-        accessKey={accessKey}
-        disabled={disabled || active}
-        onActiveChange={setOriginalActive}
-        onComplete={onComplete}
-      />
+      {(hasOriginals || originalJob) && (
+        <AutomaticFilmPanel
+          collection={c}
+          accessKey={accessKey}
+          disabled={disabled || active}
+          onWorkingChange={setOriginalWorking}
+          job={originalJob}
+          available={automaticAvailable}
+          hasSources={hasSources}
+          checking={checking}
+          error={error}
+          onError={setError}
+          onRefresh={refresh}
+          onJobAccepted={acceptCreatedJob}
+        />
+      )}
       <section
         aria-labelledby="sharing-choice-heading"
         className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7"
@@ -229,15 +228,16 @@ export function FilmGenerationPanel({
           Other ways to share
         </h2>
         <p className="mt-3 text-base leading-7 text-ink-500">
-          Prefer a written keepsake? You can share the stories without films.
-          Full original recordings stay private; only approved films are shared.
+          {hasOriginals
+            ? "Prefer a written keepsake? You can share the stories without films. Full original recordings stay private; only approved films are shared."
+            : "Your written stories can be shared on their own. To add your own voice, choose Continue my interview above and record your answers. AI narration is another optional choice below."}
         </p>
         <label className="mt-5 flex items-start gap-3 text-base leading-7">
           <input
             type="checkbox"
             className="mt-1 h-5 w-5 shrink-0"
             checked={writtenOnly}
-            disabled={disabled || active || originalActive}
+            disabled={disabled || active || originalsActive}
             onChange={(event) => onWrittenOnly(event.target.checked)}
           />
           <span>
@@ -347,7 +347,8 @@ export function FilmGenerationPanel({
               <button
                 type="button"
                 className="mt-4 min-h-12 text-base font-medium underline underline-offset-4"
-                onClick={() => setRevision((value) => value + 1)}
+                onClick={refresh}
+                disabled={checking}
               >
                 Refresh film status
               </button>

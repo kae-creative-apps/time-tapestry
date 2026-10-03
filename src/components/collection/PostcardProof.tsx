@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { collectionRequest } from "@/lib/collection/client-request";
 import type { CollectionView } from "@/lib/collection/types";
 import type { PostcardProofSnapshot } from "@/lib/collection/postcard-proofs";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
@@ -96,13 +97,10 @@ export function PostcardProof({
     const controller = new AbortController();
     setBusy(true);
     setError("");
-    void fetch(endpoint, { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok)
-          throw new Error(
-            body.error || "The print preview could not be opened.",
-          );
+    void collectionRequest<ProofResponse>(endpoint, {
+      signal: controller.signal,
+    })
+      .then((body) => {
         if (!controller.signal.aborted) setResult(body);
       })
       .catch((cause) => {

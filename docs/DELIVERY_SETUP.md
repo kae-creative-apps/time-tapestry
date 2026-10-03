@@ -58,6 +58,20 @@ Local records use the collection file store. Vercel deployment requires the root
 
 The PNG QR renderer requires `qrcode`; TypeScript uses `@types/qrcode`.
 
+### Save a local Lob test key
+
+From the repository root, open the local setup form:
+
+```sh
+node scripts/configure-lob.mjs --browser
+```
+
+Open the printed `http://127.0.0.1` link on the same computer, paste the Lob `test_` key into the password field, and choose **Save API key**. The form accepts test keys only by default. Its one-use session closes after a successful save or 15 minutes. If a terminal is preferred, run `node scripts/configure-lob.mjs` without `--browser` and paste the key at its hidden prompt. Do not put the key in command arguments, shell environment variables, chat, or GitHub.
+
+The helper updates only `LOB_API_KEY` in this repository's ignored `.env.local`, preserves the other settings, and writes the file atomically with owner-only permissions. It refuses symbolic links and a file changed during entry. Delivery flags stay unchanged. The helper makes no Lob request, sends no postcard, and does not verify the key with the provider. Restart the intended local preview after saving so it can load the new value.
+
+This configures the local checkout only. It does not update a hosted application's environment, deploy the app, configure the return address or webhook, or enable delivery. Keep `COLLECTION_DELIVERY_ENABLED=false` and `COLLECTION_EMAIL_ENABLED=false` during setup. Live-key entry requires the explicit `--allow-live` launch option and is outside this test setup.
+
 ## Worker
 
 The protected endpoint is:

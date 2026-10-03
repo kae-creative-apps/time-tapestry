@@ -83,7 +83,7 @@ export default function Home() {
         >
           <div className="brand-gradient-chocolate relative isolate grid overflow-hidden rounded-[28px] text-white lg:min-h-[620px] lg:grid-cols-[1.05fr_1fr]">
             <div className="relative z-10 flex flex-col justify-center px-7 pb-3 pt-10 sm:px-12 sm:pt-16 lg:px-14 lg:py-20">
-              <p className="brand-eyebrow mb-7 text-white/75">
+              <p className="brand-eyebrow mb-7 text-paper">
                 Stories woven together
               </p>
               <h1
@@ -94,7 +94,7 @@ export default function Home() {
                 <br />
                 of many threads.
               </h1>
-              <p className="mt-6 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
+              <p className="mt-6 max-w-md text-base leading-relaxed text-paper sm:text-lg">
                 The kindness you received. The faith you lived. The time and
                 money you sowed into others. Gather those stories into a gift
                 for someone you love.
@@ -108,7 +108,7 @@ export default function Home() {
                 </Link>
                 <InterviewPreview />
               </div>
-              <p className="mt-7 text-xs leading-relaxed text-white/70">
+              <p className="mt-7 text-xs leading-relaxed text-paper">
                 A hackathon pilot. You review everything before sharing.
               </p>
             </div>
@@ -192,17 +192,17 @@ export default function Home() {
             <div className="brand-gradient-chocolate relative overflow-hidden rounded-[26px] p-8 text-white sm:p-10">
               <div className="mb-12 flex items-center gap-4">
                 <SiriOrb size={64} animationDuration={18} />
-                <p className="text-sm text-white/75">
+                <p className="text-sm text-paper">
                   A question from the interview
                 </p>
               </div>
               <p className="font-display text-3xl font-medium leading-[1.35] sm:text-4xl">
                 “Tell me about someone whose kindness has stayed with you.”
               </p>
-              <p className="mt-7 max-w-sm text-base leading-relaxed text-white/75">
+              <p className="mt-7 max-w-sm text-base leading-relaxed text-paper">
                 There is no perfect answer. Start with a moment you remember.
               </p>
-              <div className="mt-10 flex flex-wrap gap-2 border-t border-white/20 pt-5 text-xs text-white/80">
+              <div className="mt-10 flex flex-wrap gap-2 border-t border-white/20 pt-5 text-xs text-paper">
                 <span className="rounded-full border border-white/25 px-3 py-2">
                   Speak
                 </span>
@@ -286,7 +286,7 @@ export default function Home() {
           <div className="grid overflow-hidden rounded-[28px] lg:grid-cols-[1fr_1.08fr]">
             <div className="brand-gradient-sage relative isolate flex min-h-[370px] items-center justify-center overflow-hidden p-7 sm:p-12">
               <BrandPattern
-                variant="weave"
+                variant="ribbon"
                 className="absolute -bottom-20 -left-20 -z-10 w-[700px] max-w-none text-white opacity-[.09]"
               />
               <PostcardPreview />

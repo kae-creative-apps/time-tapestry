@@ -1,32 +1,14 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppIcon } from "@/components/icons";
+import { collectionRequest } from "@/lib/collection/client-request";
 import type { CollectionView } from "@/lib/collection/types";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
 
-type Job = {
-  id: string;
-  mode?: string;
-  preparation?: string;
-  status: string;
-  error?: string;
-  chapters: {
-    chapterId: string;
-    title: string;
-    status: string;
-    progress?: number;
-    error?: string;
-  }[];
-};
-const activeStatus = (status?: string) =>
-  [
-    "queued",
-    "transcribing",
-    "matching",
-    "preparing",
-    "narrating",
-    "rendering",
-  ].includes(status || "");
+import {
+  isActiveFilmStatus as activeStatus,
+  type PortalFilmJob,
+} from "./film-status";
 const labels: Record<string, string> = {
   queued: "Waiting to begin",
   transcribing: "Listening to your recordings",
@@ -42,82 +24,46 @@ export function AutomaticFilmPanel({
   collection: c,
   accessKey,
   disabled,
-  onActiveChange,
-  onComplete,
+  onWorkingChange,
+  job,
+  available,
+  hasSources,
+  checking,
+  error,
+  onError,
+  onRefresh,
+  onJobAccepted,
 }: {
   collection: CollectionView;
   accessKey: string;
   disabled: boolean;
-  onActiveChange: (active: boolean) => void;
-  onComplete: () => Promise<unknown>;
+  onWorkingChange: (active: boolean) => void;
+  job: PortalFilmJob | null;
+  available: boolean | null;
+  hasSources: boolean;
+  checking: boolean;
+  error: string;
+  onError: (error: string) => void;
+  onRefresh: () => void;
+  onJobAccepted: (job: PortalFilmJob | null) => void;
 }) {
-  const [job, setJob] = useState<Job | null>(null);
-  const [available, setAvailable] = useState<boolean | null>(null);
-  const [hasSources, setHasSources] = useState(false);
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
-  const lastReady = useRef("");
   const endpoint = `/api/collection/${encodeURIComponent(c.id)}/films?key=${encodeURIComponent(accessKey)}`;
-  const accept = useCallback(
-    (next: Job | null) => {
-      setJob(next);
-      if (next?.status === "ready" && lastReady.current !== next.id) {
-        lastReady.current = next.id;
-        void onComplete();
-      }
-    },
-    [onComplete],
-  );
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function check() {
-      try {
-        const response = await fetch(endpoint, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        const body = await response.json();
-        if (!response.ok)
-          throw new Error(body.error || "We could not check film progress.");
-        if (controller.signal.aborted) return;
-        accept(body.job || null);
-        setAvailable(Boolean(body.automaticAvailable));
-        setHasSources(Boolean(body.sources?.length));
-        setError("");
-        if (activeStatus(body.job?.status)) timer = setTimeout(check, 8000);
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "We could not check film progress.",
-          );
-          timer = setTimeout(check, 15000);
-        }
-      }
-    }
-    void check();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [endpoint, revision, accept]);
   const active = working || activeStatus(job?.status);
   useEffect(() => {
-    onActiveChange(active);
-  }, [active, onActiveChange]);
+    onWorkingChange(working);
+  }, [working, onWorkingChange]);
+  useEffect(() => () => onWorkingChange(false), [onWorkingChange]);
   async function prepare() {
     if (disabled || active || !hasSources) return;
     setWorking(true);
-    setError("");
+    onError("");
     try {
       const retry =
         job?.mode === "original" &&
         job.preparation === "automatic" &&
         job.status === "failed";
-      const response = await fetch(endpoint, {
+      const body = await collectionRequest(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,13 +78,9 @@ export function AutomaticFilmPanel({
               : "audio",
         }),
       });
-      const body = await response.json();
-      if (!response.ok)
-        throw new Error(body.error || "Your films could not be started.");
-      accept(body.job || null);
-      setRevision((value) => value + 1);
+      onJobAccepted(body.job || null);
     } catch (cause) {
-      setError(
+      onError(
         cause instanceof Error
           ? cause.message
           : "Your films could not be started.",
@@ -213,6 +155,11 @@ export function AutomaticFilmPanel({
         </ol>
       )}
       <PortalError message={error} />
+      {available === null && !error && (
+        <p role="status" className="mt-4 text-base leading-7">
+          Checking your films…
+        </p>
+      )}
       {ownJob && job?.status === "failed" && (
         <div className="mt-5 rounded-xl border border-clay-300 bg-white p-4">
           <p className="text-base font-medium">
@@ -227,17 +174,16 @@ export function AutomaticFilmPanel({
               Show details
             </summary>
             <p className="text-sm leading-6 text-ink-500">
-              {job.error ||
-                "Open the admin portal to review the processing job."}
+              {job.error || "The saved job is available to the support team."}
             </p>
           </details>
         </div>
       )}
       {available === false && !active && !ready && (
         <p role="status" className="mt-4 text-base leading-7 text-ink-500">
-          Automatic editing is currently offline. Your stories are saved. Film
-          processing needs to be connected before your collection can be
-          completed.
+          Automatic editing is currently offline. Your stories and original
+          recordings are saved. You can check again later, or choose written
+          stories below.
         </p>
       )}
       {!active && !ready && hasSources && (
@@ -269,10 +215,11 @@ export function AutomaticFilmPanel({
       {(error || available === false) && (
         <button
           type="button"
-          onClick={() => setRevision((value) => value + 1)}
+          onClick={onRefresh}
+          disabled={checking}
           className={`${portalSecondary} mt-4`}
         >
-          Check progress again
+          {checking ? "Checking progress…" : "Check progress again"}
         </button>
       )}
     </section>

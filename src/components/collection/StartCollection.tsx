@@ -1,10 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HumanVerification } from "@/components/security/HumanVerification";
 import Image from "next/image";
 import { Logo } from "@/components/Logo";
 import { BrandPattern } from "@/components/BrandPattern";
 import type { Contact, PostalAddress } from "@/lib/collection/types";
+import {
+  readStartDraft,
+  startDraftKey,
+  startDraftLifetime,
+  type StartDraft,
+} from "@/lib/collection/start-draft";
+import { collectionRequest } from "@/lib/collection/client-request";
 const input =
   "mt-2 min-h-12 w-full rounded-md border border-warmgray-300 bg-white px-4 py-3 text-base text-ink transition-colors hover:border-taupe";
 const primary =
@@ -37,7 +44,88 @@ export default function StartCollection({
   const [humanToken, setHumanToken] = useState("");
   const [humanReady, setHumanReady] = useState(false);
   const [humanRevision, setHumanRevision] = useState(0);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const previousStep = useRef(0);
+  const submission = useRef<StartDraft["submission"]>(undefined);
   const receiver = mode === "share" ? other : recipientIsMe ? me : recipient;
+  const payload = useMemo(
+    () => ({
+      initiationPath: mode,
+      storyteller: mode === "share" ? me : other,
+      recipient: receiver,
+      requester: me,
+      address: addressLater ? undefined : { ...address, name: receiver.name },
+      invitationNote: note,
+    }),
+    [mode, me, other, receiver, addressLater, address, note],
+  );
+  const fingerprint = JSON.stringify(payload);
+  const snapshot = (): StartDraft => ({
+    version: 1,
+    expiresAt: Date.now() + startDraftLifetime,
+    step,
+    me,
+    other,
+    recipient,
+    recipientIsMe,
+    addressLater,
+    address,
+    note,
+    submission: submission.current,
+  });
+  useEffect(() => {
+    try {
+      const saved = readStartDraft(sessionStorage.getItem(startDraftKey(mode)));
+      if (saved) {
+        setStep(saved.step);
+        setMe(saved.me);
+        setOther(saved.other);
+        setRecipient(saved.recipient);
+        setRecipientIsMe(saved.recipientIsMe);
+        setAddressLater(saved.addressLater);
+        setAddress(saved.address);
+        setNote(saved.note);
+        submission.current = saved.submission;
+        setRestored(Boolean(saved.me.name || saved.me.email));
+      }
+    } catch {
+      /* Private browsing may block storage. The form still works. */
+    }
+    setDraftReady(true);
+  }, [mode]);
+  useEffect(() => {
+    if (!draftReady) return;
+    if (submission.current?.fingerprint !== fingerprint)
+      submission.current = { id: crypto.randomUUID(), fingerprint };
+    try {
+      sessionStorage.setItem(startDraftKey(mode), JSON.stringify(snapshot()));
+      setDraftSaved(Boolean(me.name || me.email));
+    } catch {
+      setDraftSaved(false);
+    }
+  }, [
+    draftReady,
+    fingerprint,
+    step,
+    me,
+    other,
+    recipient,
+    recipientIsMe,
+    addressLater,
+    address,
+    note,
+    mode,
+  ]);
+  useEffect(() => {
+    if (previousStep.current !== step) {
+      previousStep.current = step;
+      heading.current?.focus({ preventScroll: true });
+      heading.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }, [step]);
   function fields(value: Contact, set: (v: Contact) => void) {
     return (
       <div className="space-y-5">
@@ -45,6 +133,7 @@ export default function StartCollection({
           Full name
           <input
             required
+            maxLength={200}
             autoComplete="name"
             className={input}
             value={value.name}
@@ -56,6 +145,7 @@ export default function StartCollection({
           <input
             required
             type="email"
+            maxLength={254}
             autoComplete="email"
             className={input}
             value={value.email}
@@ -66,6 +156,7 @@ export default function StartCollection({
           Phone number <span className="text-sm text-ink-500">(optional)</span>
           <input
             type="tel"
+            maxLength={40}
             autoComplete="tel"
             className={input}
             value={value.phone || ""}
@@ -84,23 +175,23 @@ export default function StartCollection({
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/collection", {
+      if (submission.current?.fingerprint !== fingerprint)
+        submission.current = { id: crypto.randomUUID(), fingerprint };
+      try {
+        sessionStorage.setItem(startDraftKey(mode), JSON.stringify(snapshot()));
+      } catch {}
+      const data = await collectionRequest("/api/collection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           humanToken,
-          initiationPath: mode,
-          storyteller: mode === "share" ? me : other,
-          recipient: receiver,
-          requester: me,
-          address: addressLater
-            ? undefined
-            : { ...address, name: receiver.name },
-          invitationNote: note,
+          ...payload,
+          submissionId: submission.current.id,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      try {
+        sessionStorage.removeItem(startDraftKey(mode));
+      } catch {}
       window.location.assign(data.nextUrl);
     } catch (e) {
       setError(
@@ -127,10 +218,10 @@ export default function StartCollection({
               className="object-cover object-center"
             />
           </div>
-          <div className="brand-gradient-chocolate relative hidden h-44 overflow-hidden lg:block">
+          <div className="relative hidden h-44 overflow-hidden bg-paper lg:block">
             <BrandPattern
               variant="weave"
-              className="absolute -right-12 -top-16 h-72 w-96 text-clay opacity-45"
+              className="h-full w-full"
             />
           </div>
         </aside>
@@ -139,7 +230,11 @@ export default function StartCollection({
             {mode === "share" ? "Share my story" : "Request a story"} · Step{" "}
             {step + 1} of 4
           </p>
-          <h1 className="my-4 font-serif text-3xl leading-tight sm:text-4xl">
+          <h1
+            ref={heading}
+            tabIndex={-1}
+            className="my-4 scroll-mt-6 font-serif text-3xl leading-tight outline-none sm:text-4xl"
+          >
             {
               [
                 "Let’s begin with you.",
@@ -157,12 +252,21 @@ export default function StartCollection({
                 "This free pilot helps you turn one conversation into four written stories and a personal story page. No payment details are needed.",
                 mode === "share"
                   ? "Choose someone you want to share your stories, faith and encouragement with."
-                  : "We will invite them to speak, type or record their story. They approve everything before sharing.",
+                  : "Create a personal invitation for them to speak, type or record their story. They approve everything before sharing.",
                 "We are testing a four-postcard schedule: one to introduce all four stories, then three planned for months 3, 6 and 9.",
                 "Original recordings stay saved. Stories are only shared and postcards scheduled after the storyteller approves them.",
               ][step]
             }
           </p>
+          {draftSaved && (
+            <p className="mb-5 text-sm leading-6 text-ink-500" role="status">
+              {restored
+                ? "Your details are back."
+                : "Your details are saved in this tab."}{" "}
+              You can refresh without starting over. This draft is available
+              here for 24 hours and clears when you finish.
+            </p>
+          )}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -199,6 +303,7 @@ export default function StartCollection({
                       <textarea
                         className={input}
                         rows={3}
+                        maxLength={2000}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                         placeholder="Why would you like to hear their story?"
@@ -349,7 +454,7 @@ export default function StartCollection({
               )}
               <button
                 className={primary}
-                disabled={busy || (step === 3 && !humanReady)}
+                disabled={!draftReady || busy || (step === 3 && !humanReady)}
               >
                 {busy
                   ? "Saving..."

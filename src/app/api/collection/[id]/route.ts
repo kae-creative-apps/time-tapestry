@@ -23,7 +23,7 @@ import {
   prepareAutomaticPostcards,
 } from "@/lib/collection/postcard-proofs";
 import { CHAPTERS, MAX_FOLLOW_UPS } from "@/lib/interview-state";
-import { chat } from "@/lib/gloo-client";
+import { chat, gloo } from "@/lib/gloo-client";
 import type { AnswerTake, Collection, Reply } from "@/lib/collection/types";
 import { getCollectionUsage } from "@/lib/collection/usage";
 import { guardRequest } from "@/lib/security/request";
@@ -94,8 +94,33 @@ export async function POST(
           { collection: publicView(initial, role) },
           { headers: noStore },
         );
-      await guardRequest(req, { action: "generate", resourceId: id });
+      const guard = await guardRequest(req, {
+        action: "generate",
+        resourceId: id,
+      });
+      // Check every chapter before the first provider call, not partway through
+      // a four-chapter generation that can never produce a complete draft.
+      for (const [index, chapter] of CHAPTERS.entries())
+        if (
+          !selectedAnswers(initial, chapter.id).some((answer) =>
+            answer.text.trim(),
+          )
+        )
+          throw new Error(
+            `Save a written answer or finish transcription for part ${index + 1} before creating your story.`,
+          );
+      if (process.env.GLOO_API_KEY && gloo) await guard.reserveProviderBudget();
       const chapters = await draftChapters(initial);
+      const prepareFilms =
+        b.prepareFilms === true &&
+        b.processingApproved === true &&
+        chapters.some((chapter) =>
+          selectedAnswers(initial, chapter.id).some(
+            (answer) =>
+              answer.kind !== "text" &&
+              Boolean(answer.mediaId || answer.liveSource?.sourceRanges.length),
+          ),
+        );
       next = await mutateCollection(id, (c) => {
         requireOwner(c, role);
         if (c.updatedAt !== initial.updatedAt)
@@ -119,7 +144,7 @@ export async function POST(
           chapters,
           notifications: [
             ...c.notifications.filter((n) => n.kind !== "review_ready"),
-            ...(b.prepareFilms === true
+            ...(prepareFilms
               ? []
               : [
                   {
@@ -136,7 +161,7 @@ export async function POST(
           ],
         };
       });
-      if (b.prepareFilms === true && b.processingApproved === true) {
+      if (prepareFilms) {
         try {
           await enqueueAutomaticOriginalFilms(next, {
             processingApproved: true,
@@ -166,7 +191,10 @@ export async function POST(
       }
     } else if (b.action === "followup") {
       requireOwner(initial, role);
-      await guardRequest(req, { action: "followup", resourceId: id });
+      const guard = await guardRequest(req, {
+        action: "followup",
+        resourceId: id,
+      });
       const chapter = CHAPTERS.find((ch) => ch.id === b.questionId);
       if (!chapter) throw new Error("This story could not be found.");
       const count = initial.followUps[chapter.id]?.length || 0;
@@ -174,6 +202,7 @@ export async function POST(
         const answers = selectedAnswers(initial, chapter.id);
         if (!answers.length) throw new Error("Save an answer first.");
         if (process.env.GLOO_API_KEY) {
+          if (gloo) await guard.reserveProviderBudget();
           const r: any = await chat([
             {
               role: "system",
@@ -314,6 +343,12 @@ export async function POST(
             typeof b.proofHash === "string" ? b.proofHash : "",
           );
         }
+        // Approval is immutable. A lost success response may be retried without adding mail or changing the frozen gift.
+        if (b.action === "approve" && c.status === "approved") {
+          if (role !== "owner")
+            throw new Error("Open your interview link to make changes.");
+          return c;
+        }
         requireOwner(c, role);
         if (b.action === "save_take") {
           const t = b.take || {};
@@ -388,7 +423,7 @@ export async function POST(
             c.draftOutdated = true;
             for (const ch of c.chapters) ch.editorialReviewed = false;
           }
-          c.status = "recording";
+          if (!c.chapters.length || c.draftOutdated) c.status = "recording";
           return c;
         }
         if (b.action === "select_take") {
@@ -561,6 +596,13 @@ export async function POST(
           return approved;
         }
         if (b.action === "request_address") {
+          if (
+            c.addressConfirmed ||
+            c.notifications.some(
+              (notification) => notification.id === `${id}:address`,
+            )
+          )
+            return c;
           c.notifications.push({
             id: `${id}:address`,
             kind: "address_request",

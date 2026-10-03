@@ -108,7 +108,7 @@ function PostcardFace({ card, index }: { card: StoryCard; index: number }) {
             <BrandArtwork variant="mark" className={styles.smallMark} />
           </div>
           <BrandPattern
-            variant={card.tone === "sage" ? "ribbon" : "weave"}
+            variant="ribbon"
             className={styles.cardPattern}
           />
           <span className={styles.cardLabel}>{card.label}</span>

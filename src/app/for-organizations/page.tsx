@@ -26,13 +26,13 @@ export default function ForOrganizations() {
                 variant="mark"
                 className="mb-10 h-16 w-16 text-white"
               />
-              <p className="brand-eyebrow mb-5 text-white/75">
+              <p className="brand-eyebrow mb-5 text-paper">
                 For churches and organizations
               </p>
               <h1 className="max-w-xl font-display text-4xl font-medium leading-[1.12] tracking-[-.035em] sm:text-5xl">
                 Give your community a reason to share their stories.
               </h1>
-              <p className="mt-6 text-lg leading-8 text-white/85">
+              <p className="mt-6 text-lg leading-8 text-paper">
                 Invite members, donors and neighbors to pass on the faith,
                 generosity and everyday moments that shaped their lives.
               </p>

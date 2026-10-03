@@ -175,13 +175,13 @@ export function GiftClaim({
                 className="absolute -bottom-14 -right-32 -z-10 w-[560px] max-w-none text-white opacity-[0.07]"
               />
               <AppIcon name="handHeart" size={40} className="mb-9" />
-              <p className="brand-eyebrow mb-5 text-white/75">
+              <p className="brand-eyebrow mb-5 text-paper">
                 A gift from {gift.organizationName}
               </p>
               <h1 className="break-words font-display text-4xl font-medium leading-[1.15] tracking-[-.03em] sm:text-5xl">
                 Your stories have a place in someone’s life.
               </h1>
-              <p className="mt-6 text-lg leading-8 text-white/85">
+              <p className="mt-6 text-lg leading-8 text-paper">
                 {gift.organizationName} has invited you to collect stories from
                 your life and share them with someone you love.
               </p>

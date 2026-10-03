@@ -45,7 +45,7 @@ h6 {
   font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1.2;
-  color: var(--color-ink);
+  color: inherit;
 }
 
 p {
@@ -203,7 +203,7 @@ a {
 /* Brand fields carry the expressive identity; content sits on quiet surfaces. */
 .brand-gradient-chocolate {
   background-color: #432e23;
-  background-image: radial-gradient(ellipse at 95% 0%, rgba(168, 134, 109, .45), transparent 60%), linear-gradient(125deg, #38271f 0%, #543b2e 55%, #78614f 100%);
+  background-image: radial-gradient(ellipse at 95% 0%, rgba(168, 134, 109, .25), transparent 60%), linear-gradient(125deg, #38271f 0%, #543b2e 55%, #705541 100%);
 }
 .brand-gradient-sage {
   background-color: #939480;

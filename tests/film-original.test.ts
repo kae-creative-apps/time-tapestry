@@ -10,7 +10,7 @@ import {
   validateSourceWords,
   type SourceWord,
 } from "../src/lib/collection/films/word-matching";
-import { validateMeasuredCuts } from "../src/lib/collection/films/original-render";
+let validateMeasuredCuts: typeof import("../src/lib/collection/films/original-render").validateMeasuredCuts;
 let store: typeof import("../src/lib/collection/store");
 let jobs: typeof import("../src/lib/collection/films/jobstore");
 let plans: typeof import("../src/lib/collection/films/original-plan");
@@ -26,6 +26,13 @@ before(async () => {
     path.join(os.tmpdir(), "film-original-test-"),
   );
   store = await import("../src/lib/collection/store");
+  assert.equal(
+    store.dataRoot,
+    process.env.COLLECTION_DATA_DIR,
+    "film tests must use their isolated temporary store",
+  );
+  ({ validateMeasuredCuts } =
+    await import("../src/lib/collection/films/original-render"));
   jobs = await import("../src/lib/collection/films/jobstore");
   plans = await import("../src/lib/collection/films/original-plan");
 });
@@ -53,15 +60,13 @@ async function fixture() {
   return c;
 }
 const words = (text: string, mediaId = "source_123") =>
-  text
-    .split(" ")
-    .map((text, i): SourceWord => ({
-      text,
-      mediaId,
-      startMs: i * 400 + 100,
-      endMs: i * 400 + 350,
-      speakerId: "speaker_0",
-    }));
+  text.split(" ").map((text, i): SourceWord => ({
+    text,
+    mediaId,
+    startMs: i * 400 + 100,
+    endMs: i * 400 + 350,
+    speakerId: "speaker_0",
+  }));
 test("word matching retains complete unique answer, source timestamps and natural gaps", () => {
   const source = words(
     "hello welcome I learned patience while fixing a bicycle thank you",
@@ -272,20 +277,62 @@ test("unverified beginning or ending words do not produce partial-thought cuts",
 });
 
 test("automatic API requires owner processing consent and reports the real queued mode", async () => {
-  Object.assign(process.env, { NODE_ENV: "test", SECURITY_LOCAL_BYPASS: "true", SECURITY_TEST_BYPASS: "true", ELEVENLABS_API_KEY: "synthetic-unused" });
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+    ELEVENLABS_API_KEY: "synthetic-unused",
+  });
   try {
     const { NextRequest } = await import("next/server");
     const route = await import("../src/app/api/collection/[id]/films/route");
     const c = await fixture();
     const context = { params: Promise.resolve({ id: c.id }) };
-    const request = (key: string, body: object) => new NextRequest(`http://localhost/api/collection/${c.id}/films?key=${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    assert.equal((await route.POST(request(c.recipientKey, { action: "prepare_automatic", processingApproved: true }), context)).status, 403);
-    assert.equal((await route.POST(request(c.ownerKey, { action: "prepare_automatic" }), context)).status, 400);
+    const request = (key: string, body: object) =>
+      new NextRequest(
+        `http://localhost/api/collection/${c.id}/films?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+    assert.equal(
+      (
+        await route.POST(
+          request(c.recipientKey, {
+            action: "prepare_automatic",
+            processingApproved: true,
+          }),
+          context,
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await route.POST(
+          request(c.ownerKey, { action: "prepare_automatic" }),
+          context,
+        )
+      ).status,
+      400,
+    );
     await jobs.writeWorkerHeartbeat("api-test");
-    const response = await route.POST(request(c.ownerKey, { action: "prepare_automatic", processingApproved: true }), context);
+    const response = await route.POST(
+      request(c.ownerKey, {
+        action: "prepare_automatic",
+        processingApproved: true,
+      }),
+      context,
+    );
     assert.equal(response.status, 202);
     const body = await response.json();
-    assert.equal(body.job.mode, "original"); assert.equal(body.job.preparation, "automatic"); assert.equal(body.job.status, "queued");
+    assert.equal(body.job.mode, "original");
+    assert.equal(body.job.preparation, "automatic");
+    assert.equal(body.job.status, "queued");
     assert.equal(body.automaticAvailable, true);
-  } finally { delete process.env.ELEVENLABS_API_KEY; }
+  } finally {
+    delete process.env.ELEVENLABS_API_KEY;
+  }
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import {
   appendTakeChunk,
   getTakeBlob,
@@ -210,6 +209,7 @@ export function useInterviewArchive({
             let mediaId: string;
             if (directUpload) {
               mediaId = crypto.randomUUID();
+              const { upload } = await import("@vercel/blob/client");
               await upload(`collections/${collectionId}/${mediaId}`, blob, {
                 access: "private",
                 multipart: true,

@@ -34,7 +34,9 @@ export function publicView(
   c: Collection,
   role: CollectionView["role"],
 ): CollectionView {
-  const { ownerKey, recipientKey, requesterKey, ...view } = structuredClone(c);
+  const { ownerKey, recipientKey, requesterKey, creationRequestHash, ...view } =
+    structuredClone(c);
+  void creationRequestHash;
   void ownerKey;
   void recipientKey;
   void requesterKey;
@@ -60,6 +62,19 @@ export function publicView(
       view.chapters = [];
       view.chapterBlessings = {};
     }
+    view.chapters = view.chapters.map((chapter) => ({
+      ...chapter,
+      sourceTakeIds: [],
+      film: chapter.film
+        ? {
+            ...chapter.film,
+            sourceTakeIds: [],
+            ...(chapter.film.narrationKind === "original_recording"
+              ? { sourceRanges: [], sourceAssets: [] }
+              : {}),
+          }
+        : undefined,
+    }));
     view.explicitTakeSelections = undefined;
     view.invitationNote = "";
     view.draftHistory = undefined;
@@ -80,7 +95,10 @@ export function publicView(
     role,
     links: role === "owner" ? linksFor(c) : undefined,
     capabilities: {
-      tts: Boolean(process.env.ELEVENLABS_API_KEY),
+      tts: Boolean(
+        process.env.ELEVENLABS_API_KEY?.trim() &&
+        process.env.ELEVENLABS_AGENT_ID?.trim(),
+      ),
       transcription: Boolean(process.env.OPENAI_API_KEY),
       ai: Boolean(process.env.GLOO_API_KEY),
       mail: Boolean(process.env.LOB_API_KEY && process.env.LOB_FROM_ADDRESS_ID),

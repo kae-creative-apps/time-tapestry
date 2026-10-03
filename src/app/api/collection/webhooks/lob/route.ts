@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readRawBody, securityErrorResponse } from "@/lib/security/http";
 import {
   parseLobEvent,
   receiveLobEvent,
@@ -16,26 +17,34 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   }
-  const declaredLength = Number(req.headers.get("content-length") || "0");
-  if (declaredLength > 1024 * 1024)
-    return NextResponse.json(
-      { error: "Event body is too large." },
-      { status: 413 },
-    );
-  const body = await req.text();
-  if (Buffer.byteLength(body) > 1024 * 1024)
-    return NextResponse.json(
-      { error: "Event body is too large." },
-      { status: 413 },
-    );
+  const signature = req.headers.get("lob-signature") || "";
+  const timestamp = req.headers.get("lob-signature-timestamp") || "";
+  const milliseconds = Number(timestamp) * (timestamp.length === 10 ? 1000 : 1);
   if (
-    !verifyLobSignature(
-      body,
-      req.headers.get("lob-signature") || "",
-      req.headers.get("lob-signature-timestamp") || "",
-      secret,
-    )
+    !/^[a-fA-F0-9]{64}$/.test(signature) ||
+    !/^\d{10}(?:\d{3})?$/.test(timestamp) ||
+    !Number.isFinite(milliseconds) ||
+    Math.abs(Date.now() - milliseconds) > 5 * 60 * 1000
   ) {
+    await req.body?.cancel().catch(() => {});
+    return NextResponse.json(
+      { error: "Invalid webhook signature or timestamp." },
+      { status: 401 },
+    );
+  }
+  let body: Buffer;
+  try {
+    body = await readRawBody(req, 1024 * 1024, "Event body is too large.");
+  } catch (error) {
+    return (
+      securityErrorResponse(error) ||
+      NextResponse.json(
+        { error: "Invalid postcard event body." },
+        { status: 400 },
+      )
+    );
+  }
+  if (!verifyLobSignature(body, signature, timestamp, secret)) {
     return NextResponse.json(
       { error: "Invalid webhook signature or timestamp." },
       { status: 401 },
@@ -43,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
   let event;
   try {
-    event = parseLobEvent(JSON.parse(body));
+    event = parseLobEvent(JSON.parse(body.toString("utf8")));
   } catch {
     return NextResponse.json(
       { error: "Invalid postcard event." },

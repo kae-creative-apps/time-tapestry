@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import type { CollectionView } from "@/lib/collection/types";
 import { mediaPath, portalSecondary } from "./PortalUI";
+import { StoryMediaPlayer } from "./StoryOriginalPreview";
 export function OwnerReplies({
   collection: c,
   accessKey,
@@ -70,12 +71,9 @@ export function OwnerReplies({
                     })}
                   </p>
                   {reply.mediaId && (
-                    <video
-                      controls
-                      playsInline
-                      preload="none"
-                      className="mt-4 aspect-video w-full max-w-2xl rounded-xl bg-espresso"
-                      aria-label={`Video reply from ${c.recipient.name} about ${chapter.title}`}
+                    <StoryMediaPlayer
+                      className="mt-4 max-w-2xl"
+                      label={`Reply from ${c.recipient.name} about ${chapter.title}`}
                       src={mediaPath(c.id, reply.mediaId, accessKey)}
                     />
                   )}

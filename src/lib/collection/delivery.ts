@@ -254,7 +254,7 @@ export function parseLobEvent(value: unknown): LobEvent {
   return v as unknown as LobEvent;
 }
 export function verifyLobSignature(
-  rawBody: string,
+  rawBody: string | Buffer,
   signature: string,
   timestamp: string,
   secret: string,
@@ -273,7 +273,8 @@ export function verifyLobSignature(
   )
     return false;
   const expected = createHmac("sha256", secret)
-    .update(timestamp + "." + rawBody)
+    .update(timestamp + ".")
+    .update(rawBody)
     .digest();
   return timingSafeEqual(expected, Buffer.from(signature, "hex"));
 }

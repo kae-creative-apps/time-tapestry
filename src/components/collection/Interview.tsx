@@ -607,7 +607,6 @@ export default function Interview({
       URL.revokeObjectURL(audioUrl.current);
       audioUrl.current = "";
     }
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
   useEffect(() => () => cancelSpeech(), [cancelSpeech]);
@@ -660,7 +659,7 @@ export default function Interview({
     }
   }
 
-  async function speak(useDevice = false) {
+  async function speak() {
     if (speaking) {
       stopSpeaking();
       return;
@@ -668,25 +667,6 @@ export default function Interview({
     cancelSpeech();
     const requestId = speechRequest.current;
     setError("");
-    if (useDevice) {
-      if (!("speechSynthesis" in window)) {
-        setError(
-          "This browser cannot read the question aloud. The question is written above.",
-        );
-        return;
-      }
-      const speech = new SpeechSynthesisUtterance(prompt);
-      speech.rate = 0.95;
-      speech.onend = () => {
-        if (requestId === speechRequest.current) setSpeaking(false);
-      };
-      speech.onerror = () => {
-        if (requestId === speechRequest.current) setSpeaking(false);
-      };
-      setSpeaking(true);
-      window.speechSynthesis.speak(speech);
-      return;
-    }
     const controller = new AbortController();
     speechAbort.current = controller;
     setSpeaking(true);
@@ -699,7 +679,7 @@ export default function Interview({
       });
       if (!response.ok)
         throw new Error(
-          "The interview voice is unavailable right now. You can try it again or choose the device voice.",
+          "The interviewer voice is unavailable right now. Please try again. You can still read the question above.",
         );
       const blob = await response.blob();
       if (controller.signal.aborted || requestId !== speechRequest.current)
@@ -711,7 +691,12 @@ export default function Interview({
         if (requestId === speechRequest.current) setSpeaking(false);
       };
       player.onerror = () => {
-        if (requestId === speechRequest.current) setSpeaking(false);
+        if (requestId !== speechRequest.current) return;
+        stopSpeaking();
+        setVoiceUnavailable(true);
+        setError(
+          "The interviewer audio could not play. Please try again. The question is still on screen.",
+        );
       };
       await player.play();
       if (requestId === speechRequest.current) setVoiceUnavailable(false);
@@ -944,7 +929,9 @@ export default function Interview({
   if (collection.role !== "owner")
     return (
       <main className="mx-auto max-w-3xl px-5 py-20">
-        <h1 className="font-serif text-4xl">This link cannot be used to record an interview.</h1>
+        <h1 className="font-serif text-4xl">
+          This link cannot be used to record an interview.
+        </h1>
         <p className="mt-5">
           Use the storyteller’s invitation to record the interview.
         </p>
@@ -988,7 +975,8 @@ export default function Interview({
         <p className="mt-4 max-w-2xl text-lg leading-8 text-ink-400">
           Four parts to help you share your life, your walk with Jesus, and what
           you hope {collection.recipient.name} carries forward. Start with one
-          moment you remember. You can take a break and review everything before sharing.
+          moment you remember. You can take a break and review everything before
+          sharing.
         </p>
         <div className="mt-6 flex items-center justify-between gap-4 text-sm">
           <span>{completed} of 4 parts are ready for your written story</span>
@@ -1081,25 +1069,19 @@ export default function Interview({
           type="button"
           disabled={recorderBusy}
           className="mt-3 text-sm font-medium text-oxblood underline underline-offset-4 disabled:opacity-50"
-          onClick={() => void speak(!collection.capabilities.tts)}
+          onClick={() => void speak()}
         >
           {speaking
             ? "Stop listening"
-            : !collection.capabilities.tts
-              ? "Listen with device voice"
-              : voiceUnavailable
-                ? "Retry interview voice"
-                : "Listen to the question"}
+            : voiceUnavailable
+              ? "Retry interview voice"
+              : "Listen to the question"}
         </button>
-        {collection.capabilities.tts && voiceUnavailable && !speaking && (
-          <button
-            type="button"
-            disabled={recorderBusy}
-            className="ml-4 mt-3 text-sm font-medium text-oxblood underline underline-offset-4 disabled:opacity-50"
-            onClick={() => void speak(true)}
-          >
-            Listen with device voice
-          </button>
+        {!collection.capabilities.tts && (
+          <p className="mt-2 text-sm text-ink-600">
+            The interviewer voice is unavailable. You can read the question here
+            and try listening again later.
+          </p>
         )}
         <p className="mt-3 text-base leading-7 text-ink-400">
           Start with one moment you remember. There is no right answer, and you

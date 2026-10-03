@@ -21,7 +21,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   const [phase, setPhase] = useState<'loading' | 'error' | 'expectations' | 'mic_permission' | 'intro' | 'interview' | 'continue_prompt' | 'paused' | 'video_prompt' | 'recording_video' | 'finished'>('loading');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [aiText, setAiText] = useState('');
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [silencePrompt, setSilencePrompt] = useState(false);
@@ -30,7 +29,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isMockMode, setIsMockMode] = useState(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const allQuestions = [...CORE_QUESTIONS, ...OPTIONAL_QUESTIONS];
   const currentQuestion = allQuestions[questionIndex];
@@ -75,24 +73,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     };
   }, [sessionId]);
 
-  const speak = useCallback((text: string) => {
-    if (!text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.85;
-    utterance.pitch = 1.02;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    speechSynthRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
-  const stopSpeaking = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  }, []);
-
   const handleMicAllowed = useCallback(() => {
     setPhase('intro');
     setAiText(
@@ -126,11 +106,9 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       setAiText(responseText);
       if (data.paused) {
         setPhase('paused');
-      } else {
-        speak(responseText);
       }
     },
-    [speak]
+    []
   );
 
   const stopRecordingFlow = useCallback(
@@ -244,7 +222,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const advance = useCallback(() => {
-    stopSpeaking();
     if (questionIndex === CORE_QUESTIONS.length - 1) {
       setPhase('continue_prompt');
       setAiText(
@@ -259,21 +236,19 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     }
     setPhase('interview');
     setQuestionIndex((i) => i + 1);
-  }, [questionIndex, stopSpeaking]);
+  }, [questionIndex]);
 
   useEffect(() => {
     if (phase === 'interview' && questionText) {
       setAiText(questionText);
-      speak(questionText);
     }
-  }, [phase, questionIndex, questionText, speak]);
+  }, [phase, questionIndex, questionText]);
 
   const handlePause = useCallback(() => {
-    stopSpeaking();
     setRecording(false);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     setPhase('paused');
-  }, [stopSpeaking]);
+  }, []);
 
   const remainingCount = () => {
     if (questionIndex < CORE_QUESTIONS.length) return CORE_QUESTIONS.length;
@@ -508,7 +483,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         </button>
       </div>
 
-      <VisualCompanion text={aiText} isSpeaking={isSpeaking} />
+      <VisualCompanion text={aiText} />
 
       {error && (
         <p className="mt-4 rounded-md bg-red-50 p-3 text-center font-sans text-sm text-red-700">

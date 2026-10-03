@@ -75,7 +75,7 @@ function FilmBackground({ chapterNumber }: { chapterNumber: number }) {
           translate: `0 ${Math.sin(frame / 180) * 18}px`,
         }}
       >
-        <BrandPattern variant="weave" />
+        <BrandPattern variant="ribbon" />
       </div>
       <div
         style={{

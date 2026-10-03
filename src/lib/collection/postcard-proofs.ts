@@ -212,7 +212,10 @@ export function postcardDeliveryReadiness(origin = appOrigin()) {
     reasons.push("Mailing is not enabled.");
   if (!process.env.LOB_API_KEY || !process.env.LOB_FROM_ADDRESS_ID)
     reasons.push("The printing service is not connected.");
-  if (!process.env.LOB_WEBHOOK_SECRET)
+  if (
+    !process.env.LOB_WEBHOOK_SECRET ||
+    process.env.LOB_WEBHOOK_SECRET === "secret"
+  )
     reasons.push("Mailing confirmation is not configured.");
   if (!process.env.CRON_SECRET)
     reasons.push("The delivery worker is not configured.");

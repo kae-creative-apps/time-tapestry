@@ -19,6 +19,7 @@ import type {
 } from "@/lib/collection/types";
 import { CHAPTERS, getChapterQuestion } from "@/lib/interview-state";
 import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
+import { collectionRequest } from "@/lib/collection/client-request";
 import {
   startConnectionCue,
   type ConnectionCue,
@@ -95,24 +96,52 @@ function OriginalPlayback({
 }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current += 1;
+    loadingRef.current = false;
+    setLoading(false);
+    setUrl("");
+    setError("");
+    return () => {
+      generation.current += 1;
+    };
+  }, [id]);
   useEffect(
     () => () => {
       if (url) URL.revokeObjectURL(url);
     },
     [url],
   );
+  async function openOriginal() {
+    if (loadingRef.current) return;
+    const version = generation.current;
+    loadingRef.current = true;
+    setLoading(true);
+    setError("");
+    try {
+      const blob = await getBlob(id);
+      if (version === generation.current) setUrl(URL.createObjectURL(blob));
+    } catch (cause) {
+      if (version === generation.current) setError(friendly(cause));
+    } finally {
+      if (version === generation.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
+    }
+  }
   return (
     <div className="mt-3 w-full">
       {!url ? (
         <button
-          className="min-h-10 text-sm text-oxblood underline"
-          onClick={() =>
-            void getBlob(id)
-              .then((blob) => setUrl(URL.createObjectURL(blob)))
-              .catch((e) => setError(friendly(e)))
-          }
+          className="min-h-12 text-base text-oxblood underline"
+          disabled={loading}
+          onClick={() => void openOriginal()}
         >
-          Play original recording
+          {loading ? "Opening your recording…" : "Play original recording"}
         </button>
       ) : kind === "video" ? (
         <video
@@ -348,7 +377,7 @@ export default function LiveInterview({
       const work = requestQueue.current
         .catch(() => {})
         .then(async () => {
-          const response = await fetch(
+          const data = await collectionRequest(
             `${base}${path}${query}`,
             body === undefined
               ? { cache: "no-store" }
@@ -358,11 +387,6 @@ export default function LiveInterview({
                   body: JSON.stringify(body),
                 },
           );
-          const data = await response.json();
-          if (!response.ok)
-            throw new Error(
-              data.error || "Your interview could not be saved yet.",
-            );
           if (data.collection) apply(data.collection);
           return data;
         });
@@ -1161,6 +1185,11 @@ export default function LiveInterview({
 
   const active = phase === "talking" || phase === "interrupted";
   const allSessions = collection?.interviews ?? [];
+  const hasSavedRecordings =
+    allSessions.some((session) => session.segments.length > 0) ||
+    Object.values(collection?.selectedTakeIds ?? {}).some((id) =>
+      collection?.takes.some((take) => take.id === id && take.kind !== "text"),
+    );
   const savedTurns = allSessions.flatMap((s) =>
     s.turns.map((turn) => ({ turn, session: s })),
   );
@@ -1317,7 +1346,7 @@ export default function LiveInterview({
         >
           <div className="brand-gradient-chocolate relative isolate overflow-hidden p-6 text-white sm:p-8">
             <BrandPattern
-              variant="weave"
+              variant="ribbon"
               className="pointer-events-none absolute -bottom-16 -right-20 -z-10 h-80 w-80 text-white opacity-[0.07]"
             />
             <div className="relative flex flex-wrap items-center justify-between gap-3">
@@ -1327,7 +1356,7 @@ export default function LiveInterview({
               >
                 {visibleStatus}
               </p>
-              <p className="min-h-7 text-sm leading-7 text-white/80">
+              <p className="min-h-7 text-sm leading-7 text-paper">
                 {archive.status === "recording"
                   ? archive.recordings.some(
                       (r) => r.state === "recording" && r.localSaved,
@@ -1377,7 +1406,7 @@ export default function LiveInterview({
                           : "There is no perfect answer. Start with a moment you remember."}
                 </p>
                 {theme.current === "q3" && phase !== "connecting" && (
-                  <aside className="mt-6 max-w-2xl rounded-xl border border-white/15 bg-white/[0.08] p-4 text-base leading-7 text-white/90">
+                  <aside className="mt-6 max-w-2xl rounded-xl border border-white/15 bg-white/[0.08] p-4 text-base leading-7 text-paper">
                     <p>
                       Stories of your time and financial giving help your family
                       understand your values and character. Share what feels
@@ -1415,7 +1444,7 @@ export default function LiveInterview({
                   {archive.stream?.getVideoTracks().length ? (
                     <CameraPreview stream={archive.stream} />
                   ) : (
-                    <div className="flex aspect-video items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-center text-sm text-white/70">
+                    <div className="flex aspect-video items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-center text-sm text-paper">
                       Your camera preview will appear here.
                     </div>
                   )}
@@ -1842,9 +1871,10 @@ export default function LiveInterview({
             </button>
           </div>
           <p className="mt-4 text-base leading-7 text-ink-500">
-            We’ll transcribe your saved audio with ElevenLabs, find the moments
-            for each story, and prepare four films automatically. Your originals
-            are kept. You’ll review the finished collection before it is shared.
+            {hasSavedRecordings
+              ? "We’ll organize your words into four stories and prepare films from your saved recordings. Your originals are kept."
+              : "We’ll organize your written answers into four stories. You can add recordings later."}{" "}
+            You’ll review everything before it is shared.
           </p>
           {(archive.pendingCount > 0 || pending.length > 0) && (
             <p className="mt-3 text-sm">

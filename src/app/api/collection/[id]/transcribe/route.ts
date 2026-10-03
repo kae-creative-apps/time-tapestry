@@ -17,6 +17,11 @@ export async function POST(
         { error: "Open your interview link to continue." },
         { status: 403 },
       );
+    const guard = await guardRequest(req, {
+      action: "transcribe",
+      resourceId: id,
+    });
+    const b = await readJsonBody(req);
     if (!process.env.OPENAI_API_KEY)
       return NextResponse.json(
         {
@@ -25,8 +30,6 @@ export async function POST(
         },
         { status: 503 },
       );
-    await guardRequest(req, { action: "transcribe", resourceId: id });
-    const b = await readJsonBody(req);
     const m = await getMedia(
       typeof b.mediaId === "string" ? b.mediaId : "invalid-id",
     );
@@ -47,9 +50,13 @@ export async function POST(
             ? "wav"
             : "webm";
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const file = await toFile(bytes, `answer.${extension}`, {
+      type: m.mimeType,
+    });
+    await guard.reserveProviderBudget();
     const result = await client.audio.transcriptions.create({
       model: "whisper-1",
-      file: await toFile(bytes, `answer.${extension}`, { type: m.mimeType }),
+      file,
     });
     return NextResponse.json(
       { text: result.text },

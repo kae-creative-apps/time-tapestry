@@ -38,7 +38,7 @@ export default function BrandKit() {
       >
         <div className="brand-gradient-chocolate flex min-h-80 flex-col items-center justify-center p-10 text-white">
           <BrandArtwork variant="wordmark" className="w-full max-w-[280px]" />
-          <p className="mt-5 text-base text-white/80">Stories woven together</p>
+          <p className="mt-5 text-base text-paper">Stories woven together</p>
         </div>
         <div className="flex min-h-80 items-center justify-center bg-white p-10">
           <BrandArtwork variant="mark" className="h-44 w-44 text-espresso" />

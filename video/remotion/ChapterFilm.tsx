@@ -95,7 +95,7 @@ function WovenBackground({
           translate: `${Math.sin(frame / 160) * 16}px ${Math.cos(frame / 210) * 14}px`,
         }}
       >
-        <BrandPattern variant="weave" />
+        <BrandPattern variant="ribbon" />
       </div>
     </AbsoluteFill>
   );

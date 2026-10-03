@@ -12,6 +12,7 @@ import {
   approvePostcardProof,
   assertReleasedPostcardProof,
   buildPostcardProof,
+  postcardDeliveryReadiness,
   postcardProofIsCurrent,
   prepareAutomaticPostcards,
   releasePostcardProof,
@@ -101,6 +102,31 @@ test("automatic approval with delivery disabled freezes a held proof and never c
   assert.equal(c.deliveries.length, 0);
   assert.equal(c.notifications.length, 0);
   assert.throws(() => assertReleasedPostcardProof(c, origin), /hold/);
+});
+test("the public Lob debugger secret cannot release postcards even when all other settings are ready", async () => {
+  readiness(true);
+  process.env.LOB_WEBHOOK_SECRET = "secret";
+  try {
+    assert.deepEqual(postcardDeliveryReadiness(origin), {
+      ready: false,
+      reasons: ["Mailing confirmation is not configured."],
+    });
+    const c = await prepareAutomaticPostcards(fixture(), now, origin);
+    assert.equal(c.postcardPreparation?.status, "waiting_for_setup");
+    assert.equal(c.postcardProof?.releaseStatus, "held");
+    assert.deepEqual(c.deliveries, []);
+    assert.throws(
+      () => releasePostcardProof(c, c.postcardProof!.hash, now, origin),
+      /Mailing confirmation is not configured/,
+    );
+    process.env.LOB_WEBHOOK_SECRET = "synthetic-private-signing-secret";
+    assert.equal(postcardDeliveryReadiness(origin).ready, true);
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardProof?.releaseStatus, "released");
+    assert.equal(c.deliveries.length, 4);
+  } finally {
+    readiness(false);
+  }
 });
 test("legacy digital approval with a saved address does not opt into postcards", async () => {
   readiness(true);

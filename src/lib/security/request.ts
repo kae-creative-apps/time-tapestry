@@ -11,6 +11,15 @@ import { clientBucket, consumeLimit } from "./rate-limit";
 import { verifyHuman } from "./human";
 export { SecurityError } from "./policy";
 
+/** Reserve only when a validated operation is about to contact a paid provider. */
+export async function reserveProviderBudget(action: SecurityAction) {
+  if (!paidActions.has(action))
+    throw new Error("This action does not use a paid provider.");
+  const value = Number(process.env.SECURITY_PROVIDER_DAILY_LIMIT || 500);
+  const daily = Number.isSafeInteger(value) && value > 0 ? value : 500;
+  await consumeLimit("all-provider-actions:daily", daily, 86400);
+}
+
 export async function guardRequest(
   req: NextRequest,
   options: {
@@ -23,12 +32,19 @@ export async function guardRequest(
   assertOrigin(req);
   requireSecurityConfiguration(req);
   // Only explicit automated test fixtures may bypass counters. Hosted requests cannot.
-  if (
+  const testBypass =
     process.env.NODE_ENV === "test" &&
     process.env.SECURITY_TEST_BYPASS === "true" &&
-    localSecurityBypass(req)
-  )
-    return;
+    localSecurityBypass(req);
+  // Memoize the promise, including rejection, so concurrent calls cannot spend twice.
+  let reservation: Promise<void> | undefined;
+  const guard = {
+    reserveProviderBudget: () =>
+      (reservation ??= testBypass
+        ? Promise.resolve()
+        : reserveProviderBudget(options.action)),
+  };
+  if (testBypass) return guard;
   const policy = limits[options.action];
   const client = clientBucket(req);
   await consumeLimit(
@@ -45,11 +61,7 @@ export async function guardRequest(
       policy.count,
       policy.seconds,
     );
-  if (paidActions.has(options.action)) {
-    const value = Number(process.env.SECURITY_PROVIDER_DAILY_LIMIT || 500);
-    const daily = Number.isSafeInteger(value) && value > 0 ? value : 500;
-    await consumeLimit("all-provider-actions:daily", daily, 86400);
-  }
   if (options.requireHuman)
     await verifyHuman(req, options.humanToken, options.action);
+  return guard;
 }

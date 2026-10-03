@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import type { AnswerTake } from "@/lib/collection/types";
 import {
   answerFromLocal,
@@ -290,6 +289,7 @@ export default function SavedRecorder({
     const name = `${label}.${recordingExtension(blob.type)}`;
     if (directUpload) {
       const mediaId = crypto.randomUUID();
+      const { upload } = await import("@vercel/blob/client");
       await upload(`collections/${collectionId}/${mediaId}`, blob, {
         access: "private",
         multipart: true,

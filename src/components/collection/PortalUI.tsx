@@ -2,9 +2,11 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { AppIcon } from "@/components/icons";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
+import { rememberCollectionReturn } from "@/lib/accounts/client-navigation";
 
 export const portalPrimary =
   "brand-button-primary min-h-12 px-5 py-3 disabled:cursor-not-allowed disabled:opacity-50";
@@ -20,21 +22,68 @@ export const isNarratedFilm = (chapter: ChapterPackage) =>
       ?.narrationKind === "ai_interviewer",
   );
 
-export function PortalShell({ children }: { children: ReactNode }) {
+export function PortalShell({
+  children,
+  collectionPath,
+  backToCollection,
+}: {
+  children: ReactNode;
+  /** Provide only after the collection access check succeeds. */
+  collectionPath?: string;
+  backToCollection?: string;
+}) {
+  const pathname = usePathname();
   return (
     <main className="mx-auto min-h-screen max-w-[1320px] px-5 pb-10 pt-6 sm:px-8 lg:px-10">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
         <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
         <nav
-          aria-label="Your collection"
+          aria-label="Story navigation"
           className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1"
         >
           <Link
+            href="/"
+            className="inline-flex min-h-12 items-center text-base font-medium"
+          >
+            Home
+          </Link>
+          <Link
             href="/account"
+            aria-current={pathname === "/account" ? "page" : undefined}
+            onClick={(event) => {
+              if (
+                !collectionPath ||
+                event.defaultPrevented ||
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              try {
+                rememberCollectionReturn(
+                  window.sessionStorage,
+                  collectionPath,
+                  window.location.origin,
+                );
+              } catch {
+                /* Private browsing may block session storage. */
+              }
+            }}
             className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4"
           >
             My stories
           </Link>
+          {backToCollection && (
+            <Link
+              href={backToCollection}
+              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-sage-200 bg-sage-50 px-4 py-2 text-base font-medium text-espresso"
+            >
+              <AppIcon name="arrowRight" size={17} className="rotate-180" />
+              Back to my collection
+            </Link>
+          )}
           <Link
             href="/privacy"
             className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-500"
@@ -155,7 +204,15 @@ export function SourceArchive({
     }),
   );
   return (
-    <details className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-6">
+    <details
+      className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-6"
+      onToggle={(event) => {
+        if (!event.currentTarget.open)
+          event.currentTarget
+            .querySelectorAll<HTMLMediaElement>("video,audio")
+            .forEach((media) => media.pause());
+      }}
+    >
       <summary className="min-h-11 cursor-pointer text-lg font-semibold">
         Your original recordings{" "}
         <span className="ml-2 text-sm font-normal text-ink-500">
@@ -164,8 +221,8 @@ export function SourceArchive({
       </summary>
       <p className="mt-2 max-w-3xl text-sm leading-7 text-ink-500">
         These are your unedited recordings. They may include the interviewer and
-        other answers. The narrated films are separate versions, and do not
-        replace these originals.
+        other answers. Your finished story films are separate versions and do
+        not replace these originals.
       </p>
       {c.usage && (
         <div className="mt-4 rounded-xl bg-paper p-4 text-sm leading-7 text-ink-500">

@@ -59,8 +59,6 @@
 
 .paper {
   background: #fbfaf8;
-  --weave-gap: #fbfaf8;
-  --weave-secondary: #939480;
 }
 
 .sage {
@@ -70,8 +68,6 @@
 
 .clay {
   background: #c18f7b;
-  --weave-gap: #c18f7b;
-  --weave-secondary: #e1b49b;
 }
 
 .cardTop {
