@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import type { CollectionView } from "@/lib/collection/types";
 import { AppIcon } from "@/components/icons";
 import AddressForm from "./AddressForm";
+import { PostcardProof } from "./PostcardProof";
 import { PrivateLink, portalPrimary, portalSecondary } from "./PortalUI";
 
 const dates = (value: string) =>
@@ -37,6 +38,16 @@ export function CollectionSharing({
   act: (body: unknown) => Promise<CollectionView | null>;
 }) {
   const [url, setUrl] = useState("");
+  const [addressDirty, setAddressDirty] = useState(false);
+  const automaticPostcards =
+    c.autoPostcards === true ||
+    c.postcardProof?.releaseStatus === "released" ||
+    c.deliveries.length > 0;
+  const ownerKey = c.links?.review
+    ? new URL(c.links.review, "https://private.invalid").searchParams.get(
+        "key",
+      ) || ""
+    : "";
   const qr = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (c.links?.collection)
@@ -119,14 +130,22 @@ export function CollectionSharing({
       </section>
       <details className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7">
         <summary className="min-h-11 cursor-pointer text-lg font-semibold">
-          Postcards and delivery (optional)
+          Postcards and delivery
         </summary>
         <p className="mt-3 max-w-3xl text-base leading-7 text-ink-500">
-          Your digital collection is already available. You can add a mailing
-          address and plan postcards separately. Scheduling a card does not mean
-          it has been printed or mailed.
+          {automaticPostcards
+            ? "Your digital collection is already available. Once the mailing address is saved, your approval starts postcard preparation automatically. The first card introduces all four stories, with three more planned for months 3, 6 and 9."
+            : "Your approved digital collection is available by private link. Postcards have not been selected for this collection."}
         </p>
-        {c.deliveries.length > 0 ? (
+        {c.postcardPreparation && (
+          <p
+            role="status"
+            className="mt-4 rounded-xl bg-sage-50 p-4 text-base leading-7"
+          >
+            {c.postcardPreparation.message}
+          </p>
+        )}
+        {c.deliveries.length > 0 && (
           <ol className="mt-5 divide-y divide-warmgray-200">
             {c.deliveries.map((delivery, index) => (
               <li
@@ -148,30 +167,30 @@ export function CollectionSharing({
               </li>
             ))}
           </ol>
-        ) : (
-          <div className="mt-5 max-w-2xl">
-            <h3 className="mb-4 text-lg font-semibold">
-              Mailing address for {c.recipient.name}
-            </h3>
-            <AddressForm
-              initial={c.address}
-              busy={busy}
-              onSave={(address) => act({ action: "address", address })}
-            />
-            {c.addressConfirmed && (
-              <p className="mt-4 text-sm text-sage-700">
-                Mailing address saved.
-              </p>
-            )}
-            <button
-              type="button"
-              className={`${portalSecondary} mt-5`}
-              disabled={busy || !c.addressConfirmed}
-              onClick={() => void act({ action: "schedule_postcards" })}
-            >
-              Schedule the four postcards
-            </button>
-          </div>
+        )}
+        <div className="mt-5 max-w-2xl">
+          <h3 className="mb-4 text-lg font-semibold">
+            Mailing address for {c.recipient.name}
+          </h3>
+          <AddressForm
+            initial={c.address}
+            busy={busy}
+            onDirtyChange={setAddressDirty}
+            automaticPostcards={automaticPostcards}
+            onSave={(address) => act({ action: "address", address })}
+          />
+          {c.addressConfirmed && !addressDirty && (
+            <p className="mt-4 text-base text-sage-700">
+              Mailing address saved.
+            </p>
+          )}
+        </div>
+        {c.addressConfirmed && ownerKey && (
+          <PostcardProof
+            collection={c}
+            accessKey={ownerKey}
+            disabled={busy || addressDirty}
+          />
         )}
         {(!c.capabilities.mail || !c.capabilities.email) && (
           <p className="mt-5 rounded-xl bg-paper p-4 text-sm leading-7 text-ink-500">

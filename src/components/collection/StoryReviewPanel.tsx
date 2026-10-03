@@ -603,11 +603,6 @@ export function StoryReviewPanel({
           </details>
         </div>
         <div className="min-w-0 space-y-5">
-          <StoryOriginalPreview
-            collection={c}
-            chapter={chapter}
-            accessKey={accessKey}
-          />
           {chapter.videoMediaId && (
             <section
               className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white"
@@ -617,11 +612,11 @@ export function StoryReviewPanel({
                 <h3 className="text-lg font-semibold">
                   {isNarratedFilm(chapter)
                     ? "Your AI narrated version"
-                    : "Your attached finished video"}
+                    : "Your story film"}
                 </h3>
                 <p className="mt-2 text-base leading-7 text-ink-500">
                   {isNarratedFilm(chapter)
-                    ? "An AI voice reads your saved story. Your original voice recording is above. Watch this whole version before approving it for sharing."
+                    ? "An AI voice reads your saved story. Your original recording is kept below. Watch this whole version before approving it for sharing."
                     : "Watch this whole video before approving it for sharing."}
                 </p>
               </div>
@@ -635,6 +630,24 @@ export function StoryReviewPanel({
                 src={mediaPath(c.id, chapter.videoMediaId, accessKey)}
               />
             </section>
+          )}
+          {chapter.videoMediaId ? (
+            <details className="rounded-2xl border border-warmgray-200 bg-white p-5">
+              <summary className="min-h-12 cursor-pointer text-base font-medium">
+                Listen to the original recording
+              </summary>
+              <StoryOriginalPreview
+                collection={c}
+                chapter={chapter}
+                accessKey={accessKey}
+              />
+            </details>
+          ) : (
+            <StoryOriginalPreview
+              collection={c}
+              chapter={chapter}
+              accessKey={accessKey}
+            />
           )}
           <details className="rounded-2xl border border-warmgray-200 bg-white p-5">
             <summary className="min-h-11 cursor-pointer text-base font-medium">

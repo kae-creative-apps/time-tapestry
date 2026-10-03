@@ -1,3 +1,4 @@
+import { queueFilmsReady } from "../notifications";
 import { randomUUID } from "node:crypto";
 import {
   getCollection,
@@ -14,6 +15,14 @@ import {
   FILM_TEMPLATE_VERSION,
 } from "./plan";
 import { resolveFilmVoice } from "./provider";
+import {
+  originalCollectionHash,
+  originalJobInputsCurrent,
+  prepareOriginalJob,
+  prepareAutomaticJob,
+  AUTOMATIC_TEMPLATE_VERSION,
+  ORIGINAL_TEMPLATE_VERSION,
+} from "./original-plan";
 import type { FilmJobView, FilmVoice, StoryFilmJob } from "./types";
 
 const registryKey = "story-film-registry";
@@ -37,6 +46,9 @@ export function filmJobView(job: StoryFilmJob): FilmJobView {
     id: job.id,
     collectionId: job.collectionId,
     status: job.status,
+    mode: job.mode ?? "ai_narration",
+    preparation: job.preparation,
+    nextAttemptAt: job.nextAttemptAt,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     scriptsApprovedAt: job.scriptsApprovedAt,
@@ -56,21 +68,76 @@ export function filmJobView(job: StoryFilmJob): FilmJobView {
 
 export function filmJobMatches(job: StoryFilmJob, c: Collection) {
   try {
-    return job.sourceSha256 === collectionFilmSourceHash(c);
+    return (
+      job.sourceSha256 ===
+      (job.mode === "original"
+        ? originalCollectionHash(c)
+        : collectionFilmSourceHash(c))
+    );
   } catch {
     return false;
   }
+}
+
+type EnqueueOptions = { now?: Date; dailyLimit?: number };
+async function enqueuePreparedJob(
+  job: StoryFilmJob,
+  options: EnqueueOptions = {},
+) {
+  const now = options.now ?? new Date();
+  const configuredLimit = Number(process.env.STORY_FILM_DAILY_LIMIT || 3);
+  const dailyLimit =
+    options.dailyLimit ??
+    (Number.isInteger(configuredLimit)
+      ? Math.max(1, Math.min(10, configuredLimit))
+      : 3);
+  let result: StoryFilmJob | null = null;
+  await mutateRecord<Index>(indexKey(job.collectionId), async (index) => {
+    const ids = index?.ids ?? [];
+    const current = await getCollection(job.collectionId);
+    if (
+      !current ||
+      current.status === "approved" ||
+      !filmJobMatches(job, current) ||
+      !(await originalJobInputsCurrent(job))
+    )
+      throw new Error(
+        "Your stories or selected cuts changed. Review the latest version first.",
+      );
+    const existing = await getFilmJob(job.id);
+    if (existing) {
+      if (existing.collectionId !== job.collectionId)
+        throw new Error("Film identity mismatch.");
+      result = existing;
+      await mutateRecord<Index>(registryKey, (registry) => ({
+        ids: [...new Set([...(registry?.ids ?? []), job.id])],
+      }));
+      return { ids: [...ids.filter((entry) => entry !== job.id), job.id] };
+    }
+    const jobs = await Promise.all(ids.map(getFilmJob));
+    if (
+      jobs.filter(
+        (item) =>
+          item && Date.parse(item.createdAt) >= now.getTime() - 86400000,
+      ).length >= dailyLimit
+    )
+      throw new Error(
+        `This collection has reached its ${dailyLimit} film versions per day. Existing films and originals are preserved.`,
+      );
+    result = await mutateRecord<StoryFilmJob>(job.id, (old) => old ?? job);
+    await mutateRecord<Index>(registryKey, (registry) => ({
+      ids: [...new Set([...(registry?.ids ?? []), job.id])],
+    }));
+    return { ids: [...ids, job.id] };
+  });
+  return result!;
 }
 
 /** The provider lookup happens before every storage lock. No paid work runs here. */
 export async function enqueueStoryFilms(
   c: Collection,
   scriptsApproved: boolean,
-  options: {
-    resolveVoice?: () => Promise<FilmVoice>;
-    now?: Date;
-    dailyLimit?: number;
-  } = {},
+  options: EnqueueOptions & { resolveVoice?: () => Promise<FilmVoice> } = {},
 ) {
   if (!scriptsApproved)
     throw new Error(
@@ -82,50 +149,13 @@ export async function enqueueStoryFilms(
   const sourceSha256 = collectionFilmSourceHash(c);
   const voice = await (options.resolveVoice ?? resolveFilmVoice)();
   const versionHash = filmVersionHash(sourceSha256, voice);
-  const id = `film_${versionHash}`;
-  const now = options.now ?? new Date();
-  const timestamp = now.toISOString();
-  const configuredLimit = Number(process.env.STORY_FILM_DAILY_LIMIT || 3);
-  const dailyLimit =
-    options.dailyLimit ??
-    (Number.isInteger(configuredLimit)
-      ? Math.max(1, Math.min(10, configuredLimit))
-      : 3);
-  let result: StoryFilmJob | null = null;
-  await mutateRecord<Index>(indexKey(c.id), async (index) => {
-    const ids = index?.ids ?? [];
-    const current = await getCollection(c.id);
-    if (
-      !current ||
-      current.status === "approved" ||
-      collectionFilmSourceHash(current) !== sourceSha256
-    )
-      throw new Error(
-        "Your stories changed while preparing the films. Review the latest version first.",
-      );
-    const existing = await getFilmJob(id);
-    if (existing) {
-      if (existing.collectionId !== c.id)
-        throw new Error("Film identity mismatch.");
-      result = existing;
-      await mutateRecord<Index>(registryKey, (registry) => ({
-        ids: [...new Set([...(registry?.ids ?? []), id])],
-      }));
-      return { ids: [...ids.filter((entry) => entry !== id), id] };
-    }
-    const jobs = await Promise.all(ids.map(getFilmJob));
-    if (
-      jobs.filter(
-        (job) => job && Date.parse(job.createdAt) >= now.getTime() - 86400000,
-      ).length >= dailyLimit
-    )
-      throw new Error(
-        `This collection has reached its ${dailyLimit} film versions per day. Existing films and originals are preserved.`,
-      );
-    const job: StoryFilmJob = {
+  const timestamp = (options.now ?? new Date()).toISOString();
+  return enqueuePreparedJob(
+    {
       schemaVersion: 1,
       kind: "story-film-job",
-      id,
+      mode: "ai_narration",
+      id: `film_${versionHash}`,
       collectionId: c.id,
       storytellerName: c.storyteller.name,
       versionHash,
@@ -138,28 +168,121 @@ export async function enqueueStoryFilms(
       updatedAt: timestamp,
       scriptsApprovedAt: timestamp,
       attempts: 0,
-    };
-    result = await mutateRecord<StoryFilmJob>(id, (old) => old ?? job);
-    await mutateRecord<Index>(registryKey, (registry) => ({
-      ids: [...new Set([...(registry?.ids ?? []), id])],
-    }));
-    return { ids: [...ids, id] };
-  });
-  return result!;
+    },
+    options,
+  );
+}
+
+export async function enqueueOriginalFilms(
+  c: Collection,
+  planHash: string,
+  cutsApproved: boolean,
+  allowNoCaptions: boolean,
+  options: EnqueueOptions = {},
+) {
+  if (c.status === "approved")
+    throw new Error("Published collections cannot be replaced.");
+  const { edit, chapters, snapshots, versionHash } = await prepareOriginalJob(
+    c,
+    planHash,
+    cutsApproved,
+    allowNoCaptions,
+  );
+  const timestamp = (options.now ?? new Date()).toISOString();
+  return enqueuePreparedJob(
+    {
+      schemaVersion: 1,
+      kind: "story-film-job",
+      mode: "original",
+      preparation: "manual",
+      id: `film_${versionHash}`,
+      collectionId: c.id,
+      storytellerName: c.storyteller.name,
+      versionHash,
+      sourceSha256: edit.storyHash,
+      templateVersion: ORIGINAL_TEMPLATE_VERSION,
+      status: "queued",
+      chapters,
+      originalPlanHash: edit.revisionHash,
+      originalSources: snapshots,
+      cutsApprovedAt: timestamp,
+      allowNoCaptions: true,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      scriptsApprovedAt: timestamp,
+      attempts: 0,
+    },
+    options,
+  );
+}
+
+export async function enqueueAutomaticOriginalFilms(
+  c: Collection,
+  options: {
+    processingApproved: true;
+    presentation?: "video" | "audio";
+  } & EnqueueOptions,
+) {
+  if (options.processingApproved !== true)
+    throw new Error(
+      "Confirm automatic transcription and editing of your original recordings first.",
+    );
+  if (c.status === "approved")
+    throw new Error("Published collections cannot be replaced.");
+  const presentation = options.presentation ?? "video";
+  if (!["video", "audio"].includes(presentation))
+    throw new Error("Choose video or voice with artwork.");
+  const prepared = await prepareAutomaticJob(c, presentation);
+  const timestamp = (options.now ?? new Date()).toISOString();
+  return enqueuePreparedJob(
+    {
+      schemaVersion: 1,
+      kind: "story-film-job",
+      mode: "original",
+      preparation: "automatic",
+      id: `film_${prepared.versionHash}`,
+      collectionId: c.id,
+      storytellerName: c.storyteller.name,
+      versionHash: prepared.versionHash,
+      sourceSha256: prepared.sourceSha256,
+      templateVersion: AUTOMATIC_TEMPLATE_VERSION,
+      status: "queued",
+      chapters: prepared.chapters,
+      originalSources: prepared.snapshots,
+      automaticPresentation: presentation,
+      processingConsentAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      scriptsApprovedAt: timestamp,
+      attempts: 0,
+    },
+    options,
+  );
+}
+
+export async function filmJobInputsCurrent(job: StoryFilmJob, c: Collection) {
+  return filmJobMatches(job, c) && (await originalJobInputsCurrent(job));
 }
 
 export async function retryStoryFilms(
   c: Collection,
   id: string,
   scriptsApproved: boolean,
+  expectedMode: "ai_narration" | "original" = "ai_narration",
 ) {
   if (!scriptsApproved)
     throw new Error("Confirm the narration scripts before retrying.");
   await getFilmJob(id);
-  return mutateRecord<StoryFilmJob>(id, (job) => {
+  return mutateRecord<StoryFilmJob>(id, async (job) => {
     if (!job || job.collectionId !== c.id)
       throw new Error("Film job not found.");
-    if (c.status === "approved" || !filmJobMatches(job, c))
+    if ((job.mode ?? "ai_narration") !== expectedMode)
+      throw new Error("Choose the matching film retry option.");
+    if (
+      c.status === "approved" ||
+      !(await filmJobInputsCurrent(job, c)) ||
+      (await latestFilmJob(c.id))?.id !== job.id
+    )
       throw new Error(
         "These film scripts are out of date. Generate films from the current reviewed stories.",
       );
@@ -173,6 +296,7 @@ export async function retryStoryFilms(
       ...job,
       status: "queued",
       error: undefined,
+      nextAttemptAt: undefined,
       lease: undefined,
       updatedAt: nowIso(),
       chapters: job.chapters.map((chapter) =>
@@ -195,14 +319,27 @@ export async function claimNextFilmJob(
     const snapshot = await getFilmJob(id);
     if (
       !snapshot ||
-      !["queued", "narrating", "rendering"].includes(snapshot.status)
+      ![
+        "queued",
+        "transcribing",
+        "matching",
+        "preparing",
+        "narrating",
+        "rendering",
+      ].includes(snapshot.status)
     )
       continue;
     let claimed: StoryFilmJob | null = null;
     await mutateRecord<StoryFilmJob>(id, async (job) => {
       if (!job) throw new Error("Film job not found.");
       if (
-        ["narrating", "rendering"].includes(job.status) &&
+        [
+          "transcribing",
+          "matching",
+          "preparing",
+          "narrating",
+          "rendering",
+        ].includes(job.status) &&
         job.lease &&
         job.lease.expiresAt <= now
       ) {
@@ -211,7 +348,7 @@ export async function claimNextFilmJob(
         // between them without generating or replacing any media.
         if (
           completed &&
-          filmJobMatches(job, completed) &&
+          (await filmJobInputsCurrent(job, completed)) &&
           job.chapters.length === 4 &&
           job.chapters.every(
             (chapter) =>
@@ -228,6 +365,16 @@ export async function claimNextFilmJob(
             updatedAt: nowIso(),
           };
         }
+        if (job.mode === "original" && job.attempts < 3)
+          return {
+            ...job,
+            status: "queued",
+            lease: undefined,
+            nextAttemptAt: new Date(now + 30000).toISOString(),
+            updatedAt: nowIso(),
+            error:
+              "The source worker stopped. Saved work will resume automatically.",
+          };
         return {
           ...job,
           status: "failed",
@@ -237,13 +384,17 @@ export async function claimNextFilmJob(
             "The worker stopped before finishing. Completed files are preserved. Retry after checking the worker; an unfinished narration request may already have been processed.",
         };
       }
-      if (job.status !== "queued" || (job.lease && job.lease.expiresAt > now))
+      if (
+        job.status !== "queued" ||
+        (job.nextAttemptAt && Date.parse(job.nextAttemptAt) > now) ||
+        (job.lease && job.lease.expiresAt > now)
+      )
         return job;
       const c = await getCollection(job.collectionId);
       if (
         !c ||
         c.status === "approved" ||
-        !filmJobMatches(job, c) ||
+        !(await filmJobInputsCurrent(job, c)) ||
         (await latestFilmJob(job.collectionId))?.id !== job.id
       )
         return {
@@ -255,8 +406,10 @@ export async function claimNextFilmJob(
         };
       claimed = {
         ...job,
-        status: "narrating",
+        status: job.mode === "original" ? "preparing" : "narrating",
         attempts: job.attempts + 1,
+        nextAttemptAt: undefined,
+        error: undefined,
         lease: {
           token: `${workerId}:${randomUUID()}`,
           expiresAt: now + FILM_LEASE_MS,
@@ -311,7 +464,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
           latest.lease.expiresAt <= Date.now()))
     )
       throw new Error("The film worker no longer owns this job.");
-    if (!filmJobMatches(job, c))
+    if (!(await filmJobInputsCurrent(job, c)))
       throw new Error(
         "The stories changed while rendering. Completed films are preserved but have not been shared.",
       );
@@ -348,6 +501,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       target.reviewedFilmSha256 = undefined;
       target.film = chapter.artifact;
     }
+    queueFilmsReady(c, job.id);
     return c;
   });
 }
@@ -372,19 +526,35 @@ export async function failFilmJob(
   token: string,
   message: string,
   stale: boolean,
+  retryable = false,
 ) {
   return mutateRecord<StoryFilmJob>(id, (job) => {
     if (!job || job.lease?.token !== token)
       throw new Error("Another worker owns this job.");
+    const retry =
+      !stale && retryable && job.mode === "original" && job.attempts < 3;
     return {
       ...job,
-      status: stale ? "stale" : "failed",
+      status: stale ? "stale" : retry ? "queued" : "failed",
+      nextAttemptAt: retry
+        ? new Date(Date.now() + 30000 * 2 ** (job.attempts - 1)).toISOString()
+        : undefined,
       error: message,
       lease: undefined,
       updatedAt: nowIso(),
       chapters: job.chapters.map((chapter) =>
-        ["narrating", "rendering"].includes(chapter.status)
-          ? { ...chapter, status: stale ? "stale" : "failed", error: message }
+        [
+          "transcribing",
+          "matching",
+          "preparing",
+          "narrating",
+          "rendering",
+        ].includes(chapter.status)
+          ? {
+              ...chapter,
+              status: stale ? "stale" : retry ? "queued" : "failed",
+              error: message,
+            }
           : chapter,
       ),
     };

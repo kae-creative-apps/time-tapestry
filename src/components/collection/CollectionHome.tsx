@@ -178,12 +178,26 @@ export default function CollectionHome({
 }) {
   const { collection: c, error, act, load } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState(chapterId || "q1");
-  const [seen, setSeen] = useState<string[]>([]);
+  const seen = useRef(new Set<string>());
   const [activeRecorderChapter, setActiveRecorderChapter] = useState<
     string | null
   >(null);
   const [recordingChapter, setRecordingChapter] = useState<string | null>(null);
   const chapters = useRef<HTMLDivElement>(null);
+  // Opening an approved story counts as a visit for readers as well as viewers.
+  useEffect(() => {
+    if (c?.role !== "recipient" || c.status !== "approved") return;
+    const opened =
+      c.chapters.find((chapter) => chapter.id === activeChapter)?.id ||
+      c.chapters[0]?.id;
+    const visitKey = `${c.id}:${opened}`;
+    if (!opened || seen.current.has(visitKey)) return;
+    seen.current.add(visitKey);
+    void act({ action: "view_chapter", chapterId: opened }).then((result) => {
+      if (!result) seen.current.delete(visitKey);
+    });
+  }, [c?.id, c?.role, c?.status, activeChapter, act]);
+
   const handleRecorderBusyChange = useCallback(
     (chapter: string, busy: boolean) =>
       setRecordingChapter((current) =>
@@ -337,15 +351,6 @@ export default function CollectionHome({
                           }
                           aria-label={`Film: ${chapter.title}`}
                           src={url(chapter.videoMediaId)}
-                          onPlay={() => {
-                            if (!seen.includes(chapter.id)) {
-                              setSeen((old) => [...old, chapter.id]);
-                              void act({
-                                action: "view_chapter",
-                                chapterId: chapter.id,
-                              });
-                            }
-                          }}
                         />
                         <p className="p-5 text-sm leading-7 text-ink-500">
                           {isNarratedFilm(chapter)

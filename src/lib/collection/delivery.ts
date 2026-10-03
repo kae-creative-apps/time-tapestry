@@ -1,8 +1,11 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import QRCode from "qrcode";
 import { BRAND_COLORS } from "../brand-art";
+import {
+  assertReleasedPostcardProof,
+  prepareAutomaticPostcards,
+} from "./postcard-proofs";
 import { addCalendarMonths } from "./content";
-import { appOrigin } from "./access";
+import { appOrigin, linksFor } from "./access";
 import { getCollection, listCollections, mutateCollection } from "./store";
 import type {
   Collection,
@@ -15,7 +18,16 @@ const DAY = 24 * 60 * 60 * 1000;
 const LEASE_MS = 2 * 60 * 1000;
 const IDEMPOTENCY_WINDOW_MS = 23 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-export const POSTCARD_COPY_LIMIT = 1000;
+import {
+  originUrl,
+  recipientChapterUrl,
+  postcardArtwork,
+} from "./postcard-artwork";
+export {
+  recipientChapterUrl,
+  postcardArtwork,
+  POSTCARD_COPY_LIMIT,
+} from "./postcard-artwork";
 
 function time(iso: string) {
   return new Date(iso).getTime();
@@ -36,33 +48,6 @@ function escapeHtml(value: string) {
         "{": "&#123;",
         "}": "&#125;",
       })[c]!,
-  );
-}
-function originUrl(origin: string) {
-  const url = new URL(origin);
-  if (url.protocol !== "https:" || url.username || url.password) {
-    console.error(
-      "Delivery requires NEXT_PUBLIC_APP_URL to be a public HTTPS app origin.",
-    );
-    throw new Error(
-      "Delivery is not ready yet because the story link needs a secure HTTPS address.",
-    );
-  }
-  return url.origin;
-}
-export function recipientChapterUrl(
-  c: Collection,
-  chapterId: string,
-  origin = appOrigin(),
-) {
-  return (
-    originUrl(origin) +
-    "/collection/" +
-    encodeURIComponent(c.id) +
-    "/chapter/" +
-    encodeURIComponent(chapterId) +
-    "?key=" +
-    encodeURIComponent(c.recipientKey)
   );
 }
 function ownerUrl(c: Collection, origin: string) {
@@ -156,12 +141,32 @@ export function notificationSuppressionReason(
   c: Collection,
   n: Notification,
 ): string | null {
-  if (n.kind === "collection_ready")
-    return "The first postcard introduces the gift, so this email is not sent.";
+  if (n.kind === "collection_ready") {
+    if (n.id !== `${c.id}:digital-ready`)
+      return "The first postcard introduces the gift, so this email is not sent.";
+    if (c.status !== "approved")
+      return "The stories have not been approved for sharing.";
+    if (
+      n.to !== c.recipient.email ||
+      n.url !== appOrigin() + linksFor(c).collection
+    )
+      return "The approved recipient and private story link need to be checked.";
+  }
   if (n.kind === "invitation" && c.status !== "invited")
     return "The storyteller has already started or completed the interview.";
-  if (n.kind === "review_ready" && c.status !== "draft")
-    return "This draft is no longer awaiting review.";
+  if (n.kind === "review_ready") {
+    if (n.id === `${c.id}:owner-approved`) {
+      if (c.status !== "approved")
+        return "This collection has not been approved.";
+      if (
+        n.to !== c.storyteller.email ||
+        n.url !== appOrigin() + linksFor(c).review
+      )
+        return "The storyteller confirmation address and link need to be checked.";
+    } else if (c.status !== "draft") {
+      return "This draft is no longer awaiting review.";
+    }
+  }
   if (n.kind === "address_request" && c.addressConfirmed)
     return "The mailing address has already been confirmed.";
   if (n.kind === "postcard_mailed" && n.to !== c.storyteller.email)
@@ -411,86 +416,18 @@ export async function receiveLobEvent(event: LobEvent, origin = appOrigin()) {
   return { duplicate };
 }
 
-export async function postcardArtwork(
-  c: Collection,
-  chapterId: string,
-  origin = appOrigin(),
-) {
-  const chapter = c.chapters.find((ch) => ch.id === chapterId);
-  if (!chapter || !chapter.editorialReviewed || c.status !== "approved")
-    throw new Error("Approve the story before mailing.");
-  const message = c.chapterBlessings[chapterId];
-  const copy = [
-    chapter.postcardNote,
-    message?.encouragement,
-    message?.scriptureText,
-    message?.scriptureReference,
-    message?.scriptureTranslation,
-  ].filter(Boolean);
-  if (copy.join("").length > POSTCARD_COPY_LIMIT)
-    throw new Error(
-      "Postcard copy exceeds 1000 characters. Create a shorter approved postcard revision before mailing.",
-    );
-  const qr = await QRCode.toDataURL(recipientChapterUrl(c, chapterId, origin), {
-    errorCorrectionLevel: "M",
-    width: 600,
-    margin: 4,
-  });
-  const note = "<p>" + escapeHtml(chapter.postcardNote) + "</p>";
-  const encouragement = message?.encouragement
-    ? "<p>" + escapeHtml(message.encouragement) + "</p>"
-    : "";
-  const scripture = message?.scriptureText
-    ? '<p class="scripture">' + escapeHtml(message.scriptureText) + "</p>"
-    : "";
-  const attribution = [
-    message?.scriptureReference,
-    message?.scriptureTranslation,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const front =
-    '<!doctype html><html><head><meta charset="utf-8"><style>' +
-    `*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};font:12pt/1.25 Arial,sans-serif}` +
-    ".content{position:absolute;left:.375in;top:.30in;width:5.5in}.brand{display:block;width:1.15in;height:.344in;object-fit:contain;margin-bottom:.10in}h1{font-family:'Arial Rounded MT Bold',Arial,sans-serif;font-size:21pt;font-weight:600;line-height:1.1;margin:.10in 0 .15in}p{margin:0 0 .11in;overflow-wrap:anywhere}.label{font:9pt Arial,sans-serif;letter-spacing:1px}.scripture{font-style:italic}.reference{font-size:10pt}" +
-    '</style></head><body><div class="content"><img class="brand" alt="Time Tapestry" src="' +
-    escapeHtml(originUrl(origin) + "/brand/time-tapestry-lockup.png") +
-    '"><h1>' +
-    escapeHtml(chapter.title) +
-    '</h1><p class="label">From ' +
-    escapeHtml(c.storyteller.name) +
-    "</p>" +
-    note +
-    encouragement +
-    scripture +
-    (attribution
-      ? '<p class="reference">' + escapeHtml(attribution) + "</p>"
-      : "") +
-    "</div></body></html>";
-  // Lob's official 4x6 template reserves the lower-right 3.2835in x 2.375in.
-  const back =
-    '<!doctype html><html><head><meta charset="utf-8"><style>' +
-    `*{box-sizing:border-box}body{position:relative;width:6.25in;height:4.25in;margin:0;background:white;color:${BRAND_COLORS.espresso};font:12pt/1.3 Arial,sans-serif}` +
-    ".intro{position:absolute;top:.35in;left:.35in;width:5.5in}.qr{position:absolute;left:.35in;top:1.6in;width:1.5in;height:1.5in}.caption{position:absolute;left:.35in;top:3.1in;width:2.2in;font-size:10pt}" +
-    ".ink-free{position:absolute;right:.275in;bottom:.25in;width:3.2835in;height:2.375in;background:white}" +
-    '</style></head><body><div class="intro">A story from ' +
-    escapeHtml(c.storyteller.name) +
-    ", made for " +
-    escapeHtml(c.recipient.name) +
-    '.<br>Scan to read all four stories and watch any included videos.</div><img class="qr" alt="Open your stories" src="' +
-    qr +
-    '"><div class="caption">You can send a video or written message back from the story page.<br>Keep this card and its private link.</div><div class="ink-free"></div></body></html>';
-  return { front, back };
-}
 async function postcardRequest(
   c: Collection,
   chapterId: string,
   origin: string,
 ) {
-  if (!c.addressConfirmed || !c.address)
-    throw new Error("A confirmed mailing address is required.");
-  const a = c.address;
-  const artwork = await postcardArtwork(c, chapterId, origin);
+  const proof = assertReleasedPostcardProof(c, origin);
+  const a = proof.address;
+  const artwork = proof.cards.find((card) => card.chapterId === chapterId);
+  if (!artwork)
+    throw new Error(
+      "This postcard is missing from the approved print snapshot.",
+    );
   return JSON.stringify({
     description:
       "Time Tapestry " +
@@ -602,6 +539,7 @@ async function providerPost(
         },
         body,
         signal: AbortSignal.timeout(12000),
+        redirect: "error",
       },
     );
   } catch {
@@ -696,8 +634,18 @@ function failedDispatch(dispatch: DispatchState, error: unknown, now: number) {
 }
 
 async function processPostcard(id: string, now: number, origin: string) {
-  const snapshot = await getCollection(id);
+  let snapshot = await getCollection(id);
   if (!snapshot) return false;
+  if (
+    snapshot.status === "approved" &&
+    snapshot.addressConfirmed &&
+    snapshot.address
+  ) {
+    snapshot = await mutateCollection(id, async (current) => {
+      await prepareAutomaticPostcards(current, iso(now), origin);
+      return current;
+    });
+  }
   const candidate = nextDuePostcard(snapshot, now);
   if (!candidate) return false;
   const configured = Boolean(
@@ -720,9 +668,14 @@ async function processPostcard(id: string, now: number, origin: string) {
   }
   let body: string;
   try {
-    body =
-      candidate.dispatch?.requestBody ||
-      (await postcardRequest(snapshot, candidate.chapterId, origin));
+    body = await postcardRequest(snapshot, candidate.chapterId, origin);
+    if (
+      candidate.dispatch?.requestBody &&
+      candidate.dispatch.requestBody !== body
+    )
+      throw new Error(
+        "This postcard's saved print request differs from its approved snapshot. The team needs to reconcile it before another attempt.",
+      );
   } catch (error) {
     await mutateCollection(id, (c) => {
       const d = c.deliveries.find(
@@ -913,9 +866,15 @@ async function processNotification(
   return true;
 }
 
-/** Run explicitly from a protected job invocation. Never called during page views. */
+export const emailDeliveryEnabled = () =>
+  process.env.COLLECTION_EMAIL_ENABLED === "true" ||
+  process.env.COLLECTION_DELIVERY_ENABLED === "true";
+export const postalDeliveryEnabled = () =>
+  process.env.COLLECTION_DELIVERY_ENABLED === "true";
+
+/** Run from a protected recurring job. Never called during page views. */
 export async function processDeliveryJobs() {
-  if (process.env.COLLECTION_DELIVERY_ENABLED !== "true")
+  if (!emailDeliveryEnabled() && !postalDeliveryEnabled())
     throw new Error("Collection delivery is disabled.");
   const origin = originUrl(appOrigin());
   const collections = await listCollections();
@@ -925,10 +884,14 @@ export async function processDeliveryJobs() {
   for (const entry of collections) {
     if (Date.now() > deadline || providerAttempts >= 3) break;
     inspected += 1;
-    if (await processPostcard(entry.id, Date.now(), origin))
+    if (
+      postalDeliveryEnabled() &&
+      (await processPostcard(entry.id, Date.now(), origin))
+    )
       providerAttempts += 1;
     const current = await getCollection(entry.id);
     if (!current) continue;
+    if (!emailDeliveryEnabled()) continue;
     for (const n of current.notifications) {
       if (Date.now() > deadline || providerAttempts >= 3) break;
       if (await processNotification(entry.id, n.id, Date.now(), origin))

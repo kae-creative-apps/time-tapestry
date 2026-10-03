@@ -1107,6 +1107,8 @@ export default function LiveInterview({
       }
       await request("", {
         action: "generate",
+        prepareFilms: true,
+        processingApproved: true,
         regenerate: Boolean(collectionRef.current?.chapters.length),
       });
       router.push(`/collection/${collectionId}/review${query}`);
@@ -1821,7 +1823,7 @@ export default function LiveInterview({
               }
               onClick={() => void prepareStories()}
             >
-              {working ? "Preparing your stories…" : "Prepare my four stories"}
+              {working ? "Preparing your collection…" : "Prepare my collection"}
             </button>
             <button
               className={secondary}
@@ -1839,6 +1841,11 @@ export default function LiveInterview({
               Add another memory
             </button>
           </div>
+          <p className="mt-4 text-base leading-7 text-ink-500">
+            We’ll transcribe your saved audio with ElevenLabs, find the moments
+            for each story, and prepare four films automatically. Your originals
+            are kept. You’ll review the finished collection before it is shared.
+          </p>
           {(archive.pendingCount > 0 || pending.length > 0) && (
             <p className="mt-3 text-sm">
               Finish backing up your recordings and words before preparing your

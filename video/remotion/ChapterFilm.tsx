@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { BrandPattern } from "../../src/components/BrandPattern";
 import { BrandArtwork } from "../../src/components/BrandArtwork";
 import { BRAND_COLORS } from "../../src/lib/brand-art";
 import { Audio, Video } from "@remotion/media";
@@ -8,6 +9,9 @@ import {
   Sequence,
   interpolate,
   useCurrentFrame,
+  delayRender,
+  continueRender,
+  cancelRender,
 } from "remotion";
 import {
   type ChapterVideoPlan,
@@ -30,7 +34,72 @@ export type ChapterFilmProps = {
 const paper = BRAND_COLORS.paper;
 const ink = BRAND_COLORS.espresso;
 const displayFont =
-  '"Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif';
+  '"OriginalQuicksand", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif';
+
+function BrandFont({ src }: { src?: string }) {
+  const [handle] = useState(() =>
+    delayRender("Loading the Time Tapestry typeface"),
+  );
+  useEffect(() => {
+    if (!src) {
+      continueRender(handle);
+      return;
+    }
+    const font = new FontFace("OriginalQuicksand", `url(${src})`, {
+      weight: "300 700",
+    });
+    font
+      .load()
+      .then((loaded) => {
+        document.fonts.add(loaded);
+        continueRender(handle);
+      })
+      .catch((error) => cancelRender(error));
+  }, [src, handle]);
+  return null;
+}
+function WovenBackground({
+  light = false,
+  chapterNumber = 1,
+}: {
+  light?: boolean;
+  chapterNumber?: number;
+}) {
+  const frame = useCurrentFrame();
+  const accent =
+    ["#dce0d3", "#ecd8cd", "#e3d9c7", "#d6ddd3"][chapterNumber - 1] ||
+    "#dce0d3";
+  return (
+    <AbsoluteFill
+      style={{
+        background: light
+          ? paper
+          : `linear-gradient(125deg, ${ink}, #675040 70%, ${BRAND_COLORS.taupe})`,
+      }}
+    >
+      {light && (
+        <AbsoluteFill
+          style={{
+            background: `radial-gradient(ellipse at 92% 25%, ${accent} 0%, transparent 65%)`,
+          }}
+        />
+      )}
+      <div
+        style={{
+          position: "absolute",
+          width: 1150,
+          right: -300,
+          bottom: -210,
+          color: light ? ink : paper,
+          opacity: light ? 0.085 : 0.08,
+          translate: `${Math.sin(frame / 160) * 16}px ${Math.cos(frame / 210) * 14}px`,
+        }}
+      >
+        <BrandPattern variant="weave" />
+      </div>
+    </AbsoluteFill>
+  );
+}
 
 function Title({ plan }: { plan: ChapterVideoPlan }) {
   const frame = useCurrentFrame();
@@ -44,19 +113,28 @@ function Title({ plan }: { plan: ChapterVideoPlan }) {
         gap: 26,
       }}
     >
+      <WovenBackground light chapterNumber={plan.chapterNumber} />
+      <div style={{ position: "absolute", left: 150, top: 95, width: 235 }}>
+        <BrandArtwork
+          variant="lockup"
+          style={{ width: "100%", height: "auto" }}
+        />
+      </div>
       <div
         style={{
-          font: "28px Arial",
+          position: "relative",
+          font: `28px ${displayFont}`,
           letterSpacing: 3,
           color: BRAND_COLORS.taupe,
         }}
       >
-        CHAPTER {plan.chapterNumber} OF FOUR
+        STORY {plan.chapterNumber} OF FOUR
       </div>
       <div
         style={{
+          position: "relative",
           fontFamily: displayFont,
-          fontSize: 86,
+          fontSize: plan.title.length > 70 ? 76 : 104,
           fontWeight: 600,
           lineHeight: 1.12,
           maxWidth: 1500,
@@ -68,8 +146,14 @@ function Title({ plan }: { plan: ChapterVideoPlan }) {
       >
         {plan.title}
       </div>
-      <div style={{ font: "36px Arial", color: BRAND_COLORS.taupe }}>
-        {plan.storytellerName}
+      <div
+        style={{
+          position: "relative",
+          font: `36px ${displayFont}`,
+          color: BRAND_COLORS.taupe,
+        }}
+      >
+        {`Told by ${plan.storytellerName}`}
       </div>
     </AbsoluteFill>
   );
@@ -140,6 +224,9 @@ function StoryClip({
     : src;
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
+      {clip.kind !== "video" && (
+        <WovenBackground chapterNumber={plan.chapterNumber} />
+      )}
       {clip.kind === "video" && src && (
         <Video
           src={src}
@@ -159,9 +246,15 @@ function StoryClip({
       )}
       {clip.kind !== "video" && (
         <AbsoluteFill
-          style={{ padding: "140px 190px", justifyContent: "center", gap: 42 }}
+          style={{
+            padding: "140px 170px 260px",
+            justifyContent: "center",
+            gap: 42,
+          }}
         >
-          <div style={{ font: "30px Arial", color: paper, opacity: 0.7 }}>
+          <div
+            style={{ font: `30px ${displayFont}`, color: paper, opacity: 0.7 }}
+          >
             {plan.storytellerName} ·{" "}
             {clip.kind === "audio"
               ? "In their own voice"
@@ -170,7 +263,8 @@ function StoryClip({
           <div
             style={{
               fontFamily: displayFont,
-              fontSize: clip.kind === "text" ? 55 : 82,
+              fontSize:
+                clip.kind === "text" ? 55 : plan.title.length > 70 ? 68 : 90,
               fontWeight: 500,
               lineHeight: 1.3,
             }}
@@ -230,6 +324,7 @@ export function ChapterFilm({ plan, mediaUrls, draft }: ChapterFilmProps) {
   });
   return (
     <AbsoluteFill style={{ background: ink }}>
+      <BrandFont src={mediaUrls["brand-font"]} />
       <Sequence
         name="Chapter title"
         from={0}

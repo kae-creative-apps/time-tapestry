@@ -20,7 +20,10 @@ import {
   filmJobMatches,
   filmJobView,
   latestFilmJob,
+  filmWorkerHealthy,
 } from "./collection/films/jobstore";
+import { accountEmailAvailable } from "./accounts/mail";
+import { postcardDeliveryReadiness } from "./collection/postcard-proofs";
 import { getSecurityHealth } from "./security/health";
 import type { Collection, StoredMedia } from "./collection/types";
 
@@ -163,6 +166,7 @@ function safeCollection(c: Collection) {
     draftOutdated: Boolean(c.draftOutdated),
     approvedAt: c.approvedAt,
     approvedVersion: c.approvedVersion,
+    postcardPreparation: c.postcardPreparation,
     deliveries: c.deliveries.map(
       ({
         chapterId,
@@ -264,6 +268,16 @@ export async function adminCollectionList(offset = 0, limit = 50) {
     offset,
     limit,
     health: getSecurityHealth(),
+    automation: {
+      workerOnline: await filmWorkerHealthy(),
+      originalTranscriptionConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
+      accountEmailConfigured: accountEmailAvailable(),
+      notificationsEnabled:
+        process.env.COLLECTION_EMAIL_ENABLED === "true" ||
+        process.env.COLLECTION_DELIVERY_ENABLED === "true",
+      schedulerAuthenticated: Boolean(process.env.CRON_SECRET),
+      postcards: postcardDeliveryReadiness(),
+    },
   };
 }
 export async function adminCollectionDetail(id: string) {

@@ -4,12 +4,22 @@ import { requireOwner, roleFor } from "@/lib/collection/access";
 import {
   attachReadyFilms,
   enqueueStoryFilms,
-  filmJobMatches,
+  enqueueOriginalFilms,
+  enqueueAutomaticOriginalFilms,
+  getFilmJob,
+  filmJobInputsCurrent,
   filmJobView,
   filmWorkerHealthy,
   latestFilmJob,
   retryStoryFilms,
 } from "@/lib/collection/films/jobstore";
+import {
+  getOriginalFilmEdit,
+  originalFilmSources,
+  saveOriginalFilmEdit,
+  OriginalEditConflict,
+} from "@/lib/collection/films/original-plan";
+import { automaticFilmsAvailable } from "@/lib/collection/films/transcription";
 import { filmsAvailable } from "@/lib/collection/films/provider";
 import { guardRequest } from "@/lib/security/request";
 import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
@@ -32,18 +42,26 @@ export async function GET(req: NextRequest, { params }: Context) {
         { error: "Storyteller access required." },
         { status: 403, headers },
       );
-    const job = await latestFilmJob(id);
+    const [job, originalPlan, sources, workerAvailable] = await Promise.all([
+      latestFilmJob(id),
+      getOriginalFilmEdit(id),
+      originalFilmSources(c),
+      filmWorkerHealthy(),
+    ]);
     const view = job ? filmJobView(job) : null;
-    if (job && view && !filmJobMatches(job, c)) {
+    if (job && view && !(await filmJobInputsCurrent(job, c))) {
       view.status = "stale";
       view.error =
-        "Your story text changed. Review the current scripts and create new films.";
+        "Your story or selected recordings changed. Review the current version and create new films.";
     }
-    const workerAvailable = await filmWorkerHealthy();
     return NextResponse.json(
       {
         job: view,
+        originalPlan,
+        sources,
         available: filmsAvailable() && workerAvailable,
+        originalAvailable: workerAvailable,
+        automaticAvailable: automaticFilmsAvailable() && workerAvailable,
         workerAvailable,
         ...(!workerAvailable
           ? {
@@ -75,12 +93,48 @@ export async function POST(req: NextRequest, { params }: Context) {
         { status: 403, headers },
       );
     requireOwner(c, role);
-    const body = await readJsonBody(req, 4096);
-    if (!["generate", "enqueue", "retry"].includes(String(body.action)))
-      throw new Error("Choose generate or retry.");
-    if (body.scriptsApproved !== true)
+    const body = await readJsonBody(req, 32768);
+    const action = String(body.action);
+    if (action === "save_original_plan") {
+      await guardRequest(req, { action: "collection_write", resourceId: id });
+      const originalPlan = await saveOriginalFilmEdit(
+        c,
+        body.chapters,
+        body.baseRevisionHash,
+      );
+      return NextResponse.json({ originalPlan }, { headers });
+    }
+    if (
+      ![
+        "generate",
+        "enqueue",
+        "retry",
+        "generate_original",
+        "retry_original",
+        "prepare_automatic",
+        "retry_automatic",
+      ].includes(action)
+    )
+      throw new Error("Choose a film generation or retry option.");
+    const automatic =
+      action === "prepare_automatic" || action === "retry_automatic";
+    const original =
+      action === "generate_original" ||
+      action === "retry_original" ||
+      automatic;
+    if (
+      automatic
+        ? body.processingApproved !== true
+        : original
+          ? body.cutsApproved !== true || body.allowNoCaptions !== true
+          : body.scriptsApproved !== true
+    )
       throw new Error(
-        "Review all four scripts and approve AI narration with your interviewer's voice first.",
+        automatic
+          ? "Confirm automatic transcription and editing of your original recordings first."
+          : original
+            ? "Review every selected clip and confirm original sound without timed captions."
+            : "Review all four scripts and approve AI narration with your interviewer's voice first.",
       );
     await guardRequest(req, { action: "render_film", resourceId: id });
     if (!(await filmWorkerHealthy()))
@@ -91,17 +145,45 @@ export async function POST(req: NextRequest, { params }: Context) {
         },
         { status: 503, headers },
       );
-    const job =
-      body.action === "retry"
-        ? await retryStoryFilms(
-            c,
-            typeof body.jobId === "string" ? body.jobId : "",
-            true,
-          )
-        : await enqueueStoryFilms(c, true);
+    if (automatic && !automaticFilmsAvailable())
+      throw new Error(
+        "Automatic source transcription is not configured. Your recordings remain saved.",
+      );
+    let job;
+    if (action.startsWith("retry")) {
+      const previous = await getFilmJob(
+        typeof body.jobId === "string" ? body.jobId : "",
+      );
+      if (original && (previous?.preparation === "automatic") !== automatic)
+        throw new Error("Choose the matching original-film retry option.");
+      job = await retryStoryFilms(
+        c,
+        typeof body.jobId === "string" ? body.jobId : "",
+        true,
+        original ? "original" : "ai_narration",
+      );
+    } else if (automatic)
+      job = await enqueueAutomaticOriginalFilms(c, {
+        processingApproved: true,
+        presentation: body.presentation === "audio" ? "audio" : "video",
+      });
+    else if (original)
+      job = await enqueueOriginalFilms(
+        c,
+        typeof body.planHash === "string" ? body.planHash : "",
+        true,
+        true,
+      );
+    else job = await enqueueStoryFilms(c, true);
     if (job.status === "ready") await attachReadyFilms(job);
     return NextResponse.json(
-      { job: filmJobView(job), available: filmsAvailable() },
+      {
+        job: filmJobView(job),
+        available: filmsAvailable(),
+        originalAvailable: true,
+        automaticAvailable: automaticFilmsAvailable(),
+        workerAvailable: true,
+      },
       { status: job.status === "ready" ? 200 : 202, headers },
     );
   } catch (error) {
@@ -114,7 +196,7 @@ export async function POST(req: NextRequest, { params }: Context) {
             ? error.message
             : "The films could not be queued. Your stories remain saved.",
       },
-      { status: 400, headers },
+      { status: error instanceof OriginalEditConflict ? 409 : 400, headers },
     );
   }
 }

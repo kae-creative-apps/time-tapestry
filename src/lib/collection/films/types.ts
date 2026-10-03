@@ -1,20 +1,79 @@
 export type FilmStage =
-  "queued" | "narrating" | "rendering" | "ready" | "failed" | "stale";
+  | "queued"
+  | "transcribing"
+  | "matching"
+  | "preparing"
+  | "narrating"
+  | "rendering"
+  | "ready"
+  | "failed"
+  | "stale";
 
-export type StoryFilmArtifact = {
+type FilmArtifactBase = {
   jobId: string;
   chapterId: string;
   mediaId: string;
-  narrationKind: "ai_interviewer";
   sourceTakeIds: string[];
   sourceSha256: string;
-  scriptSha256: string;
-  audioSha256: string;
   outputSha256: string;
-  voiceId: string;
-  modelId: string;
   durationSeconds: number;
   createdAt: string;
+};
+export type StoryFilmArtifact = FilmArtifactBase &
+  (
+    | {
+        narrationKind: "ai_interviewer";
+        scriptSha256: string;
+        audioSha256: string;
+        voiceId: string;
+        modelId: string;
+      }
+    | {
+        narrationKind: "original_recording";
+        presentation: "video" | "audio";
+        planSha256: string;
+        sourceRanges: OriginalClipSelection[];
+        sourceAssets: { mediaId: string; sha256: string; durationMs: number }[];
+      }
+  );
+
+export type SourceCaption = {
+  text: string;
+  startMs: number;
+  endMs: number;
+  timestampMs: null;
+  confidence: null;
+};
+export type OriginalClipSelection = {
+  mediaId: string;
+  inMs: number;
+  outMs: number;
+  captions?: SourceCaption[];
+};
+export type OriginalChapterEdit = {
+  chapterId: string;
+  presentation: "video" | "audio";
+  clips: OriginalClipSelection[];
+};
+export type OriginalFilmEdit = {
+  schemaVersion: 1;
+  collectionId: string;
+  revisionHash: string;
+  storyHash: string;
+  chapters: OriginalChapterEdit[];
+  updatedAt: string;
+};
+export type OriginalFilmSource = {
+  mediaId: string;
+  kind: "video" | "audio";
+  durationMs: number | null;
+  createdAt: string;
+  fromInterview: boolean;
+  chapterIds: string[];
+  sourceTakeIds: string[];
+};
+export type OriginalSourceSnapshot = OriginalFilmSource & {
+  metadataSha256: string;
 };
 
 export type FilmVoice = {
@@ -44,6 +103,7 @@ export type FilmChapter = {
   progress: number;
   error?: string;
   artifact?: StoryFilmArtifact;
+  sourceEdit?: OriginalChapterEdit;
 };
 
 export type StoryFilmJob = {
@@ -55,13 +115,22 @@ export type StoryFilmJob = {
   versionHash: string;
   sourceSha256: string;
   templateVersion: string;
-  voice: FilmVoice;
+  mode?: "ai_narration" | "original";
+  preparation?: "automatic" | "manual";
+  processingConsentAt?: string;
+  automaticPresentation?: "video" | "audio";
+  voice?: FilmVoice;
+  originalPlanHash?: string;
+  originalSources?: OriginalSourceSnapshot[];
+  cutsApprovedAt?: string;
+  allowNoCaptions?: boolean;
   status: FilmStage;
   chapters: FilmChapter[];
   createdAt: string;
   updatedAt: string;
   scriptsApprovedAt: string;
   attempts: number;
+  nextAttemptAt?: string;
   error?: string;
   lease?: { token: string; expiresAt: number };
 };
@@ -89,9 +158,12 @@ export type FilmJobView = Pick<
   | "id"
   | "collectionId"
   | "status"
+  | "mode"
+  | "preparation"
   | "createdAt"
   | "updatedAt"
   | "scriptsApprovedAt"
+  | "nextAttemptAt"
   | "error"
 > & {
   chapters: Pick<

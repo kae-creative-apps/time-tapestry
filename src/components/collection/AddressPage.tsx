@@ -39,7 +39,8 @@ export default function AddressPage({
           <div className="rounded-lg border border-sage-200 bg-sage-50 p-6">
             <h2 className="font-serif text-xl">Your address is saved.</h2>
             <p className="mt-3">
-              The first postcard will introduce your gift after it is approved.
+              Postcards will be prepared automatically after the storyteller
+              approves the stories. You do not need to arrange the mailing.
             </p>
             <details className="mt-6">
               <summary>Update my address</summary>

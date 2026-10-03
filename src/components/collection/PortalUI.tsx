@@ -23,15 +23,26 @@ export const isNarratedFilm = (chapter: ChapterPackage) =>
 export function PortalShell({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto min-h-screen max-w-[1320px] px-5 pb-10 pt-6 sm:px-8 lg:px-10">
-      <header className="mb-8 flex items-center justify-between gap-5">
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
         <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
-        <Link
-          href="/privacy"
-          className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-500"
+        <nav
+          aria-label="Your collection"
+          className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1"
         >
-          <AppIcon name="shield" size={16} />
-          Private collection
-        </Link>
+          <Link
+            href="/account"
+            className="inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4"
+          >
+            My stories
+          </Link>
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-500"
+          >
+            <AppIcon name="shield" size={16} />
+            Private collection
+          </Link>
+        </nav>
       </header>
       {children}
     </main>

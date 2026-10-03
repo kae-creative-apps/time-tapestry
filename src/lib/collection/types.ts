@@ -1,3 +1,4 @@
+import type { PostcardProofSnapshot } from "./postcard-proofs";
 import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
 export type Contact = { name: string; email: string; phone?: string };
@@ -135,6 +136,8 @@ export type Notification = {
   dispatch?: DispatchState;
 };
 export type Collection = {
+  /** Explicit consent to the four-card automatic mailing journey. */
+  autoPostcards?: boolean;
   schemaVersion: 2;
   id: string;
   createdAt: string;
@@ -175,6 +178,14 @@ export type Collection = {
   draftOutdated?: boolean;
   approvedAt?: string;
   approvedVersion?: number;
+  postcardPreparation?: {
+    status:
+      "waiting_for_address" | "waiting_for_setup" | "ready" | "needs_attention";
+    message: string;
+    updatedAt: string;
+  };
+  postcardProof?: PostcardProofSnapshot;
+  postcardProofHistory?: PostcardProofSnapshot[];
   deliveries: Delivery[];
   replies: Reply[];
   notifications: Notification[];

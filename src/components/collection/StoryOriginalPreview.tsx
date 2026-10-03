@@ -88,9 +88,8 @@ export function StoryOriginalPreview({
           </div>
         )}
         <p className="mt-4 border-t border-warmgray-200 pt-4 text-sm leading-7 text-ink-500">
-          Four edited films in your own voice need cuts chosen and reviewed from
-          your recordings. They are not created automatically here. You can
-          attach a finished video below.
+          These originals stay unchanged. Your finished films are prepared
+          separately and need your approval before sharing.
         </p>
       </div>
     </section>

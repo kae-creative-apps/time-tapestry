@@ -45,6 +45,9 @@ export function publicView(
     ({ dispatch, ...notification }) => notification,
   );
   if (role !== "owner") {
+    view.postcardPreparation = undefined;
+    view.postcardProof = undefined;
+    view.postcardProofHistory = undefined;
     view.interviews = undefined;
     view.takes = [];
     view.selectedTakeIds = {};

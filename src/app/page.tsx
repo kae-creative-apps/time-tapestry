@@ -39,7 +39,7 @@ const storyThemes = [
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <header className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-4 px-5 py-5 sm:px-10 sm:py-6 lg:px-14">
+      <header className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-10 sm:py-6 lg:px-14">
         <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
         <nav
           aria-label="Main navigation"
@@ -53,9 +53,15 @@ export default function Home() {
           </Link>
           <Link
             href="/for-organizations"
-            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 md:inline-flex"
+            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 xl:inline-flex"
           >
             For churches & organizations
+          </Link>
+          <Link
+            href="/account"
+            className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-full px-3 py-3 transition-colors hover:bg-sage-100 sm:px-4"
+          >
+            My stories
           </Link>
           <Link
             href="#begin"
@@ -229,8 +235,9 @@ export default function Home() {
               </h2>
             </div>
             <p className="max-w-lg text-lg leading-relaxed text-ink-500">
-              Four written stories, your chosen recordings, and the Scripture or
-              encouragement you want to pass on. Together on a personal page for
+              Your interview becomes four written stories and films made from
+              your recordings. Add the Scripture or encouragement you want to
+              pass on, then review everything together on a personal page for
               the people you choose.
             </p>
           </div>

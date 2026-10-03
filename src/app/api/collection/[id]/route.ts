@@ -14,10 +14,14 @@ import {
 } from "@/lib/collection/access";
 import {
   approveCollection,
-  schedulePostcards,
   draftChapters,
   selectedAnswers,
 } from "@/lib/collection/content";
+import { enqueueAutomaticOriginalFilms } from "@/lib/collection/films/jobstore";
+import {
+  releasePostcardProof,
+  prepareAutomaticPostcards,
+} from "@/lib/collection/postcard-proofs";
 import { CHAPTERS, MAX_FOLLOW_UPS } from "@/lib/interview-state";
 import { chat } from "@/lib/gloo-client";
 import type { AnswerTake, Collection, Reply } from "@/lib/collection/types";
@@ -82,6 +86,7 @@ export async function POST(
     const b = (await readJsonBody(req, 512 * 1024)) as any;
     let next: Collection;
     let question: string | null = null;
+    let filmPreparationError: string | null = null;
     if (b.action === "generate") {
       requireOwner(initial, role);
       if (initial.chapters.length && !b.regenerate)
@@ -114,19 +119,51 @@ export async function POST(
           chapters,
           notifications: [
             ...c.notifications.filter((n) => n.kind !== "review_ready"),
-            {
-              id: `${id}:review:${randomUUID()}`,
-              kind: "review_ready",
-              to: c.storyteller.email,
-              subject: "Your Time Tapestry story is ready to review",
-              text: "Your four story drafts are ready. Review the wording, encouragement and postcard notes. Recorded answers also need a finished video edit before video approval.",
-              url: appOrigin() + linksFor(c).review,
-              dueAt: new Date().toISOString(),
-              status: "pending",
-            },
+            ...(b.prepareFilms === true
+              ? []
+              : [
+                  {
+                    id: `${id}:review:${randomUUID()}`,
+                    kind: "review_ready" as const,
+                    to: c.storyteller.email,
+                    subject: "Your Time Tapestry story is ready to review",
+                    text: "Your four written story drafts are ready. Open your collection to check the wording and film preparation progress. Nothing is shared until you approve.",
+                    url: appOrigin() + linksFor(c).review,
+                    dueAt: new Date().toISOString(),
+                    status: "pending" as const,
+                  },
+                ]),
           ],
         };
       });
+      if (b.prepareFilms === true && b.processingApproved === true) {
+        try {
+          await enqueueAutomaticOriginalFilms(next, {
+            processingApproved: true,
+          });
+        } catch (error) {
+          filmPreparationError =
+            error instanceof Error
+              ? error.message
+              : "Your stories are saved. Automatic film preparation needs attention.";
+          next = await mutateCollection(id, (c) => {
+            if (c.status !== "draft") return c;
+            const notificationId = `${id}:preparation-needs-attention:${next.updatedAt}`;
+            if (!c.notifications.some((n) => n.id === notificationId))
+              c.notifications.push({
+                id: notificationId,
+                kind: "review_ready",
+                to: c.storyteller.email,
+                subject: "Your Time Tapestry stories are saved",
+                text: "Your written stories and original recordings are saved. Automatic film preparation needs a setup check. You can reopen your collection to see progress; nothing has been shared.",
+                url: appOrigin() + linksFor(c).review,
+                dueAt: new Date().toISOString(),
+                status: "pending",
+              });
+            return c;
+          });
+        }
+      }
     } else if (b.action === "followup") {
       requireOwner(initial, role);
       await guardRequest(req, { action: "followup", resourceId: id });
@@ -206,7 +243,9 @@ export async function POST(
             country: clean(a.country, 2).toUpperCase() || "US",
           };
           c.addressConfirmed = true;
-          return c;
+          return c.status === "approved"
+            ? await prepareAutomaticPostcards(c)
+            : c;
         }
         if (b.action === "view_chapter") {
           if (
@@ -270,7 +309,10 @@ export async function POST(
             throw new Error(
               "Open your private storyteller link to schedule postcards.",
             );
-          return schedulePostcards(c);
+          return releasePostcardProof(
+            c,
+            typeof b.proofHash === "string" ? b.proofHash : "",
+          );
         }
         requireOwner(c, role);
         if (b.action === "save_take") {
@@ -470,6 +512,7 @@ export async function POST(
           });
           if (
             b.deliveryMode === "digital" &&
+            b.autoPostcards !== true &&
             !approved.notifications.some((n) => n.id === `${id}:digital-ready`)
           )
             approved.notifications.push({
@@ -482,6 +525,39 @@ export async function POST(
               dueAt: new Date().toISOString(),
               status: "pending",
             });
+          if (b.autoPostcards === true) {
+            approved.autoPostcards = true;
+            if (
+              !approved.notifications.some(
+                (n) => n.id === `${id}:owner-approved`,
+              )
+            )
+              approved.notifications.push({
+                id: `${id}:owner-approved`,
+                kind: "review_ready",
+                to: c.storyteller.email,
+                subject: "Your Time Tapestry collection is approved",
+                text: "Your approved stories are ready. Your four postcards will be sent automatically after the mailing address and delivery service are ready. Open your collection to see progress.",
+                url: appOrigin() + linksFor(c).review,
+                dueAt: new Date().toISOString(),
+                status: "pending",
+              });
+            if (
+              !approved.addressConfirmed &&
+              !approved.notifications.some((n) => n.id === `${id}:address`)
+            )
+              approved.notifications.push({
+                id: `${id}:address`,
+                kind: "address_request",
+                to: c.recipient.email,
+                subject: `A gift from ${c.storyteller.name}`,
+                text: `${c.storyteller.name} has prepared a personal gift for you. Add the address where you would like your postcards to arrive.`,
+                url: appOrigin() + linksFor(c).address,
+                dueAt: new Date().toISOString(),
+                status: "pending",
+              });
+            return await prepareAutomaticPostcards(approved);
+          }
           return approved;
         }
         if (b.action === "request_address") {
@@ -509,6 +585,7 @@ export async function POST(
             : {}),
         },
         question,
+        ...(filmPreparationError ? { filmPreparationError } : {}),
       },
       { headers: noStore },
     );

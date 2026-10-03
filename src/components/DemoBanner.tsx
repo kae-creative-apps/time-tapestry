@@ -7,9 +7,10 @@ import { usePathname } from "next/navigation";
 export function DemoBanner() {
   const pathname = usePathname();
   const [mock, setMock] = useState(false);
-  const personalFlow = /^\/(?:record|collection|share|request)(?:\/|$)/.test(
-    pathname ?? "",
-  );
+  const personalFlow =
+    /^\/(?:record|collection|share|request|account)(?:\/|$)/.test(
+      pathname ?? "",
+    );
 
   useEffect(() => {
     if (personalFlow) return;

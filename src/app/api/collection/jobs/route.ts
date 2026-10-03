@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { processDeliveryJobs } from "@/lib/collection/delivery";
+import {
+  processDeliveryJobs,
+  emailDeliveryEnabled,
+  postalDeliveryEnabled,
+} from "@/lib/collection/delivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +25,7 @@ async function run(req: NextRequest) {
   ) {
     return NextResponse.json({ error: "Not authorized." }, { status: 401 });
   }
-  if (process.env.COLLECTION_DELIVERY_ENABLED !== "true") {
+  if (!emailDeliveryEnabled() && !postalDeliveryEnabled()) {
     return NextResponse.json(
       { error: "Collection delivery is disabled." },
       { status: 503 },

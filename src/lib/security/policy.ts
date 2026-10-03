@@ -24,7 +24,9 @@ export type SecurityAction =
   | "contact"
   | "admin_login"
   | "interview_write"
-  | "collection_write";
+  | "collection_write"
+  | "account_login"
+  | "account_verify";
 export const paidActions = new Set<SecurityAction>([
   "ai_session",
   "transcribe",
@@ -52,6 +54,8 @@ export const limits: Record<
   admin_login: { count: 8, seconds: 900 },
   interview_write: { count: 3000, seconds: 3600 },
   collection_write: { count: 3000, seconds: 3600 },
+  account_login: { count: 12, seconds: 3600 },
+  account_verify: { count: 20, seconds: 600 },
 };
 export const loopback = (host: string) =>
   ["localhost", "127.0.0.1", "[::1]", "::1"].includes(host);

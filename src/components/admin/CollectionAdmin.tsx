@@ -168,6 +168,71 @@ export function CollectionAdminList() {
                 ))}
               </details>
             </section>
+            <section
+              aria-label="Automatic processing readiness"
+              className={`${panel} mt-5`}
+            >
+              <h2 className="text-xl">Automatic processing</h2>
+              <p className="mt-3 text-base leading-7 text-ink-600">
+                These checks show configuration and the latest worker heartbeat.
+                A connected service still needs an end-to-end delivery test.
+              </p>
+              <dl className="mt-5 grid gap-5 text-base sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <dt className="text-ink-600">Film worker</dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.workerOnline ? "Online" : "Offline"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-600">Original audio transcription</dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.originalTranscriptionConfigured
+                      ? "Configured"
+                      : "Setup needed"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-600">Account email</dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.accountEmailConfigured
+                      ? "Configured"
+                      : "Setup needed"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-600">Notification sending</dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.notificationsEnabled
+                      ? "Enabled"
+                      : "Disabled"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-600">
+                    Scheduled delivery authentication
+                  </dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.schedulerAuthenticated
+                      ? "Configured"
+                      : "Setup needed"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-600">Postcard mailing</dt>
+                  <dd className="mt-1 font-medium">
+                    {data.automation.postcards.ready ? "Configured" : "On hold"}
+                  </dd>
+                </div>
+              </dl>
+              {!data.automation.postcards.ready && (
+                <ul className="mt-5 space-y-2 text-sm leading-6 text-ink-600">
+                  {data.automation.postcards.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
             <label className="mt-8 block text-base font-medium">
               Find a person on this page
               <input
@@ -399,6 +464,11 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                   {data.filmJob.error}
                 </p>
               )}
+              {data.collection.postcardPreparation && (
+                <p className="mt-4 rounded-xl bg-paper p-4 text-base leading-7">
+                  Postcards: {data.collection.postcardPreparation.message}
+                </p>
+              )}
               {data.collection.draftOutdated && (
                 <p className="mt-4 text-oxblood">
                   Answers changed after drafting. The storyteller needs to
@@ -449,7 +519,11 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                     {ch.editorialReviewed
                       ? "Reviewed by storyteller"
                       : "Needs review"}
-                    {ch.film ? " · AI interviewer narration" : ""}
+                    {ch.film?.narrationKind === "original_recording"
+                      ? " · Original voice or video"
+                      : ch.film
+                        ? " · AI interviewer narration"
+                        : ""}
                   </p>
                 </article>
               ))}

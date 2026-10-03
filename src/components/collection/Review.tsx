@@ -5,6 +5,7 @@ import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
 import { useCollection } from "./useCollection";
 import { CollectionSharing } from "./CollectionSharing";
+import { OwnerReplies } from "./OwnerReplies";
 import { FilmGenerationPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
 import {
@@ -81,13 +82,15 @@ export default function Review({
     setLocalError("");
     const result = await act({
       action: "generate",
+      prepareFilms: true,
+      processingApproved: true,
       ...(regenerate ? { regenerate: true } : {}),
     });
     if (result) {
       setEditorStates({});
       setActiveChapter("q1");
       setNotice(
-        "Your four story drafts are ready. Start with the first story below.",
+        "Your story drafts are saved. We’re preparing films from your original recordings. You can follow progress below.",
       );
     }
     setWorking(false);
@@ -98,6 +101,7 @@ export default function Review({
     const result = await act({
       action: "approve",
       deliveryMode: "digital",
+      autoPostcards: true,
       ...(writtenOnly ? { allowWrittenOnly: true } : {}),
     });
     if (result) {
@@ -242,7 +246,15 @@ export default function Review({
         </p>
 
         {approved ? (
-          <CollectionSharing collection={c} busy={busy} act={act} />
+          <>
+            <CollectionSharing collection={c} busy={busy} act={act} />
+            <OwnerReplies
+              collection={c}
+              accessKey={accessKey}
+              busy={busy}
+              onRefresh={() => void load()}
+            />
+          </>
         ) : (
           <>
             {!c.chapters.length ? (
@@ -266,6 +278,10 @@ export default function Review({
                     </li>
                   ))}
                 </ol>
+                <p className="mt-5 text-base leading-7 text-ink-500">
+                  Preparation uses ElevenLabs to transcribe your original audio
+                  and assemble the films. Nothing is shared until you approve.
+                </p>
                 <button
                   className={`${portalPrimary} mt-6`}
                   disabled={blocked}
@@ -395,9 +411,10 @@ export default function Review({
                   </h2>
                   <p className="mt-4 max-w-3xl text-base leading-8 text-ink-500">
                     Approve only when all four stories and any included films
-                    say what you want to share. This saves a fixed version and
-                    opens your private sharing link and QR code. No mailing
-                    address is needed for digital sharing.
+                    say what you want to share. This saves a fixed version,
+                    opens your private family page, and prepares the four
+                    postcards automatically. If the mailing address is missing,
+                    we’ll ask your recipient for it.
                   </p>
                   <p className="mt-4 text-base font-medium">
                     {reviewedCount} of 4 story reviews saved.
@@ -419,14 +436,13 @@ export default function Review({
                     className={`${portalPrimary} mt-5`}
                     onClick={() => void approve()}
                   >
-                    {busy
-                      ? "Saving your approval…"
-                      : "Approve and open sharing"}
+                    {busy ? "Saving your approval…" : "Approve my collection"}
                     <AppIcon name="arrowRight" size={18} />
                   </button>
                   <p className="mt-3 text-sm leading-6 text-ink-500">
-                    Approval queues a completion email for {c.recipient.name}.
-                    You can check its delivery status afterward. Approved
+                    Approval starts the automatic postcard process and emails
+                    you a confirmation. The first postcard introduces the
+                    collection, followed by cards at months 3, 6 and 9. Approved
                     stories cannot be edited in this pilot.
                   </p>
                 </section>

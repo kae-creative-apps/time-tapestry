@@ -1,67 +1,65 @@
 # Story film worker
 
-Time Tapestry can create four private films from the four reviewed written chapters. Each film contains the complete saved chapter text, a short disclosure, narration by the configured ElevenLabs interviewer's voice, progressive text captions, a restrained brand pattern, and the four-second HyperFrames closer. The renderer does not clone the storyteller's voice or assemble their original camera recordings. Original recordings remain separate and available.
+The primary film path uses the storyteller's own recorded microphone audio and camera video. After written drafts are saved and processing consent is recorded, a durable job transcribes the actual source recordings with ElevenLabs Scribe v2. It matches saved user answers to word timestamps, assembles all four themes, levels an audio copy with ffmpeg, adds source-timed captions and the branded title and closer, and attaches the four films together. It never clones a personal voice, modifies an original, or uses transcript arrival times as cuts.
 
-The storyteller approves the scripts and AI narration before a job is queued. All four outputs must finish before they are attached to the collection. The storyteller then watches and approves each exact output before publication. Editing a story invalidates its film review. A written-only publication path remains available.
+Each finished film still needs the owner's final approval of its exact output hash before sharing. Successful attachment queues one owner review-ready notification. The protected delivery job sends it. It does not send family links before approval.
+
+AI interviewer narration remains an explicit alternative. That mode contains the complete saved written chapter, an AI disclosure, the configured interviewer's synthesized voice, progressive narration captions, and the four-second HyperFrames closer. Scripts and the AI voice must be approved before enqueueing that mode. A written-only path remains available.
 
 ## Start the worker
 
-Run from the source project directory with Node 24, the installed npm dependencies, `ffmpeg`, and `ffprobe` on PATH. Remotion also needs its supported Chromium binary. The first render may download Chromium if it is not already cached.
+Run from the source project with Node 24, installed npm dependencies, `ffmpeg`, and `ffprobe` on PATH. Remotion also needs its supported Chromium binary. The first render may download Chromium if it is not cached.
 
 ```sh
 npm run video:worker
 ```
 
-The worker loads `.env.local` using Next's environment loader. It polls every three seconds, renews active job leases, and publishes a heartbeat every twenty seconds. Keep the worker running on a machine that remains awake. Closing the process, putting the machine to sleep, or disconnecting its storage can interrupt a render. A terminal command is not a managed production service. A hosted deployment needs a supervised long-running worker with the same storage configuration as its web server.
+The worker loads `.env.local`, polls every three seconds, renews active leases, and writes a heartbeat every twenty seconds. A heartbeat older than 90 seconds is reported as offline. Keep its machine awake. This terminal command is not a managed production service. Hosted operation needs a supervised long-running worker sharing the web server's metadata and media storage. No API route launches rendering subprocesses.
 
-For a single queued job:
+For one already queued job:
 
 ```sh
 npm run video:films -- --job=film_HASH
 ```
 
-This command accepts an already approved job. It does not create approval or bypass the private review page.
-
 ## Configuration
 
 | Variable | Purpose |
 | --- | --- |
-| `ELEVENLABS_API_KEY` | Server-only ElevenLabs access. |
-| `ELEVENLABS_AGENT_ID` | Interviewer whose current voice is verified and saved with the job. |
-| `COLLECTION_DATA_DIR` | Local collection store. The web server and worker must use the same absolute directory. Defaults to `.data/collections`. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Shared metadata and job storage for a hosted deployment. |
-| `BLOB_READ_WRITE_TOKEN` | Private generated-media storage. Required when using shared KV or Vercel. |
-| `STORY_FILM_TTS_MODEL` | Optional REST narration model. Defaults to `eleven_multilingual_v2`; also accepts `eleven_turbo_v2_5` and `eleven_flash_v2_5`. The agent's conversational model is not assumed to support REST narration. |
-| `STORY_FILM_DAILY_LIMIT` | Maximum new generation versions per collection in a rolling 24 hours. Defaults to 3; configurable from 1 to 10. Reading an existing version does not consume another version. |
-| `STORY_FILM_CLOSER_FILE` | Optional absolute path to a verified four-second MP4. Defaults to `public/brand/film-closer-v2.mp4`. |
-| `COLLECTION_STORAGE_LIMIT_BYTES` | Collection storage allowance, shared with original recordings. Defaults to 2 GiB; each output has a 512 MiB limit. |
+| `ELEVENLABS_API_KEY` | Server-only Scribe transcription and optional AI narration access. Manual reviewed original cuts do not need it. |
+| `ELEVENLABS_AGENT_ID` | Required only for optional interviewer narration. Its current voice is verified and snapshotted. |
+| `COLLECTION_DATA_DIR` | Local store. Web server and worker must use the same absolute directory. Defaults to `.data/collections`. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Shared hosted metadata and durable job storage. |
+| `BLOB_READ_WRITE_TOKEN` | Private media storage, required with shared KV or Vercel. |
+| `STORY_FILM_TTS_MODEL` | Optional narration REST model, default `eleven_multilingual_v2`. Also accepts `eleven_turbo_v2_5` and `eleven_flash_v2_5`. |
+| `STORY_FILM_DAILY_LIMIT` | New versions per collection over 24 hours, default 3, configurable 1 to 10. Duplicate requests reuse the version. |
+| `STORY_FILM_CLOSER_FILE` | Optional verified four-second MP4. Default `public/brand/film-closer-v2.mp4`. |
+| `COLLECTION_STORAGE_LIMIT_BYTES` | Shared collection storage allowance, default 2 GiB. Each uploaded output is limited to 512 MiB. |
 
-The bundled font is `public/brand/fonts/quicksand-latin.woff2`. The renderer serves only its specific audio, font, and closer assets on a temporary localhost server. It does not publish a private media directory.
+The renderer uses `public/brand/fonts/quicksand-latin.woff2`. A temporary localhost server exposes only that job's verified assets through unguessable paths, not a private directory.
 
-## Jobs and recovery
+## Automatic editing and its limits
 
-`GET /api/collection/:id/films?key=OWNER_KEY` returns private job progress and worker availability. A heartbeat older than 90 seconds is reported as offline. The generation endpoint requires owner access, script approval, the request protection checks, and a healthy worker. It never launches a subprocess from an API request.
+The live recorder captures the selected microphone and optional camera. It does not digitally mix the interviewer audio. Acoustic speaker bleed is possible despite echo cancellation. Approximately four-minute recording files roll independently of themes, with a small overlap to preserve speech. Saved live transcript turns are explicitly unaligned.
 
-A version is identified by the reviewed chapter text, selected source IDs and text, narrator voice settings, REST model, and template version. Duplicate requests reuse that version. A newer version prevents an older job from attaching its outputs.
+The automatic path obtains word timestamps from the actual microphone track. Theme attribution comes from the saved user answers, not a newly invented story classification. It matches complete consecutive user answers within a theme, in chronological order. Source words at rollover edges are retained only where matched. Cuts preserve full words with short bounded padding; captions use the source timestamps. Dedicated accepted question recordings retain the whole take and natural pauses. Audio-only originals use branded artwork. Optional video-to-audio presentation keeps the original audio, with no new narration.
 
-Each job holds a renewable two-minute lease. A stopped or expired worker cannot attach output. Recovery marks an interrupted job failed and requires an explicit owner retry, with at most three total attempts. Completed narration chunks and rendered files are reused only after their hashes match. An unfinished provider request can have been processed without its response being saved, so a retry can repeat that unfinished part. The free pilot does not charge participants.
+This is conservative automatic assembly, not a semantic highlight editor. A match requires at least 90 percent token agreement, verified beginning and ending words, a unique source passage, and no conflicting diarized speaker within it. Ambiguous matches, missing recordings, unexpected multiple speakers, impossible timing, or a theme with no usable original stop for attention. The worker never fabricates alignment or silently substitutes AI narration. Edited written stories can differ from the actual spoken film and must not be described as exact transcripts.
 
-Local intermediate files are in `COLLECTION_DATA_DIR/film-work/JOB_ID/CHAPTER_ID`. Final local videos are in `COLLECTION_DATA_DIR/media`; hosted outputs use private Blob paths `collections/COLLECTION_ID/MEDIA_ID.mp4`. Request receipts, source and script hashes, audio hashes, output hashes, source IDs, voice/model IDs, and render receipts preserve provenance. These private files must not be committed to Git.
+The normal portal does not require clip selection. The owner-authenticated original-plan API remains available for controlled recovery: save a draft with its base revision hash, review in/out cuts, then explicitly approve an original render. This recovery mode has no inferred captions. The older CLI collection exporter still deliberately stops on unaligned live material; the new worker has a separate verified source-plan adapter supporting several answers in one source file and answers spanning files.
 
-A film may contain up to one hour, including its intro and closer. A complete script may contain up to 32,000 characters. Oversized stories fail clearly rather than being silently shortened. Missing narration configuration, invalid timing, mismatched sources, missing media, quota failures, and render errors cannot produce a ready film.
+## Jobs, version fences and recovery
+
+`GET /api/collection/:id/films?key=OWNER_KEY` returns job progress, mode, preparation method and availability. Automatic jobs have `mode: original` and `preparation: automatic`, with stages `queued`, `transcribing`, `matching`, `preparing`, `rendering`, `ready`, `failed` or `stale`. `POST` action `prepare_automatic` requires `processingApproved: true`. `retry_automatic` requires the same consent and `jobId`. Collection draft generation can enqueue directly after saving, so closing the browser does not abandon preparation.
+
+All film modes share a latest-version fence. Versions cover current chapter content, source selections, original metadata, presentation settings and template version, plus voice settings for AI narration. A newer job or changed source prevents an older worker from attaching. All four outputs attach atomically and reset each exact-output review.
+
+Leases renew every twenty seconds and expire after two minutes. Original transcription network errors, HTTP 408/429/5xx and recoverable connection failures receive a persisted `nextAttemptAt`, with at most three total job attempts. Original jobs interrupted by a lease crash resume after a delay, also within that bound. Alignment and media validation failures require attention. Completed transcripts, audio derivatives and renders are reused only after their source/output hashes match. An interrupted Scribe request can have been processed without its response being saved; a bounded retry may repeat that request. Optional AI voice jobs retain explicit owner retries because an unfinished paid narration call may have completed.
+
+Private work lives in `COLLECTION_DATA_DIR/film-work/JOB_ID`, including preserved original copies, measured durations, source-word transcripts, cut plans and provenance. Final local videos are in `COLLECTION_DATA_DIR/media`; hosted paths are `collections/COLLECTION_ID/MEDIA_ID.mp4` in private Blob storage. Do not commit these files. Originals remain untouched and separately available.
+
+Each film is limited to one hour including its title and closer. A source file is limited to two hours. Narration scripts have a 32,000-character limit. Quota, missing configuration, source mismatch, incomplete media or failed verification cannot produce a ready film.
 
 ## QA
 
-Automated film tests use fictional examples and no live providers. The end-to-end render check uses four explicitly synthetic chapters with `example.test` contacts. Do not use private family stories for operator QA without reviewing the actual scripts and obtaining the requested narration approval.
-
-The film's large progressive captions are a visual narration treatment. They are not a replacement for source recordings or evidence of an original speaker's exact delivery. The original clip-edit pipeline remains a separate, manually reviewed workflow.
-
-## Original recordings are the preferred direction
-
-The preferred experience is the storyteller's own video when it exists, or their own recorded voice. AI narration is an optional alternative. The original recordings can be reviewed beside the written stories now; this does not mean four original-recording films are ready.
-
-The live recorder captures the selected microphone and optional camera through `getUserMedia`. It does not digitally mix the interviewer's output into that recording. Echo cancellation is requested, but a speaker can still be picked up acoustically. Recordings roll into roughly four-minute files independently of story themes, with a small recorded overlap to avoid losing speech.
-
-Live transcript turns have a theme and arrival time, but are explicitly marked `unaligned`. Their arrival times are not verified speech boundaries. An unaligned answer can reference every recording segment in its session. Never use those references to repeat a full recording for each answer or to infer automatic cuts. The existing source exporter deliberately stops and produces an editorial source guide for these live recordings.
-
-Four source films require verified in/out ranges, source-timed captions where included, and review of each complete edit. The existing `ChapterFilm` composition and source renderer support original video and original audio with titles and a closer, but the current export/import mapping must be extended for live answers spanning multiple segments or sharing one segment. Question-by-question accepted recordings already have a more direct source mapping. Original footage must stay intact, and an edited written story must not be presented as an exact transcript of a differently worded recording.
+Unit tests use fictional examples and no providers. `scripts/verify-original-films.ts --real-asr` creates a clearly synthetic fixture using macOS speech synthesis, calls real Scribe on that fixture, and renders four original-audio films. It writes its private evidence report under `.data/original-automatic-qa/verified.json`. `--retry` reuses that fixture and cached work. The test requires the explicit flag for the real transcription call, and never reads a family collection. It verifies audio/video streams, original preservation, output hashes, four-film attachment and the remaining owner review gate.

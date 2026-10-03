@@ -95,6 +95,9 @@ export async function prepareNarration(
   assertCurrent: () => Promise<void>,
   provider = narrateFilmChunk,
 ) {
+  const voice = job.voice;
+  if (!voice)
+    throw new Error("This narration job has no approved interviewer voice.");
   await mkdir(work, { recursive: true, mode: 0o700 });
   const audioFile = path.join(work, "narration.wav");
   const receiptFile = path.join(work, "narration.json");
@@ -129,12 +132,12 @@ export async function prepareNarration(
       await privateJson(`${file}.request.json`, {
         requestedAt: new Date().toISOString(),
         scriptSha256,
-        voiceId: job.voice.voiceId,
-        modelId: job.voice.modelId,
+        voiceId: voice.voiceId,
+        modelId: voice.modelId,
         attempt: job.attempts,
       });
       const result = await provider(
-        job.voice,
+        voice,
         text,
         chunks[index - 1]?.slice(-500),
         chunks[index + 1]?.slice(0, 500),

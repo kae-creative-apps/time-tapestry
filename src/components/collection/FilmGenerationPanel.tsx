@@ -1,14 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AutomaticFilmPanel } from "./AutomaticFilmPanel";
 import { AppIcon } from "@/components/icons";
 import type { CollectionView } from "@/lib/collection/types";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
 
 type FilmStatus =
-  "queued" | "narrating" | "rendering" | "ready" | "failed" | "stale";
+  | "queued"
+  | "transcribing"
+  | "matching"
+  | "preparing"
+  | "narrating"
+  | "rendering"
+  | "ready"
+  | "failed"
+  | "stale";
 export type PortalFilmJob = {
   id: string;
+  mode?: string;
   status: FilmStatus;
   error?: string;
   chapters: {
@@ -20,9 +30,19 @@ export type PortalFilmJob = {
   }[];
 };
 const isActive = (status?: string) =>
-  ["queued", "narrating", "rendering"].includes(status || "");
+  [
+    "queued",
+    "transcribing",
+    "matching",
+    "preparing",
+    "narrating",
+    "rendering",
+  ].includes(status || "");
 const labels: Record<FilmStatus, string> = {
   queued: "Waiting to begin",
+  transcribing: "Listening to the recordings",
+  matching: "Finding each story",
+  preparing: "Preparing the recordings",
   narrating: "Preparing narration",
   rendering: "Creating the film",
   ready: "Ready to review",
@@ -47,6 +67,7 @@ export function FilmGenerationPanel({
   writtenOnly: boolean;
   onWrittenOnly: (value: boolean) => void;
 }) {
+  const [originalActive, setOriginalActive] = useState(false);
   const [job, setJob] = useState<PortalFilmJob | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState("");
@@ -95,7 +116,7 @@ export function FilmGenerationPanel({
         if (controller.signal.aborted) return;
         setAvailable(Boolean(result.available));
         setAvailabilityNotice(result.notice || "");
-        acceptJob(result.job || null);
+        acceptJob(result.job?.mode === "original" ? null : result.job || null);
         setError(result.error || "");
         if (isActive(result.job?.status)) timer = setTimeout(check, 10000);
       } catch (cause) {
@@ -117,11 +138,11 @@ export function FilmGenerationPanel({
   }, [endpoint, revision, acceptJob]);
   const active = working || isActive(job?.status);
   useEffect(() => {
-    onActiveChange(active);
+    onActiveChange(active || originalActive);
     if (active) setShowAi(true);
-  }, [active, onActiveChange]);
+  }, [active, originalActive, onActiveChange]);
   async function generate(retry = false) {
-    if (disabled || active || !scriptsApproved) return;
+    if (disabled || active || originalActive || !scriptsApproved) return;
     setWorking(true);
     setError("");
     try {
@@ -159,7 +180,7 @@ export function FilmGenerationPanel({
           type="checkbox"
           className="mt-1 h-5 w-5 shrink-0"
           checked={scriptsApproved}
-          disabled={disabled || active}
+          disabled={disabled || active || originalActive}
           onChange={(event) => setScriptsApproved(event.target.checked)}
         />
         <span>
@@ -170,7 +191,13 @@ export function FilmGenerationPanel({
       <button
         type="button"
         onClick={() => void generate(job?.status === "failed")}
-        disabled={disabled || active || !scriptsApproved || available !== true}
+        disabled={
+          disabled ||
+          active ||
+          originalActive ||
+          !scriptsApproved ||
+          available !== true
+        }
         className={`${filmsReady ? portalSecondary : portalPrimary} mt-5`}
       >
         {working
@@ -186,139 +213,148 @@ export function FilmGenerationPanel({
   );
 
   return (
-    <section
-      aria-labelledby="sharing-choice-heading"
-      className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7"
-    >
-      <h2 id="sharing-choice-heading" className="text-2xl font-semibold">
-        Choose what to share
-      </h2>
-      <p className="mt-3 text-base leading-7 text-ink-500">
-        You can share the written stories without creating AI films. Your
-        original recordings stay private in your workspace.
-      </p>
-      <label className="mt-5 flex items-start gap-3 text-base leading-7">
-        <input
-          type="checkbox"
-          className="mt-1 h-5 w-5 shrink-0"
-          checked={writtenOnly}
-          disabled={disabled || active}
-          onChange={(event) => onWrittenOnly(event.target.checked)}
-        />
-        <span>
-          Share written stories without creating new films. I will review each
-          story first.
-        </span>
-      </label>
-      {c.chapters.some((chapter) => chapter.videoMediaId) && (
-        <p className="mt-3 text-base leading-7 text-ink-500">
-          Any film already attached remains part of this collection and must
-          also be reviewed before sharing.
-        </p>
-      )}
-      <details
-        className="mt-6 rounded-2xl border border-sage-200 bg-sage-50 p-5"
-        open={showAi}
-        onToggle={(event) => setShowAi(event.currentTarget.open)}
+    <div className="space-y-6">
+      <AutomaticFilmPanel
+        collection={c}
+        accessKey={accessKey}
+        disabled={disabled || active}
+        onActiveChange={setOriginalActive}
+        onComplete={onComplete}
+      />
+      <section
+        aria-labelledby="sharing-choice-heading"
+        className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7"
       >
-        <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-          {active
-            ? "AI films are being prepared"
-            : "Optional: create films with an AI voice"}
-        </summary>
-        <div className="mt-4">
-          <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-sage-700">
-              <AppIcon name="video" size={25} />
-            </span>
-            <div>
-              <h2 id="film-heading" className="text-2xl font-semibold">
-                {active
-                  ? "Your AI narrated films are being prepared."
-                  : "AI narration from your written stories"}
-              </h2>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-ink-500">
-                The AI interviewer narrates your complete saved stories. It is
-                an AI voice, not a recording or imitation of your voice. Your
-                originals remain available, and nothing is shared until you
-                approve.
-              </p>
+        <h2 id="sharing-choice-heading" className="text-2xl font-semibold">
+          Other ways to share
+        </h2>
+        <p className="mt-3 text-base leading-7 text-ink-500">
+          Prefer a written keepsake? You can share the stories without films.
+          Full original recordings stay private; only approved films are shared.
+        </p>
+        <label className="mt-5 flex items-start gap-3 text-base leading-7">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 shrink-0"
+            checked={writtenOnly}
+            disabled={disabled || active || originalActive}
+            onChange={(event) => onWrittenOnly(event.target.checked)}
+          />
+          <span>
+            Share written stories without creating new films. I will review each
+            story first.
+          </span>
+        </label>
+        {c.chapters.some((chapter) => chapter.videoMediaId) && (
+          <p className="mt-3 text-base leading-7 text-ink-500">
+            Any film already attached remains part of this collection and must
+            also be reviewed before sharing.
+          </p>
+        )}
+        <details
+          className="mt-6 rounded-2xl border border-sage-200 bg-sage-50 p-5"
+          open={showAi}
+          onToggle={(event) => setShowAi(event.currentTarget.open)}
+        >
+          <summary className="min-h-12 cursor-pointer text-lg font-semibold">
+            {active
+              ? "AI films are being prepared"
+              : "Optional: create films with an AI voice"}
+          </summary>
+          <div className="mt-4">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-sage-700">
+                <AppIcon name="video" size={25} />
+              </span>
+              <div>
+                <h2 id="film-heading" className="text-2xl font-semibold">
+                  {active
+                    ? "Your AI narrated films are being prepared."
+                    : "AI narration from your written stories"}
+                </h2>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-ink-500">
+                  The AI interviewer narrates your complete saved stories. It is
+                  an AI voice, not a recording or imitation of your voice. Your
+                  originals remain available, and nothing is shared until you
+                  approve.
+                </p>
+              </div>
             </div>
-          </div>
-          {job && (
-            <div className="mt-5">
-              <p role="status" className="mb-3 text-sm font-medium">
-                {
-                  job.chapters.filter((chapter) => chapter.status === "ready")
-                    .length
-                }{" "}
-                of 4 films prepared
-                {active
-                  ? ". You can leave this page and return to check progress."
-                  : "."}
-              </p>
-              <ol className="grid gap-3 sm:grid-cols-2">
-                {job.chapters.map((chapter, index) => (
-                  <li
-                    key={chapter.chapterId}
-                    className="flex items-start justify-between gap-3 rounded-xl bg-white px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {index + 1}. {chapter.title}
-                      </p>
-                      <p className="mt-1 text-sm text-ink-500">
-                        {labels[chapter.status] || chapter.status}
-                      </p>
-                      {chapter.error && (
-                        <p className="mt-2 text-sm text-oxblood">
-                          {chapter.error}
+            {job && (
+              <div className="mt-5">
+                <p role="status" className="mb-3 text-sm font-medium">
+                  {
+                    job.chapters.filter((chapter) => chapter.status === "ready")
+                      .length
+                  }{" "}
+                  of 4 films prepared
+                  {active
+                    ? ". You can leave this page and return to check progress."
+                    : "."}
+                </p>
+                <ol className="grid gap-3 sm:grid-cols-2">
+                  {job.chapters.map((chapter, index) => (
+                    <li
+                      key={chapter.chapterId}
+                      className="flex items-start justify-between gap-3 rounded-xl bg-white px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {index + 1}. {chapter.title}
                         </p>
+                        <p className="mt-1 text-sm text-ink-500">
+                          {labels[chapter.status] || chapter.status}
+                        </p>
+                        {chapter.error && (
+                          <p className="mt-2 text-sm text-oxblood">
+                            {chapter.error}
+                          </p>
+                        )}
+                      </div>
+                      {chapter.status === "ready" && (
+                        <AppIcon
+                          name="check"
+                          size={19}
+                          className="shrink-0 text-sage-700"
+                        />
                       )}
-                    </div>
-                    {chapter.status === "ready" && (
-                      <AppIcon
-                        name="check"
-                        size={19}
-                        className="shrink-0 text-sage-700"
-                      />
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-          <PortalError message={error || job?.error || ""} />
-          {available === false && !active && (
-            <p className="mt-4 text-base leading-7 text-ink-500">
-              {availabilityNotice ||
-                "Film creation is currently unavailable. Your stories and recordings are saved. You can return later or choose to share the written stories."}
-            </p>
-          )}
-          {!active && !writtenOnly && consent}
-          {!active && writtenOnly && (
-            <p className="mt-4 text-base leading-7 text-ink-500">
-              You chose written stories. Uncheck that option above if you would
-              like to create AI narrated films instead.
-            </p>
-          )}
-          {disabled && !active && (
-            <p className="mt-4 text-sm leading-6 text-ink-500">
-              Save any open edits and resolve changed answers before creating
-              films.
-            </p>
-          )}
-          {(error || available === false) && (
-            <button
-              type="button"
-              className="mt-4 min-h-12 text-base font-medium underline underline-offset-4"
-              onClick={() => setRevision((value) => value + 1)}
-            >
-              Refresh film status
-            </button>
-          )}
-        </div>
-      </details>
-    </section>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <PortalError message={error || job?.error || ""} />
+            {available === false && !active && (
+              <p className="mt-4 text-base leading-7 text-ink-500">
+                {availabilityNotice ||
+                  "Film creation is currently unavailable. Your stories and recordings are saved. You can return later or choose to share the written stories."}
+              </p>
+            )}
+            {!active && !writtenOnly && consent}
+            {!active && writtenOnly && (
+              <p className="mt-4 text-base leading-7 text-ink-500">
+                You chose written stories. Uncheck that option above if you
+                would like to create AI narrated films instead.
+              </p>
+            )}
+            {disabled && !active && (
+              <p className="mt-4 text-sm leading-6 text-ink-500">
+                Save any open edits and resolve changed answers before creating
+                films.
+              </p>
+            )}
+            {(error || available === false) && (
+              <button
+                type="button"
+                className="mt-4 min-h-12 text-base font-medium underline underline-offset-4"
+                onClick={() => setRevision((value) => value + 1)}
+              >
+                Refresh film status
+              </button>
+            )}
+          </div>
+        </details>
+      </section>
+    </div>
   );
 }
