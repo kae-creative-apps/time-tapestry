@@ -1,6 +1,7 @@
 'use client';
 
 import { QRCodeSVG } from 'qrcode.react';
+import { BrandLockup } from './Logo';
 import { cn } from '@/lib/utils';
 
 export type PostcardProps = {
@@ -41,12 +42,11 @@ export function Postcard({
     >
       <div
         className={cn(
-          'rounded-lg border border-warmgray-300 bg-paper-50 p-6 shadow-lift',
-          'postcard-paper'
+          'rounded-xl border border-warmgray-200 bg-paper-50 p-6'
         )}
       >
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="flex flex-col items-center justify-center border-2 border-dashed border-warmgray-300 p-6 text-center">
+          <div className="flex flex-col items-center justify-center rounded-lg bg-paper-100 p-6 text-center">
             {chapterIndex === 0 && (
               <div className="mb-4 rounded-full bg-oxblood px-3 py-1 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-paper">
                 Welcome
@@ -58,13 +58,10 @@ export function Postcard({
             <p className="font-serif text-base leading-relaxed text-ink">
               {frontContent}
             </p>
-            <div className="mt-6 h-px w-16 bg-warmgray-400" />
-            <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.18em] text-warmgray-500">
-              Time Tapestry
-            </p>
+            <BrandLockup className="mt-8" />
           </div>
 
-          <div className="flex flex-col justify-between gap-6 border-l border-dashed border-warmgray-300 p-6 md:pl-6">
+          <div className="flex flex-col justify-between gap-6 border-t border-warmgray-200 p-6 md:border-l md:border-t-0 md:pl-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-warmgray-500">
@@ -72,12 +69,8 @@ export function Postcard({
                 </p>
                 <p className="font-serif text-base text-ink">{sentDate}</p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-oxblood bg-paper text-center shadow-sm">
-                <span className="font-serif text-[10px] font-semibold leading-none text-oxblood">
-                  TT
-                  <br />
-                  Post
-                </span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-md border border-warmgray-300 bg-paper-50 text-oxblood">
+                <BrandLockup variant="mark" />
               </div>
             </div>
 
@@ -94,7 +87,7 @@ export function Postcard({
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between border-t border-dashed border-warmgray-300 pt-4">
+        <div className="mt-4 flex items-center justify-between border-t border-warmgray-200 pt-4">
           <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-warmgray-500">
             Card {chapterIndex + 1} of 5
           </p>

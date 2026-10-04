@@ -1,21 +1,24 @@
-import { StoryDisplay } from '@/components/StoryDisplay';
-import { Logo } from '@/components/Logo';
-import { Footer } from '@/components/Footer';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { getSession } from '@/lib/session';
-import Link from 'next/link';
+import { legacyPageAllowed } from "@/lib/legacy-access";
+import LegacyAccessNotice from "@/components/LegacyAccessNotice";
+import { StoryDisplay } from "@/components/StoryDisplay";
+import { Logo } from "@/components/Logo";
+import { Footer } from "@/components/Footer";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { getSession } from "@/lib/session";
+import Link from "next/link";
 
 export default async function KeepsakePage({
-  params
+  params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await legacyPageAllowed())) return <LegacyAccessNotice />;
   const { id } = await params;
   const session = await getSession(id);
   const story = session?.story;
-  const grandparentName = session?.grandparent.name ?? 'A beloved storyteller';
-  const grandchildName = session?.grandchild.name ?? 'you';
+  const grandparentName = session?.grandparent.name ?? "A beloved storyteller";
+  const grandchildName = session?.grandchild.name ?? "you";
 
   if (!session || !story || story.chapters.length === 0) {
     return (
@@ -23,10 +26,12 @@ export default async function KeepsakePage({
         <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
           <Logo className="mb-8" />
           <Card className="text-center">
-            <h1 className="mb-4 font-serif text-3xl text-ink">Story not found</h1>
+            <h1 className="mb-4 font-serif text-3xl text-ink">
+              Story not found
+            </h1>
             <p className="text-ink-500">
-              We couldn&apos;t find a finished story for this link. Please finish the
-              interview and approve your story first.
+              We couldn&apos;t find a finished story for this link. Please
+              finish the interview and approve your story first.
             </p>
           </Card>
         </main>
@@ -47,7 +52,8 @@ export default async function KeepsakePage({
             Kept for {grandchildName}, to read and return to.
           </h1>
           <p className="mb-8 text-base leading-relaxed text-ink-500">
-            This can be a grandparent, great-aunt, mentor, family friend, or any person whose story you want to keep.
+            This can be a grandparent, great-aunt, mentor, family friend, or any
+            person whose story you want to keep.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link href={`/act/${id}`} className="w-full sm:w-auto">
@@ -74,7 +80,8 @@ export default async function KeepsakePage({
 
         <footer className="mt-12 border-t border-warmgray-300 py-6 text-center">
           <p className="font-sans text-sm text-warmgray-500">
-            We don&apos;t sell data. Your family&apos;s stories belong to your family.
+            We don&apos;t sell data. Your family&apos;s stories belong to your
+            family.
           </p>
         </footer>
       </main>

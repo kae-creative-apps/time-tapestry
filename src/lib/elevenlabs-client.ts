@@ -1,35 +1,96 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
-const apiKey = process.env.ELEVENLABS_API_KEY;
+const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
 
-export const elevenlabs = apiKey ? new ElevenLabsClient({ apiKey }) : null;
+export const elevenlabs = apiKey
+  ? new ElevenLabsClient({ apiKey, timeoutInSeconds: 20, maxRetries: 0 })
+  : null;
 
-// deliberate: default to Rachel for a warm, conversational sound; Alice stays available via env
-const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL';
+export type InterviewerVoice = {
+  agentId: string;
+  voiceId: string;
+  modelId: string;
+  settings: {
+    stability: number;
+    similarityBoost: number;
+    speed: number;
+    style: number;
+    useSpeakerBoost: boolean;
+  };
+};
+
+export function interviewerVoiceConfigured() {
+  return Boolean(
+    process.env.ELEVENLABS_API_KEY?.trim() &&
+    process.env.ELEVENLABS_AGENT_ID?.trim(),
+  );
+}
+
+const finite = (value: unknown, fallback: number, min: number, max: number) =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= min &&
+  value <= max
+    ? value
+    : fallback;
+
+/** Resolve the same interviewer's identity and settings for every generated voiceover. */
+export async function resolveInterviewerVoice(): Promise<InterviewerVoice> {
+  if (!elevenlabs || !interviewerVoiceConfigured())
+    throw new Error(
+      "The interviewer voice is not configured. Your written questions and original recordings are still available.",
+    );
+  // Realtime agent models may require a different transport. Keep one explicit,
+  // supported REST model for both read-aloud and film narration, never another voice.
+  const modelId =
+    process.env.STORY_FILM_TTS_MODEL?.trim() || "eleven_multilingual_v2";
+  if (
+    ![
+      "eleven_multilingual_v2",
+      "eleven_turbo_v2_5",
+      "eleven_flash_v2_5",
+    ].includes(modelId)
+  )
+    throw new Error(
+      "Choose a supported REST narration model for STORY_FILM_TTS_MODEL.",
+    );
+  const agentId = process.env.ELEVENLABS_AGENT_ID!.trim();
+  let agent;
+  try {
+    agent = await elevenlabs.conversationalAi.agents.get(agentId);
+  } catch {
+    throw new Error(
+      "The interviewer voice could not be verified. Please try again.",
+    );
+  }
+  const tts = agent.conversationConfig.tts;
+  if (!tts?.voiceId?.trim())
+    throw new Error("The configured interviewer has no narration voice.");
+  return {
+    agentId,
+    voiceId: tts.voiceId,
+    modelId,
+    settings: {
+      stability: finite(tts.stability, 0.5, 0, 1),
+      similarityBoost: finite(tts.similarityBoost, 0.75, 0, 1),
+      speed: finite(tts.speed, 1, 0.7, 1.2),
+      style: 0,
+      useSpeakerBoost: true,
+    },
+  };
+}
 
 export async function streamTextToSpeech(
   text: string,
-  voiceId: string = DEFAULT_VOICE_ID
-): Promise<ReadableStream<Uint8Array> | null> {
-  if (!elevenlabs) return null;
-  const response = await elevenlabs.textToSpeech.stream(voiceId, {
+  beforeGenerate: () => Promise<void>,
+): Promise<ReadableStream<Uint8Array>> {
+  const voice = await resolveInterviewerVoice();
+  // Verify the current voice before consuming the shared paid-provider allowance.
+  await beforeGenerate();
+  const response = await elevenlabs!.textToSpeech.stream(voice.voiceId, {
     text,
-    modelId: process.env.ELEVENLABS_MODEL || 'eleven_turbo_v2_5',
-    voiceSettings: {
-      stability: 0.4,
-      similarityBoost: 0.8,
-      style: 0.6,
-      useSpeakerBoost: true,
-      speed: 0.9
-    }
+    modelId: voice.modelId,
+    voiceSettings: voice.settings,
   });
   return response as unknown as ReadableStream<Uint8Array>;
-}
-
-export function speakWithBrowserTTS(text: string): void {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.85;
-  utterance.pitch = 1.02;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
 }

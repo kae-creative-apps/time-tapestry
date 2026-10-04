@@ -32,7 +32,7 @@ export function AudioPlayer({ src }: { src?: string }) {
 
   if (!available) {
     return (
-      <p className="text-sm italic text-warmgray-500">
+      <p className="text-sm text-warmgray-500">
         Audio narration will appear here.
       </p>
     );

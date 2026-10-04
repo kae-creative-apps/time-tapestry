@@ -1,0 +1,64 @@
+TIME TAPESTRY | PRESENTER SCRIPT V3
+October 2, 2026. Editable rehearsal draft.
+
+90-SECOND SUMMARY ROUTE
+Use slides 1, 2, 4, 6, 7 and 10. Approximately 180 spoken words; rehearse and trim to your pace. Keep the separately submitted demo video within 90 seconds too. Do not assume the event gives extra stage time for both.
+
+TAYLOE | slides 1–2
+Forty-three percent of Americans over 50 named life lessons and values among their most important legacies. Time Tapestry helps families put those values into stories they can return to.
+
+KAELYN | slide 4
+I use Marco Polo to stay connected with people who live far away. We do not have to be free at the same time. Time Tapestry brings that flexibility to stories of faith and generosity.
+
+TAYLOE | slides 4–6
+A family member can ask these questions. We help them follow through: answer when they can, review four chapters, and share a complete collection. Four postcards invite the family to return and respond.
+
+KAELYN | slide 7
+Our typed-answer journey, review, private video playback and replies passed local checks. AI connections for questions and transcription are implemented; live validation remains. Human review stays essential.
+
+TAYLOE | slide 10
+Our proposed church pilot will test completed stories, meaningful conversations and willingness to pay. We want families to have stories they can return to and a conversation they can continue.
+
+OPTIONAL 40-SECOND MARKET INSERT
+Use this instead of other material when the speaking limit allows it. Do not add it to the complete 90-second route.
+
+KAELYN
+I use Marco Polo to stay connected with people who live far away. We do not have to be available at the same time. Could we create that same space for the stories and faith our families want to carry?
+
+TAYLOE
+A family member can ask these questions. Time Tapestry helps them follow through: answer when you can, review four chapters, and share them with family. The postcards are designed to invite people back to those stories and encourage a response. Our aim is to help families pass on faith and generosity.
+
+WHY NOT INTERVIEW THEM YOURSELF?
+We encourage that. The gap we are testing is follow-through when distance or schedules get in the way. Time Tapestry gives someone a place to start, the ability to answer over time, control over what they share, and a finished collection their family can return to. We will measure whether that leads to completed stories and meaningful conversations.
+
+HOW DO YOU KNOW THERE IS A MARKET?
+Marco Polo makes asynchronous connection familiar. Storyworth and Remento show paid family-storytelling offers exist. Neither proves demand for our exact product. Our hypothesis is that Christian legacy, personal encouragement, postcards and a reply loop are worth choosing and paying for. We need a real family purchase or sponsor commitment, along with completion and cost evidence, to establish that.
+
+WHAT IS DIFFERENT?
+AI interviews, written chapters, QR recordings and instant family sharing already exist. Our proposed distinction is the specific Christian legacy experience: four focused chapters about lived values, the storyteller’s own encouragement or Scripture, quarterly physical reminders and a family response. This combination is a positioning hypothesis, not a defensible monopoly claim.
+
+WHAT CAN YOU SHOW TODAY?
+Show the verified typed path, chapter review, approved collection, synthetic private-video playback and explicit text reply. Label synthetic fixtures. Do not show mail as sent or claim a natural ElevenLabs voice until tested. Actual footage needs editorial approval. The media pipeline currently requires an operator for trims and caption timing.
+
+DESIGN AND EDIT NOTES
+The v2 PowerPoint is preserved. This v3 uses the current Time Tapestry palette, native editable text and diagrams, an actual local QA screenshot, and a reserved video slot. Slides 11–13 support judge questions. The project name and all copy remain editable.
+
+SOURCE LINKS
+Edward Jones / Age Wave, 2021
+https://www.prnewswire.com/news-releases/pandemic-prompted-first-time-legacy-planning-conversations-for-44-5-million-americans-edward-jones-finds-301398039.html
+Barna, 2023 report
+https://www.barna.com/research/future-generosity/
+IU Women Give, 2013
+https://philanthropy.indianapolis.iu.edu/news-events/news/_news/2013/women-give-2013.html
+Marco Polo, official fact sheet
+https://www.marcopolo.me/docs/marco-polo-fact-sheet.pdf
+Pew Research Center, 2022
+https://www.pewresearch.org/short-reads/2022/05/18/more-than-half-of-americans-live-within-an-hour-of-extended-family/
+Storyworth, pricing help
+https://help.storyworth.com/en_US/book-pricing
+Remento, pricing guide
+https://help.remento.co/en/articles/8365892-remento-s-pricing-guide
+Gloo, official rules
+https://docs.google.com/document/d/1jmH6lnQkI_B9YQeHT12pCanQI8W4yoE_yK3EO2IWaeQ/edit
+Build and QA evidence
+https://github.com/kae-creative-apps/time-tapestry/pull/1

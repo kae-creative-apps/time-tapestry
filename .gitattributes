@@ -1,0 +1,6 @@
+# Preserve exported handoff documents and upstream font licenses byte-for-byte.
+docs/handoff/**/*.pdf binary
+docs/handoff/**/*.pptx binary
+docs/handoff/**/*.docx binary
+docs/handoff/**/*.ttf binary
+docs/handoff/brand/kit-v39/source/*-OFL.txt -text -whitespace

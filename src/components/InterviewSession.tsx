@@ -21,7 +21,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   const [phase, setPhase] = useState<'loading' | 'error' | 'expectations' | 'mic_permission' | 'intro' | 'interview' | 'continue_prompt' | 'paused' | 'video_prompt' | 'recording_video' | 'finished'>('loading');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [aiText, setAiText] = useState('');
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [silencePrompt, setSilencePrompt] = useState(false);
@@ -30,7 +29,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isMockMode, setIsMockMode] = useState(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const allQuestions = [...CORE_QUESTIONS, ...OPTIONAL_QUESTIONS];
   const currentQuestion = allQuestions[questionIndex];
@@ -75,24 +73,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     };
   }, [sessionId]);
 
-  const speak = useCallback((text: string) => {
-    if (!text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.85;
-    utterance.pitch = 1.02;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    speechSynthRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
-  const stopSpeaking = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  }, []);
-
   const handleMicAllowed = useCallback(() => {
     setPhase('intro');
     setAiText(
@@ -126,11 +106,9 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
       setAiText(responseText);
       if (data.paused) {
         setPhase('paused');
-      } else {
-        speak(responseText);
       }
     },
-    [speak]
+    []
   );
 
   const stopRecordingFlow = useCallback(
@@ -244,7 +222,6 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const advance = useCallback(() => {
-    stopSpeaking();
     if (questionIndex === CORE_QUESTIONS.length - 1) {
       setPhase('continue_prompt');
       setAiText(
@@ -259,21 +236,19 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
     }
     setPhase('interview');
     setQuestionIndex((i) => i + 1);
-  }, [questionIndex, stopSpeaking]);
+  }, [questionIndex]);
 
   useEffect(() => {
     if (phase === 'interview' && questionText) {
       setAiText(questionText);
-      speak(questionText);
     }
-  }, [phase, questionIndex, questionText, speak]);
+  }, [phase, questionIndex, questionText]);
 
   const handlePause = useCallback(() => {
-    stopSpeaking();
     setRecording(false);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     setPhase('paused');
-  }, [stopSpeaking]);
+  }, []);
 
   const remainingCount = () => {
     if (questionIndex < CORE_QUESTIONS.length) return CORE_QUESTIONS.length;
@@ -313,7 +288,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
           Time Tapestry weaves your story into keepsakes your family can hold onto.
         </p>
         <div className="mb-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </div>
@@ -322,7 +297,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Your story, woven into a keepsake page with audio narration across four chapters.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             </div>
@@ -331,7 +306,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Record a short message at the end... your face, your voice, your advice.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </div>
@@ -340,7 +315,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
               Sent one at a time over five weeks, each one carrying a piece of the story.
             </p>
           </div>
-          <div className="rounded-lg border border-warmgray-200 bg-paper-50/90 p-5 shadow-soft">
+          <div className="rounded-lg border border-warmgray-200 bg-paper-50 p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-oxblood/10 text-oxblood">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </div>
@@ -508,7 +483,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
         </button>
       </div>
 
-      <VisualCompanion text={aiText} isSpeaking={isSpeaking} />
+      <VisualCompanion text={aiText} />
 
       {error && (
         <p className="mt-4 rounded-md bg-red-50 p-3 text-center font-sans text-sm text-red-700">
@@ -526,7 +501,7 @@ export function InterviewSession({ sessionId }: { sessionId: string }) {
                   value={textAnswer}
                   onChange={(e) => setTextAnswer(e.target.value)}
                   placeholder="Type your answer here..."
-                  className="w-full rounded-md border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink shadow-inner placeholder:text-warmgray-500 focus:border-oxblood focus:outline-none focus:ring-2 focus:ring-oxblood/20"
+                  className="w-full rounded-md border border-warmgray-300 bg-paper-50 p-4 font-sans text-ink placeholder:text-warmgray-500 focus:border-oxblood focus:outline-none focus:ring-2 focus:ring-oxblood/20"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button onClick={submitTextAnswer} className="w-full sm:flex-1" loading={uploading}>

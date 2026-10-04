@@ -1,0 +1,9 @@
+media/
+archive/
+output/
+.bundle/
+workspaces/
+*.mp4
+*.wav
+*.webm
+*.mov

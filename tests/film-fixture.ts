@@ -1,0 +1,83 @@
+import { randomUUID } from "node:crypto";
+import { CHAPTERS } from "../src/lib/interview-state";
+import type { Collection } from "../src/lib/collection/types";
+import type { FilmVoice } from "../src/lib/collection/films/types";
+
+export const testVoice: FilmVoice = {
+  agentId: "synthetic-agent",
+  voiceId: "synthetic-voice",
+  modelId: "eleven_multilingual_v2",
+  settings: {
+    stability: 0.5,
+    similarityBoost: 0.8,
+    speed: 1,
+    style: 0,
+    useSpeakerBoost: true,
+  },
+};
+export function syntheticFilmCollection(): Collection {
+  const now = new Date().toISOString();
+  const stories = [
+    "This is a fictional story for testing. My grandmother kept a blue notebook beside her kitchen window. She wrote down the names of neighbors she wanted to visit.",
+    "This is a fictional story for testing. I learned patience while helping a friend repair an old bicycle. We tried again together when the first repair did not hold.",
+    "This is a fictional story for testing. A quiet walk through the garden reminded me to pay attention. I found hope in the small signs of new growth.",
+    "This is a fictional story for testing. I hope the next generation will make time to listen. A thoughtful question can help someone feel remembered.",
+  ];
+  const takes = CHAPTERS.map((theme, i) => ({
+    id: randomUUID(),
+    questionId: theme.id,
+    prompt: theme.title,
+    kind: "text" as const,
+    text: stories[i],
+    createdAt: now,
+  }));
+  return {
+    schemaVersion: 2,
+    id: `synthetic_${randomUUID()}`,
+    createdAt: now,
+    updatedAt: now,
+    status: "draft",
+    ownerKey: randomUUID(),
+    recipientKey: randomUUID(),
+    requesterKey: randomUUID(),
+    initiationPath: "share",
+    storyteller: {
+      name: "Alex Example",
+      email: "synthetic-storyteller@example.test",
+    },
+    recipient: {
+      name: "Sam Example",
+      email: "synthetic-recipient@example.test",
+    },
+    requester: {
+      name: "Alex Example",
+      email: "synthetic-storyteller@example.test",
+    },
+    addressConfirmed: false,
+    invitationNote: "Synthetic fixture only",
+    faithFraming: "beliefs",
+    currentQuestion: 4,
+    chapterBlessings: {},
+    takes,
+    selectedTakeIds: Object.fromEntries(
+      takes.map((take) => [take.questionId, take.id]),
+    ),
+    followUps: {},
+    chapters: CHAPTERS.map((theme, i) => ({
+      id: theme.id,
+      title: theme.title,
+      content: stories[i],
+      postcardNote: "A fictional story for testing.",
+      sourceTakeIds: [takes[i].id],
+      videoStatus: "not_requested",
+      editorialReviewed: true,
+      generatedWith: "source_text",
+    })),
+    draftOutdated: false,
+    deliveries: [],
+    replies: [],
+    notifications: [],
+    recipientViewedChapters: {},
+    replyRemindersEnabled: false,
+  };
+}

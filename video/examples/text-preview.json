@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic-text-preview",
+  "sessionId": "example",
+  "chapterId": "chapter-1",
+  "chapterNumber": 1,
+  "revision": 1,
+  "title": "A story worth sharing",
+  "storytellerName": "Sample storyteller",
+  "sources": [],
+  "clips": [
+    {
+      "id": "sample-text",
+      "sourceAnswerId": "example-answer",
+      "kind": "text",
+      "inMs": 0,
+      "outMs": 10000,
+      "captions": [],
+      "text": "This is a layout preview using fictional text. Add the accepted interview takes to render a real chapter.",
+      "editorialReason": "Synthetic fixture for checking the renderer. This is not a family story."
+    }
+  ],
+  "approval": null
+}

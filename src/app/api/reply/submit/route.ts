@@ -1,19 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSession, updateSession } from '@/lib/session';
+import { withLegacyAdmin } from "@/lib/legacy-access";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession, updateSession } from "@/lib/session";
 
-export async function POST(req: NextRequest) {
+async function legacyPOST(req: NextRequest) {
   try {
     const { sessionId, type, content, mediaBase64 } = await req.json();
     if (!sessionId || !type || !content) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
+        { error: "Missing required fields" },
+        { status: 400 },
       );
     }
 
     const session = await getSession(sessionId);
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     const mediaUrl = mediaBase64
@@ -22,18 +23,20 @@ export async function POST(req: NextRequest) {
 
     await updateSession(sessionId, (s) => ({
       ...s,
-      status: 'delivered',
+      status: "delivered",
       grandchildReply: {
         type,
         content,
         mediaUrl,
-        submittedAt: new Date().toISOString()
-      }
+        submittedAt: new Date().toISOString(),
+      },
     }));
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('reply/submit error', err);
-    return NextResponse.json({ error: 'Reply failed' }, { status: 500 });
+    console.error("reply/submit error", err);
+    return NextResponse.json({ error: "Reply failed" }, { status: 500 });
   }
 }
+
+export const POST = withLegacyAdmin(legacyPOST);
