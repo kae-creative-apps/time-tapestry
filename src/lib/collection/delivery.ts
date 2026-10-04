@@ -11,6 +11,7 @@ import {
   lobPostcardTransport,
   serializeLobPostcardRequest,
 } from "./lob-transport";
+import { postcardArtworkFormat } from "./postcard-format";
 import type {
   Collection,
   Delivery,
@@ -438,6 +439,7 @@ async function postcardRequest(
     throw new Error(
       "This postcard is missing from the approved print snapshot.",
     );
+  const format = postcardArtworkFormat(artwork);
   return serializeLobPostcardRequest({
     description:
       "Time Tapestry " +
@@ -456,7 +458,7 @@ async function postcardRequest(
       address_country: a.country,
     },
     from: process.env.LOB_FROM_ADDRESS_ID || "",
-    size: "4x6",
+    size: format.size,
     mail_type: "usps_first_class",
     use_type: "operational",
     front: artwork.front,

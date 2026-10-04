@@ -23,6 +23,11 @@ async function main() {
     const base = `public/brand/time-tapestry-${variant}`;
     await writeFile(`${base}.svg`, svg);
     await sharp(Buffer.from(svg)).resize(1200).png().toFile(`${base}.png`);
+    if (variant === "weave")
+      await sharp(Buffer.from(svg))
+        .resize(3000)
+        .png()
+        .toFile(`${base}-print-v2.png`);
   }
   await writeFile(
     "src/lib/brand-patterns.ts",

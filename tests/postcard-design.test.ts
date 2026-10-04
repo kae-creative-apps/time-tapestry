@@ -44,23 +44,26 @@ test("actual print artwork shares safe public text and first names, with exact a
     "q1",
     "https://stories.example.com",
   );
-  assert.match(front, /Dear Anna,/);
+  assert.match(back, /Dear Anna,/);
   assert.match(front, /From Evelyn/);
-  assert.match(front, /You are loved\. Keep making room for kindness\./);
+  assert.match(back, /You are loved\. Keep making room for kindness\./);
   for (const html of [front, back]) {
     assert.doesNotMatch(
       html,
       /PRIVATE-|DO-NOT-PRINT|private-sender|private-recipient|Example/,
     );
-    assert.match(html, /font\/woff2;base64,/);
+    assert.match(html, /font\/ttf;base64,/);
     assert.match(html, /script-src 'none'/);
   }
-  const thread = await readFile("public/brand/time-tapestry-weave.png");
+  const thread = await readFile(
+    "public/brand/time-tapestry-weave-print-v2.png",
+  );
   assert.ok(
     front.includes(`data:image/png;base64,${thread.toString("base64")}`),
   );
-  assert.match(back, /width:3\.2835in;height:2\.375in/);
-  assert.match(back, /Sign in with the email this gift was sent to/);
+  assert.match(back, /width:384px;height:228px/);
+  assert.match(back, /Scan to open your story and reply/);
+  assert.match(back, /Sign in with the email address linked to this gift/);
 });
 
 test("private title, notes and blessings do not affect the public print layout", async () => {
@@ -73,13 +76,13 @@ test("private title, notes and blessings do not affect the public print layout",
     scriptureReference: "private",
     scriptureTranslation: "private",
   };
-  const { front } = await postcardArtwork(
+  const { front, back } = await postcardArtwork(
     c,
     "q1",
     "https://stories.example.com",
   );
-  assert.ok(front.includes(PUBLIC_POSTCARD_DEFAULTS.q1));
-  assert.doesNotMatch(front, /private|😀/);
+  assert.ok(back.includes(PUBLIC_POSTCARD_DEFAULTS.q1));
+  assert.doesNotMatch(front + back, /PRIVATE-|😀/);
 });
 
 test("four public defaults and a full 240-character ordinary message fit without truncation", () => {
@@ -90,7 +93,7 @@ test("four public defaults and a full 240-character ordinary message fit without
   assert.equal(longest.length, 240);
   for (const publicMessage of [
     ...Object.values(PUBLIC_POSTCARD_DEFAULTS),
-    longest,
+    ...[90, 91, 160, 161, 240].map((length) => longest.slice(0, length)),
   ])
     assert.doesNotThrow(() =>
       assertPublicPostcardFits({
@@ -119,14 +122,13 @@ test("four public defaults and a full 240-character ordinary message fit without
   );
 });
 
-test("QR and back caption stay outside the official postal region; trim is exactly 4 by 6", () => {
+test("QR and back caption stay outside the official postal region; trim is exactly 6 by 9", () => {
   const layout = POSTCARD_LAYOUT;
-  assert.equal(layout.width - layout.bleed * 2, 6 * 96);
-  assert.equal(layout.height - layout.bleed * 2, 4 * 96);
+  assert.equal(layout.width - layout.bleed * 2, 9 * 96);
+  assert.equal(layout.height - layout.bleed * 2, 6 * 96);
   assert.ok(layout.qr.x + layout.qr.width < layout.postal.x);
   assert.ok(layout.caption.x + layout.caption.width < layout.postal.x);
-  assert.ok(layout.backIntro.bottom < layout.postal.y);
-  assert.ok(layout.front.bottom < layout.thread.y);
+  assert.ok(layout.note.bottom < layout.postal.y);
 });
 
 test("pure renderer escapes text and rejects external or injected asset references", () => {
@@ -137,17 +139,18 @@ test("pure renderer escapes text and rejects external or injected asset referenc
   };
   const assets = {
     signaturePng: "data:image/png;base64,YQ==",
+    signatureLightPng: "data:image/png;base64,YQ==",
     approvedThreadPng: "data:image/png;base64,YQ==",
     qrPng: "data:image/png;base64,YQ==",
-    quicksandWoff2: "data:font/woff2;base64,YQ==",
+    quicksandPrintTtf: "data:font/ttf;base64,YQ==",
   };
-  const { front } = renderPostcardDesign(content, assets);
-  assert.match(front, /Dear &lt;Anna&gt;,/);
+  const { front, back } = renderPostcardDesign(content, assets);
+  assert.match(back, /Dear &lt;Anna&gt;,/);
   assert.match(
-    front,
+    back,
     /&lt;script&gt;&quot;hello&quot;&lt;\/script&gt;&#123;code&#125;/,
   );
-  assert.doesNotMatch(front, /<script>/);
+  assert.doesNotMatch(front + back, /<script>/);
   assert.throws(
     () =>
       renderPostcardDesign(content, {
@@ -162,9 +165,9 @@ test("public sample route ignores customer identifiers and returns the actual re
   const response = await sample();
   assert.equal(response.status, 200);
   const artwork = await response.json();
-  assert.match(artwork.front, /Dear Anna,/);
+  assert.match(artwork.back, /Dear Anna,/);
   assert.match(artwork.front, /From Evelyn/);
-  assert.ok(artwork.front.includes(PUBLIC_POSTCARD_DEFAULTS.q1));
+  assert.ok(artwork.back.includes(PUBLIC_POSTCARD_DEFAULTS.q1));
   assert.doesNotMatch(JSON.stringify(artwork), /SECRET|PRIVATE-NAME/);
   assert.match(artwork.back, /class="ink-free"/);
 });

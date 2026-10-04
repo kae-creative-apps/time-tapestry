@@ -342,12 +342,12 @@ test("print artwork uses only escaped public copy and a keyless QR, never privat
   };
   const artwork = await postcardArtwork(c, "q1", origin);
   assert.match(artwork.back, /data:image\/png;base64,/);
-  assert.match(artwork.front, /&lt;script&gt;/);
+  assert.match(artwork.back, /&lt;script&gt;/);
   assert.doesNotMatch(
-    artwork.front,
+    artwork.front + artwork.back,
     /<script>|Private encouragement|Private words/,
   );
-  assert.doesNotMatch(artwork.front, /An approved note/);
+  assert.doesNotMatch(artwork.front + artwork.back, /An approved note/);
   assert.equal(
     recipientChapterUrl(c, "q1", origin),
     `${origin}/collection/${c.id}/chapter/q1`,

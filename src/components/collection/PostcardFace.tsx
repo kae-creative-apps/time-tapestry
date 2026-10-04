@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { POSTCARD_LAYOUT } from "@/lib/collection/postcard-design";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { inferPostcardFormat } from "@/lib/collection/postcard-format";
 
 /** Shows the actual print HTML. Only the marketing view crops the print bleed. */
 export function PostcardFace({
@@ -17,9 +17,10 @@ export function PostcardFace({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const inset = trim ? POSTCARD_LAYOUT.bleed : 0;
-  const width = POSTCARD_LAYOUT.width - inset * 2;
-  const height = POSTCARD_LAYOUT.height - inset * 2;
+  const format = useMemo(() => inferPostcardFormat(html), [html]);
+  const inset = trim ? format.bleed : 0;
+  const width = format.width - inset * 2;
+  const height = format.height - inset * 2;
   useEffect(() => {
     const resize = new ResizeObserver(([entry]) =>
       setScale(entry.contentRect.width / width),
@@ -45,8 +46,8 @@ export function PostcardFace({
         style={{
           left: -inset * scale,
           top: -inset * scale,
-          width: POSTCARD_LAYOUT.width,
-          height: POSTCARD_LAYOUT.height,
+          width: format.width,
+          height: format.height,
           transform: `scale(${scale})`,
           transformOrigin: "top left",
         }}
@@ -54,7 +55,17 @@ export function PostcardFace({
           if (!onFit) return;
           const doc = event.currentTarget.contentDocument;
           if (!doc) return onFit(false);
-          await doc.fonts.ready;
+          try {
+            // The branded front can contain only images. Request its embedded
+            // face explicitly so a valid unused font still passes validation.
+            await doc.fonts.load("500 16px Quicksand");
+            await doc.fonts.ready;
+          } catch {
+            return onFit(false);
+          }
+          const fontLoaded = [...doc.fonts].some(
+            (font) => font.family === "Quicksand" && font.status === "loaded",
+          );
           const fitsRegions = [
             ...doc.querySelectorAll<HTMLElement>("[data-print-bottom]"),
           ].every(
@@ -63,8 +74,15 @@ export function PostcardFace({
               Number(element.dataset.printBottom) + 1,
           );
           onFit(
-            Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) <=
-              POSTCARD_LAYOUT.height + 2 && fitsRegions,
+            fontLoaded &&
+              Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth) <=
+                format.width + 2 &&
+              Math.max(
+                doc.documentElement.scrollHeight,
+                doc.body.scrollHeight,
+              ) <=
+                format.height + 2 &&
+              fitsRegions,
           );
         }}
       />

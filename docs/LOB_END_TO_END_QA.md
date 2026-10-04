@@ -54,3 +54,7 @@ Lob test postcards do not receive real carrier tracking. The quarter-by-quarter 
 The existing Vercel configuration requests a five-minute cron. Prior deployment diagnostics identified a plan restriction; do not silently reduce frequency or purchase a plan. A running server on a personal computer is not a reliable nine-month scheduler.
 
 Complete public hosting/storage/security and real recipient sign-in first. Then register the Lob webhook, configure the authenticated scheduler, and verify the deployed test flow. Switch to live credentials and enable physical sending only after an explicit live-mail decision. Shipping dates refer to dispatch, not guaranteed arrival dates.
+
+## Later design refinement
+
+The approved woven-keepsake v3 design uses a 6 × 9 color front and a personal-note back. A further four actual Lob test renders passed; the chapter QR codes decoded correctly. Historical 4 × 6 proofs retain their original artwork and mailing format. Current validation is 269 passing tests plus TypeScript and production build. See [postcard design v3](brand/POSTCARD_DESIGN_v3.md) for print specifications and the actual provider screenshots.

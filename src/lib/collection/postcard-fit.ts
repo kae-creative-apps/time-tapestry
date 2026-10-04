@@ -6,6 +6,7 @@ import {
 } from "./postcard-public-message";
 import {
   POSTCARD_LAYOUT,
+  POSTCARD_TYPE,
   POSTCARD_BACK_CAPTION,
   POSTCARD_BACK_INSTRUCTION,
   postcardFirstName,
@@ -52,7 +53,7 @@ function lines(text: string, pixels: number, width: number, spacing = 0) {
   }
   return count;
 }
-export const postcardFontSha256 = metrics.fontSha256;
+export const postcardFontSha256 = metrics.printFontSha256;
 export function postcardPrintContent(
   c: Collection,
   chapterId: string,
@@ -77,44 +78,60 @@ export function assertPublicPostcardFits(content: PublicPostcardContent) {
       `Public postcard encouragement needs 1 to ${PUBLIC_POSTCARD_MESSAGE_LIMIT} characters before printing.`,
     );
   const type = postcardMessageTypography(content.publicMessage);
+  const text = POSTCARD_TYPE;
   // The shared renderer preserves explicit line breaks. Count those here too.
   const messageLines = content.publicMessage
     .split(/\r?\n/)
     .reduce(
       (total, line) =>
-        total + Math.max(1, lines(line, type.size, layout.front.width - 12)),
+        total + Math.max(1, lines(line, type.size, layout.note.width - 12)),
       0,
     );
-  const frontHeight =
-    lines(`Dear ${content.recipientFirstName},`, 18, layout.front.width - 12) *
-      24 +
-    18 +
+  const noteHeight =
+    lines(
+      `Dear ${content.recipientFirstName},`,
+      text.salutation.size,
+      layout.note.width - 12,
+    ) *
+      text.salutation.lineHeight +
+    text.salutation.gap +
     messageLines * type.lineHeight +
-    20 +
-    lines(`From ${content.storytellerFirstName}`, 16, layout.front.width - 12) *
-      22;
-  if (frontHeight > layout.front.bottom - layout.front.y)
+    text.sender.gap +
+    lines(
+      `From ${content.storytellerFirstName}`,
+      text.sender.size,
+      layout.note.width - 12,
+    ) *
+      text.sender.lineHeight;
+  if (noteHeight > layout.note.bottom - layout.note.y)
     throw new PostcardLayoutError(
       "The public postcard message needs a shorter print revision before mailing. Your private story remains saved.",
     );
-  const introHeight =
-    lines(
-      `A story from ${content.storytellerFirstName}`,
-      20,
-      layout.backIntro.width - 12,
-    ) *
-      26 +
-    8 +
-    lines(POSTCARD_BACK_INSTRUCTION, 14, layout.backIntro.width - 12) * 20;
-  if (introHeight > layout.backIntro.bottom - layout.backIntro.y)
-    throw new PostcardLayoutError(
-      "The postcard names need a print layout check before mailing.",
-    );
   const captionHeight =
-    lines(POSTCARD_BACK_CAPTION, 13, layout.caption.width - 8) * 17;
+    lines(
+      POSTCARD_BACK_INSTRUCTION,
+      text.instruction.size,
+      layout.caption.width - 8,
+    ) *
+      text.instruction.lineHeight +
+    text.instruction.gap +
+    lines(POSTCARD_BACK_CAPTION, text.caption.size, layout.caption.width - 8) *
+      text.caption.lineHeight;
   if (captionHeight > layout.caption.bottom - layout.caption.y)
     throw new PostcardLayoutError(
       "The postcard sign-in caption does not fit its print area.",
+    );
+  if (
+    lines(
+      `From ${content.storytellerFirstName}, for ${content.recipientFirstName}.`,
+      20,
+      716,
+    ) *
+      28 >
+    48
+  )
+    throw new PostcardLayoutError(
+      "The postcard names need a print layout check before mailing.",
     );
 }
 

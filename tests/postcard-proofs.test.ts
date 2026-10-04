@@ -103,7 +103,7 @@ test("actual artwork is self-contained, print-fit checked, and quarterly dates c
     ],
   );
   assert.match(proof.cards[0].front, /data:image\/png;base64/);
-  assert.match(proof.cards[0].front, /data:font\/woff2;base64/);
+  assert.match(proof.cards[0].front, /data:font\/ttf;base64/);
   assert.match(proof.cards[0].back, /data:image\/png;base64/);
   assert.doesNotMatch(proof.cards[0].front, /src="https:/);
 });

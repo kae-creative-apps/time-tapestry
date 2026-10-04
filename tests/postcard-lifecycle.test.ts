@@ -278,7 +278,7 @@ test("all four postcards dispatch once at calendar quarters through authenticate
         "to[address_zip]": "90001",
         "to[address_country]": "US",
         from: "adr_fixture",
-        size: "4x6",
+        size: "6x9",
         mail_type: "usps_first_class",
         use_type: "operational",
       }))

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { POSTCARD_DESIGN_VERSION } from "@/lib/collection/postcard-design";
 
 export type SamplePostcardArtwork = {
   front: string;
@@ -17,7 +18,7 @@ export function usePostcardSample() {
     const abort = new AbortController();
     setFailed(false);
     collectionRequest<unknown>(
-      "/api/postcards/sample",
+      `/api/postcards/sample?design=${POSTCARD_DESIGN_VERSION}`,
       {
         signal: abort.signal,
         cache: "force-cache",
