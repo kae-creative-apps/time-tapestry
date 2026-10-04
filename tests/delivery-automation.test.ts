@@ -19,10 +19,12 @@ test("protected delivery automation separates email from printing and sends only
     CRON_SECRET: "fixture-private-scheduler",
     RESEND_API_KEY: "fixture-private-resend",
     RESEND_FROM_EMAIL: "fixture@example.com",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "fixture-public-site-key",
+    TURNSTILE_SECRET_KEY: "fixture-private-turnstile",
+    KV_REST_API_URL: "https://fixture.invalid",
+    KV_REST_API_TOKEN: "fixture-private-kv",
   });
   for (const key of [
-    "KV_REST_API_URL",
-    "KV_REST_API_TOKEN",
     "VERCEL",
     "LOB_API_KEY",
     "LOB_FROM_ADDRESS_ID",
@@ -77,10 +79,60 @@ test("protected delivery automation separates email from printing and sends only
     return c;
   };
   const originalFetch = globalThis.fetch;
-  const calls: { url: string; body: Record<string, unknown>; key: string }[] =
-    [];
+  // Exercise hosted readiness without touching a real KV service. Keep the
+  // record and lease operations used by the delivery worker in memory.
+  const records = new Map<string, unknown>();
+  const calls: {
+    url: string;
+    body: Record<string, unknown>;
+    key: string;
+    bytes: Buffer;
+    contentType: string;
+  }[] = [];
+  let failNextPostcard = false;
   globalThis.fetch = async (input, options) => {
-    const url = String(input);
+    const url = input instanceof Request ? input.url : String(input);
+    if (new URL(url).origin === "https://fixture.invalid") {
+      const payload = JSON.parse(
+        input instanceof Request ? await input.text() : String(options?.body),
+      );
+      const command = ([operation, ...args]: unknown[]) => {
+        const name = String(operation).toLowerCase();
+        const key = String(args[0]);
+        if (name === "get") return { result: records.get(key) ?? null };
+        if (name === "keys") {
+          assert.ok(["collection-v2:*", "collection-v2:media-*"].includes(key));
+          return {
+            result: [...records.keys()].filter((item) =>
+              item.startsWith(key.slice(0, -1)),
+            ),
+          };
+        }
+        if (name === "set") {
+          if (args.includes("nx") && records.has(key)) return { result: null };
+          records.set(key, args[1]);
+          return { result: "OK" };
+        }
+        if (name === "eval") {
+          const script = String(args[0]);
+          const keyCount = Number(args[1]);
+          const keys = args.slice(2, 2 + keyCount).map(String);
+          const values = args.slice(2 + keyCount);
+          assert.ok(script.includes("redis.call('get',KEYS[1]) == ARGV[1]"));
+          if (records.get(keys[0]) !== values[0]) return { result: 0 };
+          if (keyCount === 2 && script.includes("redis.call('set'"))
+            records.set(keys[1], values[1]);
+          else if (keyCount === 1 && script.includes("redis.call('del'"))
+            records.delete(keys[0]);
+          else throw new Error("Unexpected synthetic KV script.");
+          return { result: 1 };
+        }
+        throw new Error(`Unexpected synthetic KV operation: ${name}`);
+      };
+      return Response.json(
+        Array.isArray(payload[0]) ? payload.map(command) : command(payload),
+      );
+    }
     assert.ok(
       [
         "https://api.resend.com/emails",
@@ -88,11 +140,43 @@ test("protected delivery automation separates email from printing and sends only
       ].includes(url),
     );
     assert.equal(options?.redirect, "error");
+    const request = new Request(url, options);
+    const bytes = Buffer.from(await request.clone().arrayBuffer());
+    const contentType = request.headers.get("Content-Type")!;
+    let body: Record<string, unknown>;
+    if (url.includes("lob.com")) {
+      assert.match(contentType, /^multipart\/form-data; boundary=tt-/);
+      body = {};
+      for (const [field, value] of await request.formData()) {
+        assert.equal(field.startsWith("__"), false);
+        if (value instanceof File) {
+          assert.ok(["front", "back"].includes(field));
+          assert.equal(value.name, `${field}.html`);
+          assert.match(value.type, /^text\/html/);
+          body[field] = await value.text();
+        } else {
+          const nested = /^(to|from)\[([a-z][a-z0-9_]*)\]$/.exec(field);
+          if (nested) {
+            const address = (body[nested[1]] ||= {});
+            (address as Record<string, string>)[nested[2]] = value;
+          } else body[field] = value;
+        }
+      }
+    } else {
+      assert.equal(contentType, "application/json");
+      body = await request.json();
+    }
     calls.push({
       url,
-      body: JSON.parse(String(options?.body)),
-      key: new Headers(options?.headers).get("Idempotency-Key")!,
+      body,
+      key: request.headers.get("Idempotency-Key")!,
+      bytes,
+      contentType,
     });
+    if (url.includes("lob.com") && failNextPostcard) {
+      failNextPostcard = false;
+      return new Response("Synthetic retryable failure", { status: 503 });
+    }
     return new Response(
       JSON.stringify({
         id: url.includes("lob.com") ? "psc_fixture123" : "fixture-email123",
@@ -227,7 +311,46 @@ test("protected delivery automation separates email from printing and sends only
       Date.now() - 86400000,
     ).toISOString();
     await writeRecord(postal.id, postal);
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     await processDeliveryJobs();
+    const heldForSignIn = (await getCollection(postal.id))!;
+    assert.equal(
+      heldForSignIn.postcardPreparation?.status,
+      "waiting_for_setup",
+    );
+    assert.equal(heldForSignIn.deliveries[0].dispatch, undefined);
+    assert.equal(
+      calls.some((call) => call.url.includes("lob.com")),
+      false,
+    );
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "fixture-public-site-key";
+    failNextPostcard = true;
+    await processDeliveryJobs();
+    const firstAttempt = calls.find((call) => call.url.includes("lob.com"))!;
+    const frozenDispatch = (await getCollection(postal.id))!.deliveries[0]
+      .dispatch!;
+    assert.equal(frozenDispatch.attempts, 1);
+    assert.ok(
+      frozenDispatch.requestBody?.includes("__timeTapestryLobTransport"),
+    );
+    await mutateCollection(postal.id, (current) => {
+      current.deliveries[0].dispatch!.nextAttemptAt = new Date(
+        Date.now() - 1,
+      ).toISOString();
+      return current;
+    });
+    await processDeliveryJobs();
+    const retried = calls
+      .filter((call) => call.url.includes("lob.com"))
+      .at(-1)!;
+    assert.deepEqual(retried.bytes, firstAttempt.bytes);
+    assert.equal(retried.contentType, firstAttempt.contentType);
+    assert.equal(retried.key, firstAttempt.key);
+    assert.deepEqual(retried.body.to, firstAttempt.body.to);
+    assert.equal(
+      (await getCollection(postal.id))!.deliveries[0].dispatch!.requestBody,
+      frozenDispatch.requestBody,
+    );
     assert.equal(
       (await getCollection(c.id))!.postcardProof,
       undefined,
@@ -293,9 +416,16 @@ test("protected delivery automation separates email from printing and sends only
     mismatched.deliveries[0].scheduledFor = new Date(
       Date.now() - 86400000,
     ).toISOString();
+    const legacyRequestBody = JSON.stringify({
+      ...JSON.parse(frozenDispatch.requestBody!).payload,
+      description: `Time Tapestry ${mismatched.id} v${mismatched.approvedVersion || 1} q1`,
+      front: another.cards[0].front,
+      back: another.cards[0].back,
+    });
     mismatched.deliveries[0].dispatch = {
       attempts: 1,
-      requestBody: '{"front":"old artwork"}',
+      requestBody: legacyRequestBody,
+      idempotencyKey: "legacy-saved-idempotency-key",
     };
     await writeRecord(mismatched.id, mismatched);
     await processDeliveryJobs();
@@ -312,6 +442,14 @@ test("protected delivery automation separates email from printing and sends only
       (await getCollection(mismatched.id))!.deliveries[0].error!,
       /differs/,
     );
+    const heldLegacyRequest = (await getCollection(mismatched.id))!
+      .deliveries[0].dispatch!;
+    assert.equal(heldLegacyRequest.requestBody, legacyRequestBody);
+    assert.equal(
+      heldLegacyRequest.idempotencyKey,
+      "legacy-saved-idempotency-key",
+    );
+    assert.equal(heldLegacyRequest.attempts, 1);
 
     const stale = approveCollection(draft(), today);
     const staleProof = await buildPostcardProof(stale, today);
@@ -370,7 +508,7 @@ test("protected delivery automation separates email from printing and sends only
       ),
       { params: Promise.resolve({ id: pending.id }) },
     );
-    assert.equal(apiApproval.status, 200);
+    assert.equal(apiApproval.status, 200, await apiApproval.clone().text());
     const approvedPending = (await getCollection(pending.id))!;
     assert.equal(approvedPending.autoPostcards, true);
     assert.equal(approvedPending.status, "approved");

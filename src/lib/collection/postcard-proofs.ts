@@ -6,6 +6,7 @@ import { originUrl, postcardArtwork } from "./postcard-artwork";
 import type { Collection, PostalAddress } from "./types";
 import { publicPostcardMessage } from "./postcard-public-message";
 import { accountEmailAvailable } from "../accounts/mail";
+import { hostedSecurityConfigured } from "../security/policy";
 import { CHAPTERS } from "../interview-state";
 
 export type PostcardProofSnapshot = {
@@ -265,6 +266,8 @@ export function postcardDeliveryReadiness(origin = appOrigin()) {
     reasons.push("The delivery worker is not configured.");
   if (!accountEmailAvailable())
     reasons.push("Recipient email verification is not configured.");
+  if (!hostedSecurityConfigured())
+    reasons.push("Recipient sign-in security is not configured.");
   try {
     const url = new URL(originUrl(origin));
     const host = url.hostname.toLowerCase();

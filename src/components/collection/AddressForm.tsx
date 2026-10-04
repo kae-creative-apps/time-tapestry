@@ -25,12 +25,14 @@ export default function AddressForm({
   busy = false,
   onDirtyChange,
   automaticPostcards = true,
+  mailingStarted = false,
 }: {
   initial?: PostalAddress;
   onSave: (a: PostalAddress) => Promise<unknown>;
   busy?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   automaticPostcards?: boolean;
+  mailingStarted?: boolean;
 }) {
   const [a, setA] = useState<PostalAddress>(initial || empty);
   const [base, setBase] = useState(signature(initial || empty));
@@ -60,7 +62,12 @@ export default function AddressForm({
         setError("");
         try {
           const saved = await onSave(a);
-          if (saved) setNotice("Your mailing address is saved and confirmed.");
+          if (saved)
+            setNotice(
+              mailingStarted && dirty
+                ? "Your address is saved. The Time Tapestry team must review any change to the approved mailing address before future postcards can be sent. A postcard already sent for printing may still go to the previous address."
+                : "Your mailing address is saved and confirmed.",
+            );
           else
             setError(
               "Your address could not be saved. Your changes are still here. Please try again.",
@@ -101,9 +108,11 @@ export default function AddressForm({
           </label>
         ))}
         <p className="text-sm leading-7 text-ink-500">
-          {automaticPostcards
-            ? "US delivery. Postcards are prepared automatically after the storyteller approves the stories and this address is saved."
-            : "US delivery. This saves the address. Postcard delivery has not been selected for this collection."}
+          {mailingStarted
+            ? "Changing your address after printing begins pauses future postcards until the Time Tapestry team reviews the change."
+            : automaticPostcards
+              ? "US delivery. Postcards are prepared automatically after the storyteller approves the stories and this address is saved."
+              : "US delivery. This saves the address. Postcard delivery has not been selected for this collection."}
         </p>
         <button
           disabled={busy || saving}

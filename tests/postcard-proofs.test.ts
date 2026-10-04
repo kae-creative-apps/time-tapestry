@@ -85,6 +85,10 @@ function readiness(enabled: boolean) {
   process.env.CRON_SECRET = "test-only";
   process.env.RESEND_API_KEY = "test-only-no-provider-call";
   process.env.RESEND_FROM_EMAIL = "test@example.com";
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "test-only-site-key";
+  process.env.TURNSTILE_SECRET_KEY = "test-only-secret-key";
+  process.env.KV_REST_API_URL = "https://fixture.invalid";
+  process.env.KV_REST_API_TOKEN = "test-only-no-provider-call";
 }
 before(() => readiness(false));
 test("actual artwork is self-contained, print-fit checked, and quarterly dates clamp month ends", async () => {
@@ -145,6 +149,66 @@ test("legacy digital approval with a saved address does not opt into postcards",
   assert.equal(c.postcardProof, undefined);
   assert.deepEqual(c.deliveries, []);
   readiness(false);
+});
+test("every public sign-in security dependency is required before release, even with a local test bypass", async (t) => {
+  const previousBypass = {
+    NODE_ENV: process.env.NODE_ENV,
+    SECURITY_LOCAL_BYPASS: process.env.SECURITY_LOCAL_BYPASS,
+    SECURITY_TEST_BYPASS: process.env.SECURITY_TEST_BYPASS,
+  };
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    SECURITY_TEST_BYPASS: "true",
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Readiness must not contact a provider.");
+  });
+  try {
+    for (const setting of [
+      "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+      "TURNSTILE_SECRET_KEY",
+      "KV_REST_API_URL",
+      "KV_REST_API_TOKEN",
+    ]) {
+      readiness(true);
+      const c = fixture();
+      const proof = await buildPostcardProof(c, now, origin);
+      approvePostcardProof(c, proof, proof.hash, now);
+      delete process.env[setting];
+      assert.deepEqual(
+        postcardDeliveryReadiness(origin),
+        {
+          ready: false,
+          reasons: ["Recipient sign-in security is not configured."],
+        },
+        setting,
+      );
+      assert.throws(
+        () => releasePostcardProof(c, proof.hash, now, origin),
+        /Recipient sign-in security is not configured/,
+        setting,
+      );
+      await prepareAutomaticPostcards(c, now, origin);
+      assert.equal(c.postcardPreparation?.status, "waiting_for_setup", setting);
+      assert.equal(c.postcardProof?.releaseStatus, "held", setting);
+      assert.deepEqual(c.deliveries, [], setting);
+      readiness(true);
+      await prepareAutomaticPostcards(c, now, origin);
+      assert.equal(c.postcardPreparation?.status, "ready", setting);
+      const schedule = structuredClone(c.deliveries);
+      delete process.env[setting];
+      await prepareAutomaticPostcards(c, now, origin);
+      assert.equal(c.postcardPreparation?.status, "waiting_for_setup", setting);
+      assert.deepEqual(c.deliveries, schedule, setting);
+    }
+  } finally {
+    readiness(false);
+    for (const [key, value] of Object.entries(previousBypass)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 test("legacy print proofs stay held until explicit public-message review and are archived unchanged", async () => {
   readiness(true);

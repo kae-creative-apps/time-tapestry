@@ -7,6 +7,10 @@ import {
 import { addCalendarMonths } from "./content";
 import { appOrigin, linksFor } from "./access";
 import { getCollection, listCollections, mutateCollection } from "./store";
+import {
+  lobPostcardTransport,
+  serializeLobPostcardRequest,
+} from "./lob-transport";
 import type {
   Collection,
   Delivery,
@@ -434,7 +438,7 @@ async function postcardRequest(
     throw new Error(
       "This postcard is missing from the approved print snapshot.",
     );
-  return JSON.stringify({
+  return serializeLobPostcardRequest({
     description:
       "Time Tapestry " +
       c.id +
@@ -451,7 +455,7 @@ async function postcardRequest(
       address_zip: a.postalCode,
       address_country: a.country,
     },
-    from: process.env.LOB_FROM_ADDRESS_ID,
+    from: process.env.LOB_FROM_ADDRESS_ID || "",
     size: "4x6",
     mail_type: "usps_first_class",
     use_type: "operational",
@@ -527,6 +531,9 @@ async function providerPost(
   idempotencyKey: string,
 ) {
   const isMail = provider === "lob";
+  const transport = isMail
+    ? lobPostcardTransport(body)
+    : { contentType: "application/json", body };
   let response: Response;
   try {
     response = await fetch(
@@ -536,14 +543,14 @@ async function providerPost(
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": transport.contentType,
           "Idempotency-Key": idempotencyKey,
           Authorization: isMail
             ? "Basic " +
               Buffer.from(process.env.LOB_API_KEY + ":").toString("base64")
             : "Bearer " + process.env.RESEND_API_KEY,
         },
-        body,
+        body: transport.body,
         signal: AbortSignal.timeout(12000),
         redirect: "error",
       },

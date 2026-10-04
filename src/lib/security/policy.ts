@@ -67,18 +67,20 @@ export function localSecurityBypass(req: NextRequest) {
       process.env.SECURITY_LOCAL_BYPASS === "true")
   );
 }
+/** Public visitors cannot use a local worker's security bypass. */
+export function hostedSecurityConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY &&
+    process.env.TURNSTILE_SECRET_KEY &&
+    process.env.KV_REST_API_URL &&
+    process.env.KV_REST_API_TOKEN &&
+    process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://"),
+  );
+}
 export function securityConfiguration(req: NextRequest) {
   const localBypass = localSecurityBypass(req);
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-  const configured =
-    localBypass ||
-    Boolean(
-      siteKey &&
-      process.env.TURNSTILE_SECRET_KEY &&
-      process.env.KV_REST_API_URL &&
-      process.env.KV_REST_API_TOKEN &&
-      process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://"),
-    );
+  const configured = localBypass || hostedSecurityConfigured();
   return { localBypass, required: !localBypass, siteKey, configured };
 }
 export function assertOrigin(req: NextRequest) {

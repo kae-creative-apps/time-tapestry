@@ -38,6 +38,10 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     LOB_API_KEY: "live_fixture_never_sent",
     LOB_FROM_ADDRESS_ID: "adr_fixture",
     LOB_WEBHOOK_SECRET: "fixture-lifecycle-signing-secret",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "fixture-lifecycle-site-key",
+    TURNSTILE_SECRET_KEY: "fixture-lifecycle-turnstile-key",
+    KV_REST_API_URL: "https://lifecycle-kv.invalid",
+    KV_REST_API_TOKEN: "fixture-lifecycle-kv-token",
   });
   t.mock.timers.enable({
     apis: ["Date"],
@@ -135,10 +139,52 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     accepted: boolean;
   }[] = [];
   const accepted = new Map<string, string>();
+  const records = new Map<string, unknown>();
   let failFirstPostcard = true;
   const priorFetch = globalThis.fetch;
   globalThis.fetch = async (input, options) => {
-    const url = String(input),
+    const request =
+      input instanceof Request ? input : new Request(input, options);
+    if (new URL(request.url).origin === "https://lifecycle-kv.invalid") {
+      const payload = await request.json();
+      const execute = ([operation, ...args]: unknown[]) => {
+        const command = String(operation).toLowerCase();
+        const key = String(args[0]);
+        if (command === "get") return { result: records.get(key) ?? null };
+        if (command === "keys") {
+          assert.ok(["collection-v2:*", "collection-v2:media-*"].includes(key));
+          return {
+            result: [...records.keys()].filter((item) =>
+              item.startsWith(key.slice(0, -1)),
+            ),
+          };
+        }
+        if (command === "set") {
+          if (args.includes("nx") && records.has(key)) return { result: null };
+          records.set(key, args[1]);
+          return { result: "OK" };
+        }
+        assert.equal(command, "eval");
+        const script = String(args[0]);
+        const keyCount = Number(args[1]);
+        const keys = args.slice(2, 2 + keyCount).map(String);
+        const values = args.slice(2 + keyCount);
+        assert.ok(script.includes("redis.call('get',KEYS[1]) == ARGV[1]"));
+        if (records.get(keys[0]) !== values[0]) return { result: 0 };
+        if (keyCount === 2 && script.includes("redis.call('set'"))
+          records.set(keys[1], values[1]);
+        else {
+          assert.equal(keyCount, 1);
+          assert.ok(script.includes("redis.call('del'"));
+          records.delete(keys[0]);
+        }
+        return { result: 1 };
+      };
+      return Response.json(
+        Array.isArray(payload[0]) ? payload.map(execute) : execute(payload),
+      );
+    }
+    const url = request.url,
       provider =
         url === "https://api.resend.com/emails"
           ? "email"
@@ -149,15 +195,40 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       provider,
       "Unexpected provider request is forbidden in a synthetic lifecycle",
     );
-    const key = new Headers(options?.headers).get("Idempotency-Key")!;
+    const key = request.headers.get("Idempotency-Key")!;
     assert.ok(key);
-    assert.equal(options?.redirect, "error");
+    assert.equal(request.redirect, "error");
+    let body: string;
+    if (provider === "postcard") {
+      assert.match(
+        request.headers.get("content-type")!,
+        /^multipart\/form-data; boundary=tt-/,
+      );
+      body = Buffer.from(await request.clone().arrayBuffer()).toString(
+        "base64",
+      );
+      const form = await request.formData();
+      assert.equal(form.has("__timeTapestryLobTransport"), false);
+      assert.equal(form.get("to[name]"), "Sam Example");
+      assert.equal(form.get("to[address_line1]"), "1 Example Way");
+      assert.equal(form.get("from"), "adr_fixture");
+      for (const side of ["front", "back"]) {
+        const file = form.get(side);
+        assert.ok(file instanceof File);
+        assert.equal(file.name, `${side}.html`);
+        assert.match(file.type, /^text\/html/);
+        assert.ok(file.size > 10000);
+      }
+    } else {
+      assert.equal(request.headers.get("content-type"), "application/json");
+      body = await request.text();
+    }
     if (provider === "postcard" && failFirstPostcard) {
       failFirstPostcard = false;
       attempts.push({
         provider,
         key,
-        body: String(options?.body),
+        body,
         accepted: false,
       });
       return new Response("", { status: 503 });
@@ -165,7 +236,7 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     attempts.push({
       provider,
       key,
-      body: String(options?.body),
+      body,
       accepted: true,
     });
     const id =

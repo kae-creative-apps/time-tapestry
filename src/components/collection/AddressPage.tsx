@@ -19,6 +19,9 @@ export default function AddressPage({
     load,
   } = useCollection(id, accessKey);
   const automaticPostcards = Boolean(c?.autoPostcards || c?.deliveries.length);
+  const mailingStarted = Boolean(
+    c?.deliveries.some((delivery) => delivery.providerId),
+  );
   return (
     <main className="brand-page-shell mx-auto max-w-4xl px-5 py-6 sm:px-8 sm:py-8">
       <Logo className="[&_svg]:h-11" />
@@ -61,9 +64,11 @@ export default function AddressPage({
           <div className="rounded-lg border border-sage-200 bg-sage-50 p-6">
             <h2 className="font-serif text-xl">Your address is saved.</h2>
             <p className="mt-3">
-              {automaticPostcards
-                ? "Postcards are prepared automatically after the storyteller approves the stories. You do not need to arrange the mailing."
-                : "You can update this address here. Postcards will only be prepared if the storyteller chooses postcard delivery."}
+              {mailingStarted
+                ? "Address changes after printing begins pause future postcards until the Time Tapestry team reviews them. A postcard already sent for printing may still go to the previous address."
+                : automaticPostcards
+                  ? "Postcards are prepared automatically after the storyteller approves the stories. You do not need to arrange the mailing."
+                  : "You can update this address here. Postcards will only be prepared if the storyteller chooses postcard delivery."}
             </p>
             <details className="mt-6">
               <summary className="min-h-12 cursor-pointer text-base font-medium">
@@ -73,6 +78,7 @@ export default function AddressPage({
                 initial={c.address}
                 busy={busy}
                 automaticPostcards={automaticPostcards}
+                mailingStarted={mailingStarted}
                 onSave={(address) => act({ action: "address", address })}
               />
             </details>
@@ -83,6 +89,7 @@ export default function AddressPage({
               initial={c.address}
               busy={busy}
               automaticPostcards={automaticPostcards}
+              mailingStarted={mailingStarted}
               onSave={(address) => act({ action: "address", address })}
             />
           )

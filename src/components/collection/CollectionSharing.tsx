@@ -185,6 +185,9 @@ export function CollectionSharing({
             busy={busy}
             onDirtyChange={setAddressDirty}
             automaticPostcards={automaticPostcards}
+            mailingStarted={c.deliveries.some(
+              (delivery) => delivery.providerId,
+            )}
             onSave={(address) => act({ action: "address", address })}
           />
           {c.addressConfirmed && !addressDirty && (

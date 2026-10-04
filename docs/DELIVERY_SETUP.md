@@ -1,6 +1,6 @@
 # Time Tapestry delivery setup
 
-Status: implementation updated October 3, 2026. No postcards or emails were sent while building or testing this work. Provider credentials, live fulfillment, domain verification and final Lob PDF proofs still need an operator check.
+Status: audited October 3, 2026. Lob test authentication, the private test return address, and real provider rendering of all four postcard designs are verified. No physical postcards or emails were sent. Public hosting, recipient email verification, hosted security/storage, webhook registration and a running scheduler still need configuration. See `LOB_END_TO_END_QA.md` for evidence and remaining setup.
 
 ## Product behavior
 
@@ -64,7 +64,7 @@ RESEND_FROM_EMAIL=Time Tapestry <stories@example.org>
 
 Use a real, operator-approved Lob return-address ID. The return address must not be silently borrowed from an unrelated project. Resend needs a verified sending address/domain. `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and the public HTTPS origin are required for recipient email verification as well as the collection email workflow. Account sign-in emails operate independently of the collection queue enable flags. See `ACCOUNT_SETUP.md` for the browser-bound verification flow.
 
-Postcard readiness requires account email configuration before release and rechecks it before dispatching scheduled cards. If it becomes unavailable, the cards stay held without losing their saved schedule or consuming a print attempt. Missing configuration never reports mock success. Presence checks cannot prove inbox delivery, so verify the real sign-in flow before enabling postcards.
+Postcard readiness requires account email configuration and hosted sign-in security before release and rechecks them before dispatching scheduled cards. Configure `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `KV_REST_API_URL` and `KV_REST_API_TOKEN`; a local worker's security bypass cannot make a public QR destination ready. If configuration becomes unavailable, the cards stay held without losing their saved schedule or consuming a print attempt. Missing configuration never reports mock success. Presence checks cannot prove inbox delivery, so verify the real sign-in flow before enabling postcards.
 
 Local records use the collection file store. Vercel deployment requires the root store's persistent KV configuration. Do not turn on delivery against disposable or in-memory session data.
 
@@ -95,7 +95,7 @@ Authorization: Bearer <CRON_SECRET>
 
 GET is also supported for a scheduler that requires it. Authentication is required for both methods. The endpoint refuses work unless collection delivery or collection email is enabled. Email can run with `COLLECTION_EMAIL_ENABLED=true` without Lob credentials or postcard readiness. This does not change the first-postcard-first suppression for postal gifts. An invocation performs at most three provider requests, leaving further jobs for the next run. `vercel.json` now declares a five-minute recurring invocation for production deployments. This file change is not evidence that a deployed scheduler is running.
 
-The code makes a real POST to Lob's postcard endpoint and Resend's email endpoint when enabled and correctly configured. Do not invoke an enabled worker with real recipient records as a diagnostic.
+The code makes a real POST to Lob's postcard endpoint and Resend's email endpoint when enabled and correctly configured. New Lob requests upload the complete approved front and back as HTML files using multipart form data. Inline HTML has a 10,000-character limit and rejects our embedded fonts and artwork. The versioned saved request determines the multipart boundary and bytes so retries remain identical. Internal transport metadata is not sent to Lob. Previously frozen JSON requests are held for reconciliation rather than silently converted. Resend continues to receive JSON. Do not invoke an enabled worker with real recipient records as a diagnostic.
 
 Claims and outcomes are stored under the collection mutation lock. Each claimed provider job has a two-minute lease. External API calls happen after the lock is released, with a twelve-second request timeout.
 
@@ -128,6 +128,8 @@ Lob and Resend document a 24-hour idempotency window. This worker stops automati
 Do not clear the stored request, change its key or mark a timed-out request unsent merely to unblock the UI. Find the matching provider request first. If the provider created the postcard or email, repair the saved provider ID and status. If it definitively did not, document that finding before preparing an intentional retry. There is no public endpoint that bypasses this reconciliation.
 
 Changing an address after a provider request has begun cannot change that existing request. Keep the previous address in its saved request for audit. Resolve an uncertain print job before issuing a replacement.
+
+An address change after submission or mailing safely holds the remaining cards and preserves the original proof and provider payload. The address form explains that team review is required. There is currently no self-service or admin resume operation for this case; operator reconciliation remains necessary. Do not claim that a saved new address has automatically resumed the quarterly series.
 
 The request snapshots contain private delivery information. Legacy snapshots may also retain old access URLs and private print text. Keep them server-side and do not rewrite them to hide history. UI views need status, schedule and the safe error summary, not the serialized provider request.
 
