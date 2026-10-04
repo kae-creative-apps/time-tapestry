@@ -1,6 +1,6 @@
 import { BRAND_COLORS } from "../brand-art";
 
-export const POSTCARD_DESIGN_VERSION = "woven-keepsake-v4";
+export const POSTCARD_DESIGN_VERSION = "woven-keepsake-v5";
 
 /** 6 x 9 inches at trim, with 1/8 inch bleed on each edge. */
 export const POSTCARD_LAYOUT = {
@@ -10,8 +10,8 @@ export const POSTCARD_LAYOUT = {
   signature: { x: 263, y: 196, width: 362, height: 108 },
   // Equal 40px clear space from the left and bottom trim edges.
   backSignature: { x: 52, y: 514, width: 114, height: 34 },
-  // The approved weave fills the whole face, preserving its original aspect ratio.
-  thread: { x: 0, y: 0, width: 914.876, height: 600 },
+  // The complete approved stitch repeat covers the face without stretching.
+  thread: { x: 0, y: -73.438, width: 888, height: 746.876 },
   note: { x: 52, y: 42, width: 784, bottom: 330 },
   qr: { x: 52, y: 352, width: 144, height: 144 },
   caption: { x: 224, y: 356, width: 222, bottom: 530 },
@@ -99,7 +99,7 @@ export function renderPostcardDesign(
   const document = (css: string, body: string) =>
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; script-src 'none'"><style>${base}${css}</style></head><body data-postcard-size="6x9" data-postcard-design="${POSTCARD_DESIGN_VERSION}">${body}</body></html>`;
   const front = document(
-    `body{background:${BRAND_COLORS.taupe};background:linear-gradient(120deg,${BRAND_COLORS.taupe} 0%,${BRAND_COLORS.sage} 100%);color:white}.thread{position:absolute;left:${layout.thread.x}px;top:${layout.thread.y}px;width:${layout.thread.width}px;height:${layout.thread.height}px;opacity:.32}.signature{left:${layout.signature.x}px;top:${layout.signature.y}px;width:${layout.signature.width}px;height:${layout.signature.height}px}.tagline{position:absolute;left:80px;top:336px;width:728px;text-align:center;font-size:30px;line-height:40px}.dedication{position:absolute;left:80px;top:522px;width:728px;text-align:center;font-size:${text.dedication.size}px;line-height:${text.dedication.lineHeight}px}`,
+    `body{background:${BRAND_COLORS.taupe};background:linear-gradient(120deg,${BRAND_COLORS.taupe} 0%,${BRAND_COLORS.sage} 100%);color:white}.thread{position:absolute;left:${layout.thread.x}px;top:${layout.thread.y}px;width:${layout.thread.width}px;height:${layout.thread.height}px;opacity:.22}.signature{left:${layout.signature.x}px;top:${layout.signature.y}px;width:${layout.signature.width}px;height:${layout.signature.height}px}.tagline{position:absolute;left:80px;top:336px;width:728px;text-align:center;font-size:30px;line-height:40px}.dedication{position:absolute;left:80px;top:522px;width:728px;text-align:center;font-size:${text.dedication.size}px;line-height:${text.dedication.lineHeight}px}`,
     `<img class="thread" alt="" src="${assets.approvedThreadPng}"><img class="signature" alt="Time Tapestry" src="${assets.signatureLightPng}"><p class="tagline">Stories woven together.</p><p class="dedication" data-print-bottom="570">From ${escapeHtml(content.storytellerFirstName)}, for ${escapeHtml(content.recipientFirstName)}.</p>`,
   );
   const back = document(

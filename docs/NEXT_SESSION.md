@@ -77,3 +77,11 @@ Current detailed verification notes: `QA_2026-10-03.md`. Earlier `HACKATHON_QA.m
 The latest postcard keeps the v3 composition with a brighter taupe-to-sage front. The back logo now has equal 40px left/bottom trim margins. The marketing panel's approved background covers its full height. Details and actual Lob test proof are in `docs/brand/POSTCARD_DESIGN_v4.md`. All 29 relevant tests and the production build passed. Existing approved artwork stays frozen.
 
 The current local production preview uses `.next-woven-postcard-v4` on port 3112, started with `PORT=3112 NEXT_DIST_DIR=.next-woven-postcard-v4 npm run preview:local`. It preserves the local collection store and disables physical mail and email. New design QA used only a Lob test key and fictional data. Live deployment is separate from the GitHub push.
+
+### October 4: complete postcard pattern and Kaelyn handoff
+
+Final postcard direction is in `docs/brand/POSTCARD_DESIGN_v5.md`: same taupe/sage gradient and white logo as Tayloe's selected screenshot, exact approved interlocking stitch pattern covering the front, softened to 22% opacity. Back logo retains equal trim margins. The pink/green exploration was rejected and is not part of the committed design.
+
+`docs/KAELYN_SETUP.md` and `.env.local.example` explain integration continuity. Existing ElevenLabs and Lob credentials remain local and ignored. Provider configuration was not changed. Kaelyn needs securely supplied credentials for her environment; GitHub does not transfer secrets, private recordings or personal Codex plugin logins.
+
+59 relevant postcard, interview voice/agent, Lob and delivery tests passed. The final production build and one final Lob test proof passed. No physical mail was sent. Current local preview: `PORT=3112 NEXT_DIST_DIR=.next-postcard-repeat-v5 npm run preview:local`, with durable local collections and outbound mail/email disabled.

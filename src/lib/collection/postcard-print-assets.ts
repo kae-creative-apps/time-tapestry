@@ -9,9 +9,9 @@ export async function postcardPrintAssets() {
     readFile(
       path.join(process.cwd(), "public/brand/time-tapestry-lockup-light.png"),
     ),
-    // Generated directly from approved-flowing-thread_v39.svg, with original fills.
+    // Generated directly from approved-interlocking-pattern_v39.svg, with original fills.
     readFile(
-      path.join(process.cwd(), "public/brand/time-tapestry-weave-print-v2.png"),
+      path.join(process.cwd(), "public/brand/time-tapestry-ribbon-print-v1.png"),
     ),
     readFile(
       path.join(

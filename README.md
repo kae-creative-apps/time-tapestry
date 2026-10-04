@@ -17,6 +17,10 @@ This branch contains the revised four-chapter journey. Local tests and rendered 
 
 There is no recipient approval email or immediate postcard-sent email that spoils the gift. Draft-ready and confirmed-mailing updates go to the storyteller. A requested address email can reach the recipient before the first card.
 
+## Development handoff
+
+Kaelyn: start with [setup and integration continuity](docs/KAELYN_SETUP.md). It explains which services are already configured locally, which hosting settings remain, and how to securely supply credentials without replacing the existing interviewer.
+
 ## Run locally
 
 Use Node.js 22 or newer. From the repository root:
