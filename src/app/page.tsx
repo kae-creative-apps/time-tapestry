@@ -287,7 +287,7 @@ export default function Home() {
             <div className="brand-gradient-sage relative isolate flex min-h-[370px] items-center justify-center overflow-hidden p-7 sm:p-12">
               <BrandPattern
                 variant="ribbon"
-                className="absolute -bottom-20 -left-20 -z-10 w-[700px] max-w-none text-white opacity-[.09]"
+                className="absolute inset-0 -z-10 h-full w-full opacity-[.09]"
               />
               <PostcardPreview />
             </div>

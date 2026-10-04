@@ -71,3 +71,9 @@ Tayloe resumed after reboot on October 3. The shutdown turn was interrupted befo
 At shutdown handoff, root stopped its preview and film-worker processes where identifiable. All localhost previews require restarting after reboot. Old ports used during development included 3107–3112 and 3210–3214. Avoid launching duplicates. Do not delete saved data to clean up processes.
 
 Current detailed verification notes: `QA_2026-10-03.md`. Earlier `HACKATHON_QA.md` is historical and links to the newer notes.
+
+### Postcard visual refinement, woven keepsake v4
+
+The latest postcard keeps the v3 composition with a brighter taupe-to-sage front. The back logo now has equal 40px left/bottom trim margins. The marketing panel's approved background covers its full height. Details and actual Lob test proof are in `docs/brand/POSTCARD_DESIGN_v4.md`. All 29 relevant tests and the production build passed. Existing approved artwork stays frozen.
+
+The current local production preview uses `.next-woven-postcard-v4` on port 3112, started with `PORT=3112 NEXT_DIST_DIR=.next-woven-postcard-v4 npm run preview:local`. It preserves the local collection store and disables physical mail and email. New design QA used only a Lob test key and fictional data. Live deployment is separate from the GitHub push.

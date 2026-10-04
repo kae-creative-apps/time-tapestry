@@ -124,10 +124,10 @@ export function assertPublicPostcardFits(content: PublicPostcardContent) {
   if (
     lines(
       `From ${content.storytellerFirstName}, for ${content.recipientFirstName}.`,
-      20,
+      text.dedication.size,
       716,
     ) *
-      28 >
+      text.dedication.lineHeight >
     48
   )
     throw new PostcardLayoutError(
