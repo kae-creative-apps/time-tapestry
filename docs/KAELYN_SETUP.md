@@ -4,6 +4,8 @@ Checked October 4, 2026. Work from `codex/four-chapter-legacy` in [time-tapestry
 
 GitHub contains the application, locked dependencies, integration code, prompts, brand assets, rendering templates and tests. A push does not disconnect the existing provider accounts. It also does not copy local credentials, provider-side settings, recordings or a running worker to another computer or deployment.
 
+See the [complete handoff index](handoff/README.md) for the accompanying presentation and product materials. Use the [October 3 QA record](QA_2026-10-03.md) and [approved postcard v5 checks](brand/POSTCARD_DESIGN_v5.md) for current implementation and validation status; earlier planning documents contain superseded limitations.
+
 ## Start locally
 
 Use Node.js 22 or newer. In a fresh checkout:
@@ -42,6 +44,8 @@ These are configuration checks on Tayloe's ignored local environment, not fresh 
 
 Provide Kaelyn access to the existing provider projects or scoped developer credentials through a secure secret-sharing channel. Put server secrets in her ignored `.env.local` and the hosting/worker environment settings. Do not paste keys into GitHub issues, PRs, committed files or browser code. GitHub Actions secrets are not automatically application runtime environment variables. The existing local env file remains ignored with owner-only permissions.
 
+On October 4, a private development environment file was shared with Kaelyn through restricted Google Drive access. Obtain that file through the private handoff, not this repository, and save it as `.env.local` in a fresh checkout. Merge settings carefully if that file already exists. Only ElevenLabs and Lob test access were configured for that handoff; it does not provide the missing hosted email, storage, security or scheduling services. Keep collection email and postcard delivery disabled during local development. The file and its access link are intentionally excluded from GitHub.
+
 The existing agent, branch, client-tool and voice identifiers and provider setup requirements are recorded in [Live interview setup](LIVE_INTERVIEW_SETUP.md). Retain the private agent, patient turn taking, supported client events and `set_interview_theme` tool. Add the final application hostname to the existing agent's permitted domains when deploying. A key from another ElevenLabs account may not be able to access this agent. Read-aloud and optional film narration resolve the voice from this same agent; do not replace it with a generic voice or browser speech.
 
 Refero, 21st Dev, GitHub and other Codex plugins are development tools connected to Tayloe's Codex account. Their login sessions do not ship with this repository. Kaelyn can build the committed app without those plugins, or connect her own development tools. Remotion dependencies, the HyperFrames project and the rendered brand closer are committed; they are distinct from a personal plugin login.
@@ -67,6 +71,8 @@ See [Delivery setup](DELIVERY_SETUP.md), [Security and storage](SECURITY_AND_STO
 ## Data and validation
 
 Private contacts, transcripts, recordings, generated media and backups remain outside Git in `.data/` or private cloud storage. Cloning the repo does not recover them. Preserve Tayloe's existing `.data/collections` and follow [Backup runbook](BACKUP_RUNBOOK.md) before migration. Use fictional fixtures for development. Never replace the existing collection store with test data.
+
+The shared environment file and repository push are not a cloud backup of story data. Same-computer snapshots exist, but an off-computer restore still needs verification before promising durable family archives.
 
 ```sh
 npm test

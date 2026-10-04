@@ -4,29 +4,29 @@
 
 Stories woven together. Time Tapestry helps people share stories, faith, values and generosity with the people they care about through a private story collection and four postcards.
 
-This branch contains the revised four-chapter journey. Local tests and rendered fixtures do not establish live provider delivery or production readiness. See [Hackathon QA](docs/HACKATHON_QA.md) for the final check record and [October 2 decisions](docs/MEETING_DECISIONS_2026-10-02.md) for scope, research, owners and the demo script.
+This branch contains the revised four-chapter journey. Local tests and rendered fixtures do not establish live provider delivery or production readiness. Start with the [current QA record](docs/QA_2026-10-03.md) and [approved postcard design v5](docs/brand/POSTCARD_DESIGN_v5.md). [October 2 decisions](docs/MEETING_DECISIONS_2026-10-02.md) and [Hackathon QA](docs/HACKATHON_QA.md) are historical snapshots; later work supersedes some of their implementation status.
 
 ## Current journey
 
 1. **Share or request a story.** Collect storyteller and recipient details. The recipient can be the requester or someone else. Postal address can be supplied now or requested separately; phone is optional. The postcard pilot supports US addresses.
-2. **Answer four questions.** Type, record voice or record video for each question. Optional follow-ups are limited to two per section. Each recording can last up to ten minutes; two to five minutes is suggested. Video is optional.
-3. **Choose and review.** Saved takes remain available locally and on the server after successful backup. Newest saved take is the default unless the storyteller explicitly chooses another. Selected answers become four draft chapters and postcard notes. The storyteller can add personal encouragement or Scripture, edit the text and review any finished videos.
-4. **Approve the complete gift.** Source changes invalidate review. Final approval freezes the package. Nothing automatically shares unfinished content with the recipient.
-5. **Introduce it by postcard.** The first postcard's QR code opens all approved chapters and included videos immediately. Four distinct postcards are planned for months 0, 3, 6 and 9. Confirmed mailing delays shift later cards; overdue cards are not sent together.
+2. **Share across four themes.** Use the guided live interviewer, type answers, or record individual voice or video answers. The interviewer asks one question at a time; optional follow-ups are limited to two per section. Video is optional.
+3. **Choose and review.** Saved takes remain available locally and on the server after successful backup. Newest saved take is the default unless the storyteller explicitly chooses another. Selected answers become four draft chapters. With processing consent and a running worker, original recordings become four films using verified source-word timing, captions and the brand closer. The storyteller can edit written chapters and review each finished film. Optional generosity notes stay private unless the owner explicitly adds an excerpt to a written story.
+4. **Approve the complete gift.** Source changes invalidate review. Final approval freezes the package. Public postcard wording has its own explicit consent and four-card print approval. Private interview excerpts and financial details are not copied into print automatically. Nothing automatically shares unfinished content with the recipient.
+5. **Introduce it by postcard.** The first postcard's keyless QR opens the intended chapter after the recipient verifies the correct email address. All approved chapters and included videos are then available. Four distinct postcards are scheduled for months 0, 3, 6 and 9 when delivery is configured and enabled. Confirmed mailing delays shift later cards; overdue cards are not sent together.
 6. **Continue the conversation.** Fourteen days after confirmed mailing, an email offers the link and an optional video or written reply. Existing replies and email preferences suppress unnecessary reminders. A submitted reply queues an email to the storyteller.
 
 There is no recipient approval email or immediate postcard-sent email that spoils the gift. Draft-ready and confirmed-mailing updates go to the storyteller. A requested address email can reach the recipient before the first card.
 
 ## Development handoff
 
-Kaelyn: start with [setup and integration continuity](docs/KAELYN_SETUP.md). It explains which services are already configured locally, which hosting settings remain, and how to securely supply credentials without replacing the existing interviewer.
+Kaelyn: start with the [complete handoff index](docs/handoff/README.md) and [setup and integration continuity](docs/KAELYN_SETUP.md). They collect the supporting project materials and explain which services are already configured locally, which hosting settings remain, and how to securely supply credentials without replacing the existing interviewer.
 
 ## Run locally
 
 Use Node.js 22 or newer. From the repository root:
 
 ```sh
-npm install
+npm ci
 cp -n .env.local.example .env.local
 npm run dev
 ```
@@ -67,7 +67,7 @@ See [Storage readiness](docs/STORAGE_READINESS.md) before accepting lasting fami
 | `OPENAI_API_KEY`                                                | Whisper transcription. Use a valid OpenAI key; a Gloo key is not assumed interchangeable. Current transcription request limit is 25 MB.                                                                                                                      |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` | Live interview, generated narration and spoken questions use the configured interviewer's voice. REST playback and narration share `STORY_FILM_TTS_MODEL` (default `eleven_multilingual_v2`) and the agent's voice settings. No device voice fallback or independent voice override. Optional worker audio isolation uses the same API key and requires explicit external-processing consent. |
 | `COLLECTION_DELIVERY_ENABLED`                                   | Must equal `true` before the collection worker sends anything. Defaults to disabled; supplying provider keys alone does not enable it.                                                                                                                       |
-| `CRON_SECRET`                                                   | Private bearer secret protecting GET/POST `/api/collection/jobs`. No recurring job is installed automatically.                                                                                                                                               |
+| `CRON_SECRET`                                                   | Private bearer secret protecting GET/POST `/api/collection/jobs`. The repository declares a five-minute Vercel cron; a compatible deployed scheduler still needs verification.                                                                               |
 | `LOB_API_KEY`, `LOB_FROM_ADDRESS_ID`, `LOB_WEBHOOK_SECRET`      | Postcard API, approved return-address ID and webhook signing secret. Test cards do not establish actual mailing.                                                                                                                                             |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                           | Email API and verified sending identity. Provider acceptance does not prove delivery or reading.                                                                                                                                                             |
 | `ADMIN_SECRET`                                                  | Private credential for existing admin tools. Leave blank to deny admin authentication. Never use a shared example password.                                                                                                                                  |
@@ -78,15 +78,15 @@ On Vercel, collection storage fails closed without both KV REST variables. Local
 
 Keep delivery disabled until an operator verifies recipients, approved content, the public HTTPS origin, Lob print proofs and QR scans, the Resend sender, and signed real tracking events. The worker is `POST /api/collection/jobs` with `Authorization: Bearer <CRON_SECRET>`; GET is supported for schedulers. Lob posts tracking to `/api/collection/webhooks/lob`. That route verifies the raw-body signature and actual mailing timestamps. Created postcards are only submitted, not mailed.
 
-See [Delivery setup](docs/DELIVERY_SETUP.md) for enablement, suppression rules, delayed schedules, retry limits and reconciliation. There is no automatic cron deployment. Do not invoke an enabled worker with real recipients just to check whether it works.
+See [Delivery setup](docs/DELIVERY_SETUP.md) for enablement, suppression rules, delayed schedules, retry limits and reconciliation. The five-minute cron declared in `vercel.json` needs compatible hosting or an explicitly configured external scheduler. Prior deployment diagnostics reported that this interval exceeds Vercel Hobby's limit. The declaration alone does not establish a running scheduled job. Do not invoke an enabled worker with real recipients just to check whether it works.
 
 ## Video production
 
-Recorded answers require an operator edit before they are presented as finished chapter videos. The [video worker](video/README.md) exports accepted takes, supports trims and timed captions, retains originals, renders through Remotion and attaches four outputs for narrator review. HyperFrames supplies an animated closer MP4. The closer currently uses a temporary wordmark pending approved logo assets.
+The [automatic story film worker](docs/STORY_FILM_WORKER.md) processes consented jobs from a durable queue. It transcribes the actual source recordings with ElevenLabs Scribe v2, matches accepted answers to verified word timestamps, levels a copy of the original audio, adds source-timed captions, and renders four films through Remotion with approved branding and the HyperFrames closer. All four outputs attach together for the storyteller's review; originals remain unchanged. The default is the storyteller's own voice and optional camera footage. AI interviewer narration is a separate, explicitly approved alternative that resolves the voice from the existing ElevenLabs agent.
 
-FFmpeg audio processing is available; ElevenLabs isolation is optional and must be explicitly authorized. A finished film is limited to one hour including title and closer. The pipeline does not automatically choose the best clips, align untimed transcripts, replace professional editorial judgment or run a durable production render queue. Synthetic render evidence is recorded in [Video validation](video/VALIDATION.md).
+Automatic assembly is conservative. Uncertain alignment, missing media or unusable source material stops for attention instead of inventing cuts or substituting narration. Completed outputs still require review and approval. Each finished film is limited to one hour including title and closer. Version checks, bounded retries and verified cached assets support recovery. Synthetic fixture renders establish that the pipeline runs, not that every real interview will produce an editorially strong film. The [manual video tooling](video/README.md) remains available for controlled recovery and reviewed edits.
 
-Worker commands run separately from Next.js and need their environment supplied explicitly. For a local operator command that should use `.env.local`, use Node's `--env-file=.env.local` before `--import tsx`. The worker also needs FFmpeg/ffprobe and a supported Chrome renderer. Follow the complete instructions in the video README.
+Run `npm run video:worker` separately from Next.js. This command loads `.env.local` and needs FFmpeg, ffprobe, a supported Chrome renderer, and the same metadata and private media configuration as the web app. Hosted operation requires a supervised long-running worker; committing the queue and worker code does not deploy that service. Follow [Story film worker](docs/STORY_FILM_WORKER.md) for runtime, consent, progress and recovery details.
 
 ## Structure and access
 
@@ -94,20 +94,20 @@ Worker commands run separately from Next.js and need their environment supplied 
 - `src/app/api/collection/`: authenticated collection actions, media, transcription, spoken prompts, delivery jobs and Lob webhook.
 - `src/lib/collection/`: records, access roles, source-based drafting, media and delivery lifecycle.
 - `src/lib/interview-state.ts`: shared four-chapter questions and state transitions.
-- `scripts/` and `video/`: operator rendering and media processing.
+- `scripts/` and `video/`: automatic story film worker, controlled manual rendering and media processing.
 - `tests/`: interview, collection, recording backup and delivery checks.
 
-Owner, requester and recipient links have different access. Treat their private bearer keys as credentials; anyone holding a recipient link can use it. Original takes and unfinished drafts are not exposed to recipients. Media is served through authorized routes rather than a public recording URL. Legacy code and records remain available behind admin access; they are not the new public journey.
+Owner and requester links retain separate bearer permissions, so treat those keys as credentials. Recipient QR and email links are keyless locators: reading a collection, playing its films or replying requires a verified account matching the intended recipient email. Old recipient keys do not bypass this check. Anonymous and wrong-email visitors see a generic gate without story content or names. Original takes, private generosity notes and unfinished drafts are not exposed to recipients. Media is served through authorized routes rather than a public recording URL. See [Account setup](docs/ACCOUNT_SETUP.md) for the current access model. Legacy code and records remain available behind admin access; they are not the new public journey.
 
 ## Checks and handoff
 
 ```sh
+npm test
 npm run typecheck
-node --import tsx --test tests/*.test.ts scripts/render-chapter.test.ts
 npm run build
 ```
 
-Tests use local fixtures and do not send postcards or emails. The [QA record](docs/HACKATHON_QA.md) distinguishes browser checks, synthetic rendering and pending real-provider/device checks. Confirm live voice quality, transcription, long-recording recovery, private deployed playback, print proofs, email delivery and editorial meaning separately.
+Tests use local fixtures and mock outbound providers. The [current QA record](docs/QA_2026-10-03.md) distinguishes browser checks, synthetic rendering and separate provider evidence. The October 3 full suite passed 269 tests. The October 4 postcard v5 change passed 59 focused tests and a production build, with one separate fictional Lob test proof. That is not a claim that the full suite was rerun after the visual revision. The existing ElevenLabs interviewer and generated read-aloud voice were verified against the same agent. Confirm real-device voice quality, long-recording recovery, private deployed playback, recipient inbox access, physical print color and editorial meaning separately.
 
 Keep changes coordinated with Kaelyn's current branch before merging. This documentation does not mean a production deployment, submission form or live delivery has occurred.
 

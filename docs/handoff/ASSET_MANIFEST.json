@@ -1,0 +1,318 @@
+{
+  "prepared": "2026-10-04",
+  "scope": "Curated public project materials; source paths are relative to the For One Studios client folder, not filesystem restore targets. Files are preserved without changing original versions.",
+  "files": [
+    {
+      "path": "docs/handoff/presentation/historical-v3/Time_Tapestry_Editable_Pitch_v3.pptx",
+      "source": "2026-09-true-legacy/2026-10-02-pitch-v3/Time_Tapestry_Editable_Pitch_v3.pptx",
+      "bytes": 132727,
+      "sha256": "cdaf6aa9776be0fe7f6429eeb8b83b518ceac9eabe52f5efd274f7c1e1bcaa9a"
+    },
+    {
+      "path": "docs/handoff/presentation/historical-v3/Time_Tapestry_Editable_Pitch_v3.pdf",
+      "source": "2026-09-true-legacy/2026-10-02-pitch-v3/Time_Tapestry_Editable_Pitch_v3.pdf",
+      "bytes": 418054,
+      "sha256": "8e4a045f7c98fade4f7697344609dd71558f161e9192fa6d698941d5c35fcad3"
+    },
+    {
+      "path": "docs/handoff/presentation/historical-v3/Time_Tapestry_Presenter_Script_v3.txt",
+      "source": "2026-09-true-legacy/2026-10-02-pitch-v3/Time_Tapestry_Presenter_Script_v3.txt",
+      "bytes": 4923,
+      "sha256": "6f8e9dde6bd11bfeb32da289921c9e36ef0aa446f3dd5c8fe17d7a3ad05de4e7"
+    },
+    {
+      "path": "docs/handoff/presentation/historical-v3/Pitch_v3_Contact_Sheet.png",
+      "source": "2026-09-true-legacy/2026-10-02-pitch-v3/Pitch_v3_Contact_Sheet.png",
+      "bytes": 440974,
+      "sha256": "27c010067837d750d0186019d103640d459fbbcecf250b499c4389566767f273"
+    },
+    {
+      "path": "docs/handoff/brand/wording-v1/Time_Tapestry_Brand_Wording_v1.docx",
+      "source": "2026-10-time-tapestry/2026-10-02-brand-wording-v1/Time_Tapestry_Brand_Wording_v1.docx",
+      "bytes": 39597,
+      "sha256": "b10f059edf9ae7237a472f2f3c1cacb247c100e9259350af758bde75669e1698"
+    },
+    {
+      "path": "docs/handoff/brand/wording-v1/Time_Tapestry_Brand_Wording_v1.pdf",
+      "source": "2026-10-time-tapestry/2026-10-02-brand-wording-v1/Time_Tapestry_Brand_Wording_v1.pdf",
+      "bytes": 7519,
+      "sha256": "19e454c44be141d19d6ac0df0f0a49de7a8ccfeb8135ba357107e8662b341614"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/presentation/Time_Tapestry_Brand_Presentation_v39.pptx",
+      "source": "2026-10-time-tapestry/brand-kit_v39/presentation/Time_Tapestry_Brand_Presentation_v39.pptx",
+      "bytes": 3121205,
+      "sha256": "c72d16d0e4863c35312fedb27cb9820d3936a70a2b5c388db39fe4b5e1167b63"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/presentation/Time_Tapestry_Asset_Sheet_v39.pdf",
+      "source": "2026-10-time-tapestry/brand-kit_v39/presentation/Time_Tapestry_Asset_Sheet_v39.pdf",
+      "bytes": 279442,
+      "sha256": "c8a35e876ccce87b51c7cc4f8ddfd9f69d1d237c7da439f4515a4ad658a8a104"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-espresso_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-espresso_v39.png",
+      "bytes": 42954,
+      "sha256": "63319183d9c5c288f95688f82fb0d776b41b3f9b91a6cc63f19ca3b3d6f3626d"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-espresso_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-espresso_v39.svg",
+      "bytes": 37256,
+      "sha256": "59ac62fe4407d7f2bf79c2f2b99a87ef28725a2696234d0450bf171576aca21c"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-moss_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-moss_v39.png",
+      "bytes": 42688,
+      "sha256": "81aee19c7c13df411e237930b65b59f1be8dc6c49fcf0fc4f381a1fce73a0615"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-moss_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-moss_v39.svg",
+      "bytes": 37256,
+      "sha256": "f5322196c7e71d8abb3a60b9f03a88184c7e0b92952e487fad9a096a0714c5eb"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-peach_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-peach_v39.png",
+      "bytes": 41271,
+      "sha256": "233390e0f53ef5aa86dc814d6e31c8d4a480d7f8ced1b9971820fde93c2adaf4"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-peach_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-peach_v39.svg",
+      "bytes": 37256,
+      "sha256": "79d4cfab8ae836b83834b4c203ae6aa3d8c6943f62de3b65e958e676f46feb61"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-walnut_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-walnut_v39.png",
+      "bytes": 42424,
+      "sha256": "5896f9c1ea4fb6c30c3f1845ee2922c2b804e925b1ea1d21fadf4f1995c756de"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-walnut_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-walnut_v39.svg",
+      "bytes": 37256,
+      "sha256": "c0cc3ccc68b6cb4974d5f6ef59b123d6f41a398eceadf75330b01124856f9062"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-white_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-white_v39.png",
+      "bytes": 39471,
+      "sha256": "4191e26c9339ffd15a18fd9594aba88117ddeb93850b448ba5ac9b85e2f2dbf2"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/time-tapestry-primary-white_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/time-tapestry-primary-white_v39.svg",
+      "bytes": 37256,
+      "sha256": "80fdfe68ed5f2f7aad0afe977dcfc49c7fbb78f72bfc6d8ca50a147d6fe6b888"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-espresso_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-espresso_v39.png",
+      "bytes": 29029,
+      "sha256": "3e43af2c0efaeb01d431a34ecaeb97c3319e9e1196ec98619b7e0e92b3756302"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-espresso_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-espresso_v39.svg",
+      "bytes": 8176,
+      "sha256": "b24cfc35e74f2947b510759fb01097440f628561f3d9987b8c881099e795ee53"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-moss_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-moss_v39.png",
+      "bytes": 28846,
+      "sha256": "5edc9f63b6eb626ee306cc72e122e185e121405037c440f26d3ae4190c4bc437"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-moss_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-moss_v39.svg",
+      "bytes": 8176,
+      "sha256": "c4fa3b37b7bf597610b629071e1789206a7124cab0f07ae0ed4df984ef32c6b2"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-peach_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-peach_v39.png",
+      "bytes": 28147,
+      "sha256": "b383a785e4431a14d62c1659ab55cb08802382deeb81b95eebc59c12d529f4b2"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-peach_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-peach_v39.svg",
+      "bytes": 8176,
+      "sha256": "32e9d366ac5ce29325bdd39268ba36965c3f6f6ae3069b58c70d6801797eece3"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-walnut_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-walnut_v39.png",
+      "bytes": 28928,
+      "sha256": "d0d100af61b71a0b9a587145672981cefa712b5e35befa9b83dfc602f28c768d"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-walnut_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-walnut_v39.svg",
+      "bytes": 8176,
+      "sha256": "335ccb0808c65dee2e989788ff1ab72280cc0dcddd05f23cb07015392bccecf4"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-white_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-white_v39.png",
+      "bytes": 26926,
+      "sha256": "7f600765a2946fde561578828c58221a3e0c5374eaf84a6e35712cbf1e2c6cf4"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/logos/tt-icon-white_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/logos/tt-icon-white_v39.svg",
+      "bytes": 8176,
+      "sha256": "05e575d824d2cc6baf0eb6fc4f8776850994f067440ca3046d241cebc3324a54"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-espresso_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-espresso_v39.png",
+      "bytes": 25682,
+      "sha256": "fdb1bced37f442613256d2cbd473bfeb0708c6e3bd86e01b7692eb691d308ea9"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-espresso_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-espresso_v39.svg",
+      "bytes": 8603,
+      "sha256": "720747d1bc32ed5168cb16c9e341b6f3a782716c4d309c8f200a11c668dccc46"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-moss_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-moss_v39.png",
+      "bytes": 25508,
+      "sha256": "429ff80c1530ac3e6812b0a8e6ee48c477cbd06b128916b9c58431069b8f86b7"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-moss_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-moss_v39.svg",
+      "bytes": 8603,
+      "sha256": "0dff150e9235a359c3ffb664659702c15f45643f598c4fe42380508df40e9f68"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-peach_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-peach_v39.png",
+      "bytes": 24642,
+      "sha256": "5fdcc5ded95ae81373dd8380683f91700b46ce0efcba46e76e6bfbeed7d76375"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-peach_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-peach_v39.svg",
+      "bytes": 8603,
+      "sha256": "a3a40af185fc6d4bcc147b677558f315b106d90526d189e3a8125a054bda87b2"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-walnut_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-walnut_v39.png",
+      "bytes": 25582,
+      "sha256": "8c247b52c56ddb441e1e476619d135295e0051bcb15cf18364443135584c82ed"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-walnut_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-walnut_v39.svg",
+      "bytes": 8603,
+      "sha256": "af8b1e1719c2174a18e44874399b89657b038f4157984308de25158f913418cb"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-white_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-white_v39.png",
+      "bytes": 23378,
+      "sha256": "936b5a69f82be5affaa28f070690ea37140506737c915ae63f805914eda9e65a"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/wordmarks/time-tapestry-stacked-white_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/wordmarks/time-tapestry-stacked-white_v39.svg",
+      "bytes": 8603,
+      "sha256": "7e82058eb0c2129006e624ea28dee50e2d4445ba4bc8739878e395011c9b9d31"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-moss-white_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-moss-white_v39.png",
+      "bytes": 461122,
+      "sha256": "ccc971b7dfe2542ca34a4d3241a567e8a28293531a5a15ae35354b2075adc484"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-moss-white_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-moss-white_v39.svg",
+      "bytes": 704,
+      "sha256": "e16869ce08818760ccc431e20f9ce43abcd21eb491cd3c1b37402cbe301fd7ec"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-peach-moss_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-peach-moss_v39.png",
+      "bytes": 608733,
+      "sha256": "26afcdc3ef9c32cf68554a1934b35adb8632ddb8c0af818dde38b46341d9386b"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-peach-moss_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-peach-moss_v39.svg",
+      "bytes": 704,
+      "sha256": "1c9b4230b736ed484b82d37c1e81c6988a094f432653d4156e692923a0352239"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-peach-white_v39.png",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-peach-white_v39.png",
+      "bytes": 443887,
+      "sha256": "2c0514bbb6c78239805d87450dca475bec9ee425cb9843a7ffb9723142d4638c"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/assets/gradients/gradient-circle-peach-white_v39.svg",
+      "source": "2026-10-time-tapestry/brand-kit_v39/assets/gradients/gradient-circle-peach-white_v39.svg",
+      "bytes": 704,
+      "sha256": "7551220e5d0ce1b4f375439f06cdd2c1ed743405273578b35c7aa7df537d2fd6"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/source/manrope.ttf",
+      "source": "2026-10-time-tapestry/brand-kit_v39/source/manrope.ttf",
+      "bytes": 164700,
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/source/quicksand.ttf",
+      "source": "2026-10-time-tapestry/brand-kit_v39/source/quicksand.ttf",
+      "bytes": 124824,
+      "sha256": "39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/source/manrope-OFL.txt",
+      "source": "2026-10-time-tapestry/brand-kit_v39/source/manrope-OFL.txt",
+      "bytes": 4387,
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/source/quicksand-OFL.txt",
+      "source": "2026-10-time-tapestry/brand-kit_v39/source/quicksand-OFL.txt",
+      "bytes": 4445,
+      "sha256": "14d28541780d90f6577bb7abcc6f005bf6969614294e75c82abb8758a696ad46"
+    },
+    {
+      "path": "docs/handoff/brand/kit-v39/source/color-tokens_v39.json",
+      "source": "2026-10-time-tapestry/brand-kit_v39/source/color-tokens_v39.json",
+      "bytes": 115,
+      "sha256": "3c5acdbccceca5f31f4863361b250d7177a2d577a02c257d8f00bd19d7aeecb9"
+    },
+    {
+      "path": "docs/handoff/website-film/editorial-v5/voiceover_script_v5-locked.txt",
+      "source": "2026-10-time-tapestry/2026-10-03-hackathon-film-v1/evidence/audit-v5/voiceover_script_v5-locked.txt",
+      "bytes": 1879,
+      "sha256": "4445d1a489d774e4fc957775b29ab44e45c853365c5e499d8d118fc46b6b845d"
+    },
+    {
+      "path": "docs/handoff/website-film/editorial-v5/storyboard_narration_v5-locked.md",
+      "source": "2026-10-time-tapestry/2026-10-03-hackathon-film-v1/evidence/audit-v5/storyboard_narration_v5-locked.md",
+      "bytes": 4442,
+      "sha256": "ef7da09c09561f6f61b35cf6f23a64a40721925882800f8f32cfc483cd26c69a"
+    },
+    {
+      "path": "docs/handoff/website-film/historical-production-checklist_v1.md",
+      "source": "2026-10-time-tapestry/2026-10-03-hackathon-film-v1/production-checklist_v1.md",
+      "bytes": 7184,
+      "sha256": "7dfbd30d5d3d890de37c54e8c60cecd82a67e2108c11c0f3229390212347bd5e"
+    }
+  ]
+}
