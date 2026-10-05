@@ -9,9 +9,9 @@ export async function postcardPrintAssets() {
     readFile(
       path.join(process.cwd(), "public/brand/time-tapestry-lockup-light.png"),
     ),
-    // Generated directly from approved-interlocking-pattern_v39.svg, with original fills.
+    // Exact embedded art from the user-approved quiet brown v41 print proof.
     readFile(
-      path.join(process.cwd(), "public/brand/time-tapestry-ribbon-print-v1.png"),
+      path.join(process.cwd(), "public/brand/time-tapestry-quiet-flowing-thread-v41.png"),
     ),
     readFile(
       path.join(

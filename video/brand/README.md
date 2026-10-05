@@ -1,5 +1,5 @@
 # Time Tapestry logo motion studies
 
-The current review direction is **[Passing the stitch, v2](passing-stitch-v2/DESIGN.md)**. It animates the relationship between the approved two t forms. Tayloe rejected the literal textile treatment in `woven-logo-v1`; that source remains here as an earlier study, not an approved production asset.
+The current review direction is **[Joining hands, v3](joining-hands-v3/README.md)**. Two complete t forms approach, their curved ends reach and meet, and the clasp settles into the approved stitch. Tayloe requested visible interaction between the forms after reviewing the earlier reveal animation.
 
-Neither study replaces the deployed film closer. The live application still uses its existing closing asset. The v2 MP4 and private Drive review link are documented in `passing-stitch-v2/README.md`.
+Earlier studies remain as history: Tayloe rejected the literal textile treatment in `woven-logo-v1` and the masked reveal in `passing-stitch-v2`. None of these studies replaces the deployed film closer. The live application still uses its existing closing asset.

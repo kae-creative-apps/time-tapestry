@@ -56,7 +56,7 @@ test("actual print artwork shares safe public text and first names, with exact a
     assert.match(html, /script-src 'none'/);
   }
   const thread = await readFile(
-    "public/brand/time-tapestry-ribbon-print-v1.png",
+    "public/brand/time-tapestry-quiet-flowing-thread-v41.png",
   );
   assert.ok(
     front.includes(`data:image/png;base64,${thread.toString("base64")}`),

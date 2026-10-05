@@ -1,0 +1,46 @@
+{
+  "created": "2026-10-05",
+  "description": "Rendered review exports, not private interviews or production deployment assets.",
+  "exports": [
+    {
+      "path": "docs/handoff/video-previews/story-templates-v1/01-Kindness-Received-Time-Tapestry-v1.mp4",
+      "bytes": 4739599,
+      "sha256": "fd343be35f7c574124af12ce893a23c51969469706ef6b3d0d12f5e32c3703fb"
+    },
+    {
+      "path": "docs/handoff/video-previews/story-templates-v1/02-A-Life-of-Faith-Time-Tapestry-v1.mp4",
+      "bytes": 4864290,
+      "sha256": "a517c09697f3923418ff74881f26e16966736e07402a207c91325364f38a678f"
+    },
+    {
+      "path": "docs/handoff/video-previews/story-templates-v1/03-What-You-Sowed-Time-Tapestry-v1.mp4",
+      "bytes": 5340836,
+      "sha256": "fe998d4c886aeba7253f226ea1f946cd09751acaa64806a5699be1b28d3caaf7"
+    },
+    {
+      "path": "docs/handoff/video-previews/story-templates-v1/04-What-I-Hope-You-Carry-Time-Tapestry-v1.mp4",
+      "bytes": 4548345,
+      "sha256": "e886c110a650087c2ac9bb381bcdafb3967ff4d0707d2cef9be810da27bca94b"
+    },
+    {
+      "path": "docs/handoff/brand/motion-previews/history/woven-logo-v1/Time-Tapestry-Woven-Logo-HyperFrames-v1.mp4",
+      "bytes": 2248560,
+      "sha256": "45cb45ca7efa510e50a2f21ea389869b7a4b5bfa62ed774e495099dca0f80242"
+    },
+    {
+      "path": "docs/handoff/brand/motion-previews/history/woven-logo-v1/Time-Tapestry-Woven-Logo-v1.mp4",
+      "bytes": 1153543,
+      "sha256": "b659d4fb217aad43bbac390f21baffab48db27f924ed62fc31abbd4abe2cbf49"
+    },
+    {
+      "path": "docs/handoff/brand/motion-previews/history/passing-stitch-v2/Time-Tapestry-Passing-Stitch-v2.mp4",
+      "bytes": 190618,
+      "sha256": "7a34b1b97138356312c3d551c008af28d3b880b6b7ec59d6704eba5701e13ac7"
+    },
+    {
+      "path": "docs/handoff/brand/motion-previews/Time-Tapestry-Joining-Hands-v3.mp4",
+      "bytes": 325736,
+      "sha256": "f492b79f1aa5c8945510c9f424d01b4e59ec610d104ef35cc89124411a159725"
+    }
+  ]
+}
