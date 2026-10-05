@@ -1,0 +1,57 @@
+name: Worker container
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile.worker"
+      - ".dockerignore"
+      - "railway.json"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "scripts/**"
+      - "src/**"
+      - "video/**"
+      - "public/brand/**"
+      - ".github/workflows/worker-container.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile.worker"
+      - ".dockerignore"
+      - "railway.json"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "scripts/**"
+      - "src/**"
+      - "video/**"
+      - "public/brand/**"
+      - ".github/workflows/worker-container.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-container-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Linux worker image
+        run: docker build --platform linux/amd64 --file Dockerfile.worker --tag time-tapestry-worker:smoke .
+      - name: Render a synthetic film without network access or credentials
+        timeout-minutes: 10
+        run: >-
+          docker run --rm --init
+          --platform linux/amd64
+          --network none
+          --cpus=2 --memory=4g --memory-swap=4g
+          --entrypoint node
+          time-tapestry-worker:smoke
+          --import tsx scripts/verify-worker-container.ts
