@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "durationSeconds": 10,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "audio": false,
+  "renderEngine": "Remotion 4.0.532",
+  "sha256": "b659d4fb217aad43bbac390f21baffab48db27f924ed62fc31abbd4abe2cbf49",
+  "drivePreview": "https://drive.google.com/file/d/1Hyu9q6tjTdDruA-DSoB_aw4Uagr-XWul/view",
+  "hyperframes": "Native GSAP version exported with HyperFrames 0.8.65. 1920x1080, 30fps, 10 seconds, silent H.264. Strict combined checks and 224 seek assertions passed.",
+  "productionCloserReplaced": false,
+  "hyperframesSha256": "45cb45ca7efa510e50a2f21ea389869b7a4b5bfa62ed774e495099dca0f80242"
+}
