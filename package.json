@@ -14,6 +14,7 @@
     "video:audio": "node --import tsx scripts/render-chapter-audio.ts",
     "video:films": "node --import tsx scripts/render-story-films.ts",
     "video:worker": "node --import tsx scripts/run-story-film-worker.ts",
+    "video:templates": "remotion studio video/templates/story-templates-entry.tsx --no-open",
     "backup:collections": "node --import tsx scripts/backup-collections.ts",
     "preview:voice": "node --import tsx scripts/generate-interview-preview.ts"
   },

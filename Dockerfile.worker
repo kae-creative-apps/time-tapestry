@@ -23,6 +23,7 @@ COPY src/components/BrandArtwork.tsx src/components/BrandPattern.tsx ./src/compo
 COPY scripts/run-story-film-worker.ts scripts/verify-worker-container.ts ./scripts/
 COPY video/src ./video/src
 COPY video/remotion ./video/remotion
+COPY video/templates ./video/templates
 COPY public/brand/film-closer-v2.mp4 ./public/brand/film-closer-v2.mp4
 COPY public/brand/fonts/quicksand-latin.woff2 ./public/brand/fonts/quicksand-latin.woff2
 

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { ChapterVideoPlan } from "../src/lib/video-plan";
+import type { NarratedFilmPlan } from "../src/lib/collection/films/types";
 
 const exec = promisify(execFile);
 
@@ -18,12 +19,17 @@ async function main() {
   process.env.TEMP = scratch;
   process.env.COLLECTION_DATA_DIR = path.join(scratch, "collections");
   try {
-    const [{ ensureBrowser, openBrowser }, { renderOriginalFilm }, render] =
-      await Promise.all([
-        import("@remotion/renderer"),
-        import("../src/lib/collection/films/original-render"),
-        import("../src/lib/collection/films/render"),
-      ]);
+    const [
+      { ensureBrowser, openBrowser },
+      { renderOriginalFilm },
+      render,
+      filmPlan,
+    ] = await Promise.all([
+      import("@remotion/renderer"),
+      import("../src/lib/collection/films/original-render"),
+      import("../src/lib/collection/films/render"),
+      import("../src/lib/collection/films/plan"),
+    ]);
     const { fileHash, probeFilm } = render;
     for (const binary of ["ffmpeg", "ffprobe"]) {
       await exec(binary, ["-version"], { timeout: 10000 });
@@ -92,6 +98,37 @@ async function main() {
       { timeout: 30000 },
     );
     const sourceHash = await fileHash(source);
+    const tone = path.join(scratch, "synthetic-tone.wav");
+    await exec(
+      "ffmpeg",
+      [
+        "-nostdin",
+        "-v",
+        "error",
+        "-i",
+        source,
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-t",
+        "1",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-c:a",
+        "pcm_s16le",
+        tone,
+      ],
+      { timeout: 30000 },
+    );
+    const toneHash = await fileHash(tone);
+    const preservedFiles = new Map([
+      [source, sourceHash],
+      [tone, toneHash],
+      [closer, closerHash],
+      [font, await fileHash(font)],
+    ]);
     const plan: ChapterVideoPlan = {
       schemaVersion: 1,
       id: "container-smoke",
@@ -168,43 +205,138 @@ async function main() {
       async () => {},
       async () => {},
     );
-    const { stdout } = await exec(
-      "ffprobe",
-      [
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration:stream=codec_type,codec_name,width,height",
-        "-of",
-        "json",
-        output,
-      ],
-      { timeout: 10000 },
-    );
-    const metadata = JSON.parse(stdout) as {
-      format: { duration: string };
-      streams: {
-        codec_type: string;
-        codec_name: string;
-        width?: number;
-        height?: number;
-      }[];
+    async function verifyOutput(
+      outputFile: string,
+      receipt: {
+        outputSha256: string;
+        durationSeconds: number;
+        releaseEligible: boolean;
+      },
+      label: string,
+    ) {
+      const { stdout } = await exec(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-show_entries",
+          "format=duration:stream=codec_type,codec_name,width,height",
+          "-of",
+          "json",
+          outputFile,
+        ],
+        { timeout: 10000 },
+      );
+      const metadata = JSON.parse(stdout) as {
+        format: { duration: string };
+        streams: {
+          codec_type: string;
+          codec_name: string;
+          width?: number;
+          height?: number;
+        }[];
+      };
+      const video = metadata.streams.find(
+        (item) => item.codec_type === "video",
+      );
+      const audio = metadata.streams.find(
+        (item) => item.codec_type === "audio",
+      );
+      assert.equal(video?.codec_name, "h264");
+      assert.equal(video.width, 1920);
+      assert.equal(video.height, 1080);
+      assert.equal(audio?.codec_name, "aac");
+      assert(Math.abs(Number(metadata.format.duration) - 8) <= 0.2);
+      assert((await stat(outputFile)).size > 0);
+      for (const [file, hash] of preservedFiles)
+        assert.equal(
+          await fileHash(file),
+          hash,
+          `${label} changed a preserved fixture or brand asset.`,
+        );
+      assert.equal(receipt.outputSha256, await fileHash(outputFile));
+      assert(Math.abs(receipt.durationSeconds - 8) <= 0.2);
+      assert.equal(receipt.releaseEligible, false);
+      const savedReceipt = JSON.parse(
+        await readFile(`${outputFile}.result.json`, "utf8"),
+      );
+      assert.equal(savedReceipt.outputSha256, receipt.outputSha256);
+      assert.equal(savedReceipt.status, "rendered-awaiting-review");
+      assert.equal(savedReceipt.releaseEligible, false);
+      console.log(
+        `PASS: ${label}: 1920x1080 H.264/AAC, eight seconds, preserved fixture and brand hashes, matching output receipt, and review still required.`,
+      );
+    }
+    await verifyOutput(output, result, "original video");
+
+    const originalAudioPlan: ChapterVideoPlan = {
+      ...plan,
+      id: "container-smoke-original-audio",
+      chapterNumber: 2,
+      sources: plan.sources.map((item) => ({
+        ...item,
+        kind: "audio",
+        relativePath: "synthetic-tone.wav",
+        sha256: toneHash,
+      })),
+      clips: plan.clips.map((clip) => ({ ...clip, kind: "audio" })),
     };
-    const video = metadata.streams.find((item) => item.codec_type === "video");
-    const audio = metadata.streams.find((item) => item.codec_type === "audio");
-    assert.equal(video?.codec_name, "h264");
-    assert.equal(video.width, 1920);
-    assert.equal(video.height, 1080);
-    assert.equal(audio?.codec_name, "aac");
-    assert(Math.abs(Number(metadata.format.duration) - 8) <= 0.2);
-    assert((await stat(output)).size > 0);
-    assert.equal(await fileHash(source), sourceHash);
-    assert.equal(await fileHash(closer), closerHash);
-    assert.equal(result.outputSha256, await fileHash(output));
-    assert.equal(result.releaseEligible, false);
+    const audioOutput = path.join(scratch, "synthetic-original-audio.mp4");
     console.log(
-      "PASS: 1920x1080 H.264/AAC film, eight-second duration, font loaded by the composition, hashes unchanged, and review still required.",
+      "Rendering the original audio-only orb with the synthetic tone.",
     );
+    const audioResult = await renderOriginalFilm(
+      {
+        plan: originalAudioPlan,
+        assets: new Map([
+          ["synthetic-source", { file: tone, mime: "audio/wav" }],
+          ["brand-closer", { file: closer, mime: "video/mp4" }],
+          ["brand-font", { file: font, mime: "font/woff2" }],
+        ]),
+        sourceAssets: [
+          { mediaId: "synthetic-source", sha256: sourceHash, durationMs: 1000 },
+        ],
+      },
+      audioOutput,
+      async () => {},
+      async () => {},
+    );
+    await verifyOutput(audioOutput, audioResult, "original audio-only orb");
+
+    const script = "Synthetic narration fixture.";
+    const narratedPlan: NarratedFilmPlan = {
+      schemaVersion: 1,
+      jobId: "synthetic-container-smoke",
+      chapterId: "q3",
+      chapterNumber: 3,
+      storytellerName: "Synthetic fixture",
+      title: "Narrated orb container verification",
+      script,
+      sourceTakeIds: ["synthetic-take"],
+      sourceSha256: sourceHash,
+      scriptSha256: filmPlan.sha256(script),
+      audioSha256: toneHash,
+      audioDurationMs: 1000,
+      words: [
+        { text: "Synthetic", startMs: 0, endMs: 333 },
+        { text: "narration", startMs: 333, endMs: 666 },
+        { text: "fixture.", startMs: 666, endMs: 1000 },
+      ],
+      narrationKind: "ai_interviewer",
+      templateVersion: filmPlan.FILM_TEMPLATE_VERSION,
+    };
+    const narratedOutput = path.join(scratch, "synthetic-narrated-orb.mp4");
+    console.log(
+      "Rendering the narrated orb using existing synthetic audio, without a narration request.",
+    );
+    const narratedResult = await render.renderNarratedFilm(
+      narratedPlan,
+      tone,
+      narratedOutput,
+      async () => {},
+      async () => {},
+    );
+    await verifyOutput(narratedOutput, narratedResult, "narrated orb");
     console.log(
       "PASS: no collection records, credentials, or providers were used.",
     );

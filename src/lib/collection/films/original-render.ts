@@ -18,6 +18,8 @@ import {
 import { fileHash, privateJson, probeFilm } from "./render";
 import { sha256 } from "./plan";
 import { stageOriginalSource, originalAudioCopy } from "./source-media";
+import { extractAudioEnvelope } from "./audio-envelope";
+import type { AudioEnvelope } from "../../film-audio-envelope";
 import type { FilmChapter, StoryFilmJob } from "./types";
 
 export function validateMeasuredCuts(
@@ -216,6 +218,24 @@ export async function renderOriginalFilm(
     plan.brandCloser!.sha256
   )
     throw new Error("The brand closer changed before rendering.");
+  const audioEnvelopes: Record<string, AudioEnvelope> = {};
+  const orbSources = new Set(
+    plan.clips
+      .filter((clip) => clip.kind !== "video" && clip.sourceAssetId)
+      .map((clip) => clip.sourceAssetId!),
+  );
+  for (const source of plan.sources) {
+    if (!orbSources.has(source.assetId)) continue;
+    await assertCurrent();
+    const played = source.audioDerivative
+      ? assets.get(`${source.assetId}:audio`)!
+      : assets.get(source.assetId)!;
+    audioEnvelopes[source.assetId] = await extractAudioEnvelope(
+      played.file,
+      source.audioDerivative?.durationMs ?? source.durationMs,
+    );
+    await assertCurrent();
+  }
   const token = randomBytes(24).toString("hex");
   const byUrl = new Map(
     [...assets].map(([id, asset], index) => [
@@ -271,7 +291,7 @@ export async function renderOriginalFilm(
     const mediaUrls = Object.fromEntries(
       [...byUrl].map(([url, asset]) => [asset.id, `${origin}${url}`]),
     );
-    const inputProps = { plan, mediaUrls, draft: false };
+    const inputProps = { plan, mediaUrls, audioEnvelopes, draft: false };
     bundled ??= bundle({
       entryPoint: path.resolve("video/remotion/index.ts"),
     }).catch((error) => {

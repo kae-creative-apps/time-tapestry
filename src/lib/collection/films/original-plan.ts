@@ -12,7 +12,7 @@ import type {
   StoryFilmJob,
 } from "./types";
 
-export const ORIGINAL_TEMPLATE_VERSION = "original-story-v1";
+export const ORIGINAL_TEMPLATE_VERSION = "original-story-orb-v2";
 export const originalProbeKey = (mediaId: string) =>
   `film-probe-${sha256(mediaId).slice(0, 48)}`;
 export type OriginalProbe = {
@@ -404,7 +404,7 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-v2";
+export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-orb-v3";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",

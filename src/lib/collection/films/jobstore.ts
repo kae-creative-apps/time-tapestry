@@ -79,6 +79,42 @@ export function filmJobMatches(job: StoryFilmJob, c: Collection) {
   }
 }
 
+function filmTemplateCurrent(job: StoryFilmJob) {
+  const expected =
+    job.mode !== "original"
+      ? FILM_TEMPLATE_VERSION
+      : job.preparation === "automatic"
+        ? AUTOMATIC_TEMPLATE_VERSION
+        : ORIGINAL_TEMPLATE_VERSION;
+  return job.templateVersion === expected;
+}
+
+function filmOutputsAlreadyAttached(job: StoryFilmJob, c: Collection) {
+  return (
+    job.chapters.length === 4 &&
+    job.chapters.every(
+      (chapter) =>
+        chapter.artifact &&
+        c.chapters.find((item) => item.id === chapter.chapterId)?.film
+          ?.outputSha256 === chapter.artifact.outputSha256,
+    )
+  );
+}
+
+const outdatedTemplateMessage =
+  "The film template changed. Completed files are preserved. Create a new film version from the current reviewed stories.";
+
+function staleTemplateJob(job: StoryFilmJob): StoryFilmJob {
+  return {
+    ...job,
+    status: "stale",
+    lease: undefined,
+    nextAttemptAt: undefined,
+    updatedAt: nowIso(),
+    error: outdatedTemplateMessage,
+  };
+}
+
 type EnqueueOptions = { now?: Date; dailyLimit?: number };
 async function enqueuePreparedJob(
   job: StoryFilmJob,
@@ -261,7 +297,15 @@ export async function enqueueAutomaticOriginalFilms(
 }
 
 export async function filmJobInputsCurrent(job: StoryFilmJob, c: Collection) {
-  return filmJobMatches(job, c) && (await originalJobInputsCurrent(job));
+  // Existing finished films remain valid. An unfinished job must never resume
+  // with new render code and combine its cached chapters with another template.
+  return (
+    (filmTemplateCurrent(job) ||
+      job.status === "ready" ||
+      filmOutputsAlreadyAttached(job, c)) &&
+    filmJobMatches(job, c) &&
+    (await originalJobInputsCurrent(job))
+  );
 }
 
 export async function retryStoryFilms(
@@ -273,11 +317,13 @@ export async function retryStoryFilms(
   if (!scriptsApproved)
     throw new Error("Confirm the narration scripts before retrying.");
   await getFilmJob(id);
-  return mutateRecord<StoryFilmJob>(id, async (job) => {
+  const result = await mutateRecord<StoryFilmJob>(id, async (job) => {
     if (!job || job.collectionId !== c.id)
       throw new Error("Film job not found.");
     if ((job.mode ?? "ai_narration") !== expectedMode)
       throw new Error("Choose the matching film retry option.");
+    if (job.status === "failed" && !filmTemplateCurrent(job))
+      return staleTemplateJob(job);
     if (
       c.status === "approved" ||
       !(await filmJobInputsCurrent(job, c)) ||
@@ -306,6 +352,9 @@ export async function retryStoryFilms(
       ),
     };
   });
+  if (result.status === "stale" && !filmTemplateCurrent(result))
+    throw new Error(outdatedTemplateMessage);
+  return result;
 }
 
 export async function claimNextFilmJob(
@@ -350,13 +399,7 @@ export async function claimNextFilmJob(
         if (
           completed &&
           (await filmJobInputsCurrent(job, completed)) &&
-          job.chapters.length === 4 &&
-          job.chapters.every(
-            (chapter) =>
-              chapter.artifact &&
-              completed.chapters.find((item) => item.id === chapter.chapterId)
-                ?.film?.outputSha256 === chapter.artifact.outputSha256,
-          )
+          filmOutputsAlreadyAttached(job, completed)
         ) {
           return {
             ...job,
@@ -366,6 +409,7 @@ export async function claimNextFilmJob(
             updatedAt: nowIso(),
           };
         }
+        if (!filmTemplateCurrent(job)) return staleTemplateJob(job);
         if (job.mode === "original" && job.attempts < 3)
           return {
             ...job,
@@ -391,6 +435,7 @@ export async function claimNextFilmJob(
         (job.lease && job.lease.expiresAt > now)
       )
         return job;
+      if (!filmTemplateCurrent(job)) return staleTemplateJob(job);
       const c = await getCollection(job.collectionId);
       if (
         !c ||

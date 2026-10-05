@@ -21,6 +21,7 @@ import {
   validateNarratedFilmPlan,
 } from "./plan";
 import { narrateFilmChunk } from "./provider";
+import { extractAudioEnvelope } from "./audio-envelope";
 import type {
   FilmChapter,
   FilmWord,
@@ -226,6 +227,12 @@ export async function renderNarratedFilm(
   validateNarratedFilmPlan(plan);
   if ((await fileHash(audioFile)) !== plan.audioSha256)
     throw new Error("Narration audio changed after the plan was prepared.");
+  await assertCurrent();
+  const audioEnvelope = await extractAudioEnvelope(
+    audioFile,
+    plan.audioDurationMs,
+  );
+  await assertCurrent();
   const assets = new Map<string, { file: string; mime: string }>();
   const token = randomBytes(24).toString("hex");
   assets.set(`/${token}/audio`, { file: audioFile, mime: "audio/wav" });
@@ -296,6 +303,7 @@ export async function renderNarratedFilm(
     const inputProps = {
       plan,
       audioSrc: `${origin}/${token}/audio`,
+      audioEnvelope,
       ...(assets.has(`/${token}/font`)
         ? { fontSrc: `${origin}/${token}/font` }
         : {}),

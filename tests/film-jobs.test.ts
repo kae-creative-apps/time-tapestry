@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { syntheticFilmCollection, testVoice } from "./film-fixture";
+import type { StoryFilmJob } from "../src/lib/collection/films/types";
 let store: typeof import("../src/lib/collection/store");
 let jobs: typeof import("../src/lib/collection/films/jobstore");
 let route: typeof import("../src/app/api/collection/[id]/films/route");
@@ -305,4 +306,184 @@ test("expired owner can record failure but cannot overwrite a replacement owner"
     jobs.failFilmJob(claimed.id, claimed.lease!.token, "Old failure", false),
     /Another worker/,
   );
+});
+
+async function templateFixture(mode: "narration" | "manual" | "automatic") {
+  const c = syntheticFilmCollection();
+  if (mode === "narration") {
+    await store.putCollection(c);
+    return { c, queued: await jobs.enqueueStoryFilms(c, true, voice) };
+  }
+  for (const take of c.takes) {
+    take.kind = "voice";
+    take.mediaId = `original_${take.id}`;
+    take.durationSeconds = 12;
+    await store.putMedia({
+      id: take.mediaId,
+      collectionId: c.id,
+      role: "owner",
+      mimeType: "audio/wav",
+      originalName: "synthetic.wav",
+      bytes: 10,
+      createdAt: c.createdAt,
+      localPath: "/synthetic-fixture",
+    });
+  }
+  await store.putCollection(c);
+  if (mode === "automatic") {
+    return {
+      c,
+      queued: await jobs.enqueueAutomaticOriginalFilms(c, {
+        processingApproved: true,
+      }),
+    };
+  }
+  const plans = await import("../src/lib/collection/films/original-plan");
+  const edit = await plans.saveOriginalFilmEdit(
+    c,
+    c.chapters.map((chapter, index) => ({
+      chapterId: chapter.id,
+      presentation: "audio",
+      clips: [{ mediaId: c.takes[index].mediaId!, inMs: 0, outMs: 1000 }],
+    })),
+    null,
+  );
+  return {
+    c,
+    queued: await jobs.enqueueOriginalFilms(c, edit.revisionHash, true, true),
+  };
+}
+
+for (const mode of ["narration", "manual", "automatic"] as const) {
+  test(`${mode} jobs require their current template before claim and retry`, async () => {
+    const { c, queued } = await templateFixture(mode);
+    assert.equal(await jobs.filmJobInputsCurrent(queued, c), true);
+    const old = await store.mutateRecord<StoryFilmJob>(queued.id, (job) => ({
+      ...job!,
+      templateVersion: "previous-template-version",
+    }));
+    assert.equal(await jobs.filmJobInputsCurrent(old, c), false);
+    assert.equal(
+      await jobs.claimNextFilmJob("template-worker", Date.now(), old.id),
+      null,
+    );
+    const stale = (await jobs.getFilmJob(old.id))!;
+    assert.equal(stale.status, "stale");
+    assert.equal(stale.attempts, 0);
+    assert.deepEqual(stale.chapters, old.chapters);
+    assert.match(stale.error!, /template changed/);
+
+    await store.mutateRecord<StoryFilmJob>(old.id, (job) => ({
+      ...job!,
+      status: "failed",
+    }));
+    await assert.rejects(
+      jobs.retryStoryFilms(
+        c,
+        old.id,
+        true,
+        mode === "narration" ? "ai_narration" : "original",
+      ),
+      /template changed/,
+    );
+    assert.equal((await jobs.getFilmJob(old.id))?.status, "stale");
+    assert.deepEqual(await store.getCollection(c.id), c);
+  });
+
+  test(`${mode} current jobs claim normally but an expired old-template lease becomes stale`, async () => {
+    const { c, queued } = await templateFixture(mode);
+    const claimed = (await jobs.claimNextFilmJob(
+      "template-worker",
+      Date.now(),
+      queued.id,
+    ))!;
+    assert.equal(claimed.id, queued.id);
+    assert.equal(await jobs.filmJobInputsCurrent(claimed, c), true);
+    await store.mutateRecord<StoryFilmJob>(claimed.id, (job) => ({
+      ...job!,
+      templateVersion: "previous-template-version",
+      lease: { ...job!.lease!, expiresAt: 1 },
+    }));
+    assert.equal(
+      await jobs.claimNextFilmJob("replacement-worker", Date.now(), claimed.id),
+      null,
+    );
+    const stale = (await jobs.getFilmJob(claimed.id))!;
+    assert.equal(stale.status, "stale");
+    assert.equal(stale.lease, undefined);
+    assert.equal(stale.nextAttemptAt, undefined);
+    assert.equal(stale.attempts, 1);
+  });
+}
+
+test("a partial old-template job keeps completed artifacts while preventing mixed-template output", async () => {
+  const { c, claimed } = await completedClaim();
+  const old = await store.mutateRecord<StoryFilmJob>(claimed.id, (job) => ({
+    ...job!,
+    templateVersion: "previous-template-version",
+    lease: { ...job!.lease!, expiresAt: 1 },
+    chapters: job!.chapters.map((chapter, index) =>
+      index === 0
+        ? chapter
+        : {
+            ...chapter,
+            status: "queued",
+            artifact: undefined,
+          },
+      ),
+  }));
+  const preservedChapters = (await jobs.getFilmJob(claimed.id))!.chapters;
+  assert.equal(
+    await jobs.claimNextFilmJob("new-template-worker", Date.now(), claimed.id),
+    null,
+  );
+  const stale = (await jobs.getFilmJob(claimed.id))!;
+  assert.equal(stale.status, "stale");
+  assert.deepEqual(stale.chapters, preservedChapters);
+  assert.ok(await store.getMedia(old.chapters[0].artifact!.mediaId));
+  assert.deepEqual(await store.getCollection(c.id), c);
+});
+
+test("completed approved films retain their exact outputs and review after a template update", async () => {
+  const { c, claimed } = await completedClaim();
+  await jobs.attachReadyFilms(claimed);
+  const old = await store.mutateRecord<StoryFilmJob>(claimed.id, (job) => ({
+    ...job!,
+    status: "ready",
+    lease: undefined,
+    templateVersion: "previous-template-version",
+  }));
+  const approved = (await store.getCollection(c.id))!;
+  approved.status = "approved";
+  for (const chapter of approved.chapters) {
+    chapter.editorialReviewed = true;
+    chapter.reviewedFilmSha256 = chapter.film!.outputSha256;
+  }
+  await store.putCollection(approved);
+  assert.equal(await jobs.filmJobInputsCurrent(old, approved), true);
+  assert.equal(
+    await jobs.claimNextFilmJob("new-template-worker", Date.now(), old.id),
+    null,
+  );
+  await jobs.attachReadyFilms(old);
+  const after = (await store.getCollection(c.id))!;
+  assert.deepEqual({ ...after, updatedAt: approved.updatedAt }, approved);
+  assert.equal((await jobs.getFilmJob(old.id))?.status, "ready");
+});
+
+test("a template change still recovers a crash after all four outputs were already attached", async () => {
+  const { c, claimed } = await completedClaim();
+  await jobs.attachReadyFilms(claimed);
+  const attached = (await store.getCollection(c.id))!;
+  await store.mutateRecord<StoryFilmJob>(claimed.id, (job) => ({
+    ...job!,
+    templateVersion: "previous-template-version",
+    lease: { ...job!.lease!, expiresAt: 1 },
+  }));
+  assert.equal(
+    await jobs.claimNextFilmJob("recovery-worker", Date.now(), claimed.id),
+    null,
+  );
+  assert.equal((await jobs.getFilmJob(claimed.id))?.status, "ready");
+  assert.deepEqual(await store.getCollection(c.id), attached);
 });
