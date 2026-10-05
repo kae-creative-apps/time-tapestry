@@ -312,6 +312,7 @@ export async function claimNextFilmJob(
   workerId: string,
   now = Date.now(),
   onlyId?: string,
+  beforeClaim?: (job: StoryFilmJob) => Promise<boolean | void>,
 ) {
   const registry = await readRecord<Index>(registryKey);
   for (const id of registry?.ids ?? []) {
@@ -404,6 +405,9 @@ export async function claimNextFilmJob(
           error:
             "The stories changed before these films started. Generate a new reviewed version.",
         };
+      // Capacity checks run under this job's claim lock. A skip leaves the
+      // queued record and attempt count untouched, allowing smaller jobs next.
+      if ((await beforeClaim?.(job)) === false) return job;
       claimed = {
         ...job,
         status: job.mode === "original" ? "preparing" : "narrating",
