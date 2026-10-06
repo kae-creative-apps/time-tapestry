@@ -214,3 +214,23 @@ test("invalid, tampered, corrupt and inaccessible return storage never produces 
   assert.doesNotThrow(() => clearCollectionReturn(blocked));
   assert.equal(readCollectionReturn(blocked, origin, now), null);
 });
+
+test("private return navigation preserves preparation and unfinished recorded-question destinations", () => {
+  const origin = "https://example.test";
+  const complete = "/collection/interview-123/complete?key=synthetic-key";
+  assert.equal(privateCollectionPath(complete, origin), complete);
+  const question =
+    "/record/interview-123?key=synthetic-key&classic=1&chapter=q2";
+  assert.equal(privateCollectionPath(question, origin), question);
+  assert.equal(
+    privateCollectionPath("/collection/interview-123/complete", origin),
+    null,
+  );
+  assert.equal(
+    privateCollectionPath(
+      "/record/interview-123?key=synthetic-key&classic=1&chapter=https://external.test",
+      origin,
+    ),
+    "/record/interview-123?key=synthetic-key&classic=1",
+  );
+});

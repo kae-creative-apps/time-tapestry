@@ -60,6 +60,29 @@ export function claimFilmCompletion(
   return true;
 }
 
+/** Claim only after collection attachment refresh succeeds, allowing a safe retry. */
+export async function refreshFilmCompletion(
+  job: PortalFilmJob | null,
+  completed: Set<string>,
+  inFlight: Set<string>,
+  refresh: () => Promise<unknown>,
+) {
+  if (job?.status !== "ready" || completed.has(job.id) || inFlight.has(job.id))
+    return false;
+  inFlight.add(job.id);
+  try {
+    const result = await refresh();
+    if (result === null || result === false)
+      throw new Error(
+        "Your films are ready, but the collection could not refresh. Check your connection and try again.",
+      );
+    completed.add(job.id);
+    return true;
+  } finally {
+    inFlight.delete(job.id);
+  }
+}
+
 /** One sequential status request for either mode; terminal jobs stop polling. */
 export function pollFilmStatus({
   request,

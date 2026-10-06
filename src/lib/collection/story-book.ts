@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, PageSizes, rgb, type PDFFont } from "pdf-lib";
+import {
+  PDFDocument,
+  PageSizes,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 import type { Collection } from "./types";
 import { BRAND_COLORS } from "../brand-art";
 
@@ -11,6 +17,7 @@ export class StoryBookError extends Error {}
 export type StoryBook = {
   storytellerName: string;
   recipientName: string;
+  draft?: boolean;
   chapters: Array<{
     id: string;
     title: string;
@@ -23,6 +30,7 @@ export type StoryBook = {
 export function storyBookSnapshot(
   c: Collection,
   recipientName: string,
+  options: { draft?: boolean } = {},
 ): StoryBook {
   const chapters = ["q1", "q2", "q3", "q4"].map((id) => {
     const chapter = c.chapters.find((item) => item.id === id);
@@ -52,11 +60,16 @@ export function storyBookSnapshot(
         : {}),
     };
   });
-  if (c.status !== "approved")
+  if (c.status !== "approved" && !options.draft)
     throw new StoryBookError(
       "Your story book will be ready after the collection is approved.",
     );
-  return { storytellerName: c.storyteller.name, recipientName, chapters };
+  return {
+    storytellerName: c.storyteller.name,
+    recipientName,
+    chapters,
+    ...(options.draft ? { draft: true } : {}),
+  };
 }
 
 const printable = (text: string) =>
@@ -147,7 +160,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const font = await doc.embedFont(fontBytes, { subset: true });
-  assertGlyphs(font, [
+  const values = [
     book.storytellerName,
     book.recipientName,
     ...book.chapters.flatMap((chapter) => [
@@ -156,14 +169,73 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
       chapter.encouragement || "",
       chapter.scripture || "",
     ]),
-  ]);
+  ];
+  let fallback: PDFFont | undefined;
+  const primarySet = new Set(font.getCharacterSet());
+  if (
+    values.some((text) =>
+      [...printable(text)].some(
+        (ch) => ch !== "\n" && !primarySet.has(ch.codePointAt(0)!),
+      ),
+    )
+  ) {
+    fallback = await doc.embedFont(
+      await readFile(
+        path.join(
+          process.cwd(),
+          "public/brand/fonts/NotoSansCJKsc-Regular.otf",
+        ),
+      ),
+      { subset: true },
+    );
+  }
+  const fallbackSet = new Set(fallback?.getCharacterSet() || []);
+  const selectFont = (ch: string) => {
+    if (primarySet.has(ch.codePointAt(0)!)) return font;
+    if (fallback && fallbackSet.has(ch.codePointAt(0)!)) return fallback;
+    assertGlyphs(font, [ch]);
+    return font;
+  };
+  const runs = (text: string) => {
+    const result: Array<{ text: string; font: PDFFont }> = [];
+    for (const ch of printable(text)) {
+      const selected = selectFont(ch);
+      const last = result.at(-1);
+      if (last?.font === selected) last.text += ch;
+      else result.push({ text: ch, font: selected });
+    }
+    return result;
+  };
+  const measure = (text: string, size: number) =>
+    runs(text).reduce(
+      (total, run) => total + run.font.widthOfTextAtSize(run.text, size),
+      0,
+    );
+  const draw = (
+    page: PDFPage,
+    text: string,
+    x: number,
+    y: number,
+    size: number,
+  ) => {
+    for (const run of runs(text)) {
+      page.drawText(run.text, { x, y, size, font: run.font, color: ink });
+      x += run.font.widthOfTextAtSize(run.text, size);
+    }
+  };
+  for (const value of values)
+    for (const ch of printable(value)) if (ch !== "\n") selectFont(ch);
   const logo = await doc.embedPng(logoBytes);
   // Metadata deliberately excludes email addresses, member lists, IDs and links.
   doc.setTitle("Time Tapestry | Stories woven together");
   doc.setAuthor("Time Tapestry");
   doc.setCreator("Time Tapestry");
   doc.setProducer("Time Tapestry");
-  doc.setSubject("A personal collection of four approved stories");
+  doc.setSubject(
+    book.draft
+      ? "Private draft for storyteller review"
+      : "A personal collection of four approved stories",
+  );
   doc.setLanguage("en-US");
 
   const cover = doc.addPage(PageSizes.Letter);
@@ -184,13 +256,14 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   let coverY = height - 232;
   const coverBlock = (text: string, size: number, lineHeight: number) => {
     for (const line of wrapBookText(text, textWidth, (value) =>
-      font.widthOfTextAtSize(value, size),
+      measure(value, size),
     )) {
-      cover.drawText(line, { x: margin, y: coverY, font, size, color: ink });
+      draw(cover, line, margin, coverY, size);
       coverY -= lineHeight;
     }
   };
   coverBlock("Stories woven together.", 28, 37);
+  if (book.draft) coverBlock("Private draft for your review", 13, 20);
   coverY -= 30;
   // Long names flow without shrinking the book's reading text.
   coverBlock(`From ${book.storytellerName}`, 21, 29);
@@ -229,7 +302,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     runningHeader();
     const block = (text: string, size = 14, leading = 23) => {
       for (const line of wrapBookText(text, textWidth, (value) =>
-        font.widthOfTextAtSize(value, size),
+        measure(value, size),
       )) {
         if (y - leading < 63) {
           page = doc.addPage(PageSizes.Letter);
@@ -237,7 +310,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
           runningHeader();
         }
         y -= leading;
-        if (line) page.drawText(line, { x: margin, y, font, size, color: ink });
+        if (line) draw(page, line, margin, y, size);
       }
     };
     block(chapter.title, 27, 35);

@@ -38,10 +38,12 @@ export function CollectionSharing({
   collection: c,
   busy,
   act,
+  onRefresh,
 }: {
   collection: CollectionView;
   busy: boolean;
   act: (body: unknown) => Promise<CollectionView | null>;
+  onRefresh?: () => Promise<unknown>;
 }) {
   const [url, setUrl] = useState("");
   const [addressDirty, setAddressDirty] = useState(false);
@@ -51,6 +53,7 @@ export function CollectionSharing({
   const [inviteNotice, setInviteNotice] = useState("");
   const [recipients, setRecipients] = useState(c.additionalRecipients ?? []);
   const inviteInFlight = useRef(false);
+  const postcardsSection = useRef<HTMLDetailsElement>(null);
   useEffect(
     () => setRecipients(c.additionalRecipients ?? []),
     [c.additionalRecipients],
@@ -131,6 +134,21 @@ export function CollectionSharing({
       setInviteBusy(false);
     }
   }
+  const invitation = [...c.notifications]
+    .reverse()
+    .find(
+      (item) =>
+        item.kind === "collection_ready" &&
+        item.to.toLowerCase() === c.recipient.email.toLowerCase(),
+    );
+  const invitationLabel =
+    invitation?.status === "sent"
+      ? "Invitation sent"
+      : invitation?.status === "failed"
+        ? "Invitation needs attention"
+        : invitation?.status === "pending"
+          ? "Invitation queued"
+          : "Your gift is approved";
   const qr = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (c.links?.collection)
@@ -160,15 +178,63 @@ export function CollectionSharing({
             <AppIcon name="check" size={24} />
           </span>
           <h2 id="share-heading" className="text-2xl font-semibold">
-            Your stories are ready to share.
+            {invitationLabel}
           </h2>
         </div>
         <p className="mt-4 max-w-3xl text-lg leading-8 text-ink-500">
-          {c.recipient.name} is your primary recipient for physical postcards.
-          You can invite more people to the same approved digital collection.
-          Each person verifies their own invited email address before opening
-          it.
+          {invitation?.status === "sent"
+            ? `The email invitation was sent to ${c.recipient.email}.`
+            : invitation?.status === "pending"
+              ? `An email invitation for ${c.recipient.email} is waiting to send.`
+              : invitation?.status === "failed"
+                ? `We could not send the invitation to ${c.recipient.email}. Your approved gift is saved.`
+                : `Your approved gift is saved for ${c.recipient.name}.`}{" "}
+          Each person verifies their invited email address before opening it.
         </p>
+        <div className="mt-4 rounded-xl bg-paper p-4 text-base leading-7">
+          <p className="font-semibold">Postcard status</p>
+          <p className="mt-1">
+            {c.deliveries.some((item) => item.providerId)
+              ? "Mailing has started. Check the dates and delivery status below."
+              : c.postcardProof?.approvedAt
+                ? c.capabilities.mail
+                  ? "Your print designs are approved. See the mailing status below."
+                  : "Your print designs are approved. Mailing is on hold while delivery is connected."
+                : c.addressConfirmed
+                  ? "Your address is saved. Review and approve the print designs below."
+                  : `Waiting for a confirmed mailing address for ${c.recipient.name}. Your digital gift is available separately.`}
+          </p>
+          <button
+            type="button"
+            className="mt-2 inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4"
+            onClick={() => {
+              if (postcardsSection.current) {
+                postcardsSection.current.open = true;
+                postcardsSection.current.scrollIntoView({ block: "start" });
+              }
+            }}
+          >
+            {c.addressConfirmed
+              ? "Review postcard delivery"
+              : "Add a mailing address"}
+          </button>
+        </div>
+        {invitation?.status === "failed" && (
+          <p role="alert" className="mt-3 text-base leading-7 text-oxblood">
+            {invitation.error ||
+              "Email delivery needs attention. You can still share the secure link below."}
+          </p>
+        )}
+        {onRefresh && (
+          <button
+            className={`${portalSecondary} mt-4`}
+            type="button"
+            onClick={() => void onRefresh()}
+            disabled={busy}
+          >
+            Refresh delivery status
+          </button>
+        )}
         {c.status === "approved" && c.role === "owner" && (
           <section
             className="mt-7 rounded-2xl border border-clay-200 bg-clay-50 p-5 sm:p-6"
@@ -270,65 +336,73 @@ Alex <alex@example.com>"
             )}
           </section>
         )}
-        <div className="mt-6 grid items-start gap-7 md:grid-cols-[1fr_210px]">
-          <div className="min-w-0">
-            {c.links?.collection && (
-              <PrivateLink
-                path={c.links.collection}
-                label={`Link to share with ${c.recipient.name}`}
-                description="This link opens a locked page. Your recipient verifies their email before reading or watching the approved stories."
-              />
-            )}
-            <a
-              href={
-                ownerKey
-                  ? `/collection/${encodeURIComponent(c.id)}?key=${encodeURIComponent(ownerKey)}`
-                  : c.links?.collection
-              }
-              className={`${portalPrimary} mt-5`}
-            >
-              Open your approved collection
-              <AppIcon name="arrowUpRight" size={19} />
-            </a>
-            <a
-              href={`/api/collection/${encodeURIComponent(c.id)}/book?key=${encodeURIComponent(ownerKey)}`}
-              className={`${portalSecondary} mt-3 inline-flex items-center gap-2`}
-            >
-              <AppIcon name="download" size={19} /> Download your story book
-              (PDF)
-            </a>
-          </div>
-          <div className="rounded-2xl bg-paper p-5 text-center">
-            <div
-              ref={qr}
-              className="mx-auto flex h-40 w-40 items-center justify-center rounded-xl bg-white p-3"
-            >
-              {url && (
-                <QRCodeSVG
-                  value={url}
-                  size={136}
-                  level="M"
-                  marginSize={4}
-                  title="QR code for your approved story collection"
+        <details className="mt-6 border-t border-warmgray-200 pt-4">
+          <summary className="min-h-12 cursor-pointer py-2 text-base font-semibold">
+            Preview your gift, download the book or copy its secure link
+          </summary>
+          <div className="mt-4 grid items-start gap-7 md:grid-cols-[1fr_210px]">
+            <div className="min-w-0">
+              {c.links?.collection && (
+                <PrivateLink
+                  path={c.links.collection}
+                  label={`Link to share with ${c.recipient.name}`}
+                  description="This link opens a locked page. Your recipient verifies their email before reading or watching the approved stories."
                 />
               )}
+              <a
+                href={
+                  ownerKey
+                    ? `/collection/${encodeURIComponent(c.id)}/preview?key=${encodeURIComponent(ownerKey)}`
+                    : c.links?.collection
+                }
+                className={`${portalPrimary} mt-5`}
+              >
+                Preview as {c.recipient.name}
+                <AppIcon name="arrowUpRight" size={19} />
+              </a>
+              <a
+                href={`/api/collection/${encodeURIComponent(c.id)}/book?key=${encodeURIComponent(ownerKey)}`}
+                className={`${portalSecondary} mt-3 inline-flex items-center gap-2`}
+              >
+                <AppIcon name="download" size={19} /> Download your story book
+                (PDF)
+              </a>
             </div>
-            <button
-              type="button"
-              onClick={downloadQr}
-              disabled={!url}
-              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium underline underline-offset-4"
-            >
-              <AppIcon name="download" size={17} />
-              Download QR code
-            </button>
-            <p className="mt-1 text-xs leading-5 text-ink-500">
-              SVG file for printing or sharing.
-            </p>
+            <div className="rounded-2xl bg-paper p-5 text-center">
+              <div
+                ref={qr}
+                className="mx-auto flex h-40 w-40 items-center justify-center rounded-xl bg-white p-3"
+              >
+                {url && (
+                  <QRCodeSVG
+                    value={url}
+                    size={136}
+                    level="M"
+                    marginSize={4}
+                    title="QR code for your approved story collection"
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={downloadQr}
+                disabled={!url}
+                className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium underline underline-offset-4"
+              >
+                <AppIcon name="download" size={17} />
+                Download QR code
+              </button>
+              <p className="mt-1 text-xs leading-5 text-ink-500">
+                SVG file for printing or sharing.
+              </p>
+            </div>
           </div>
-        </div>
+        </details>
       </section>
-      <details className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7">
+      <details
+        ref={postcardsSection}
+        className="scroll-mt-5 rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7"
+      >
         <summary className="min-h-11 cursor-pointer text-lg font-semibold">
           Postcards and delivery
         </summary>
@@ -393,6 +467,7 @@ Alex <alex@example.com>"
             collection={c}
             accessKey={ownerKey}
             disabled={busy || addressDirty}
+            onRefresh={onRefresh}
           />
         )}
         {(!c.capabilities.mail || !c.capabilities.email) && (

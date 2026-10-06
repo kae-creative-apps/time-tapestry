@@ -16,7 +16,7 @@ export function privateCollectionPath(
     : /^https?:\/\/[^/?#]+([^?#]*)/i.exec(value)?.[1];
   // Check the raw path as well: URL parsing otherwise normalizes dot segments.
   const route =
-    /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(?:\/(review|address|chapter\/q[1-4]))?\/?$/;
+    /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(?:\/(review|complete|address|chapter\/q[1-4]))?\/?$/;
   const matched = rawPath && route.exec(rawPath);
   if (!matched || (matched[3] && matched[1] !== "collection")) return null;
   try {
@@ -35,11 +35,15 @@ export function privateCollectionPath(
     const view = matched[3] && matched[3] !== "review" ? `/${matched[3]}` : "";
     const path = `/${matched[1]}/${matched[2]}${view}`;
     if (key === null)
-      return matched[1] === "collection" && matched[3] !== "review"
+      return matched[1] === "collection" &&
+        !["review", "complete"].includes(matched[3] || "")
         ? path
         : null;
     if (!/^[a-zA-Z0-9_-]{1,512}$/.test(key)) return null;
-    return `${path}?key=${encodeURIComponent(key)}`;
+    const classic =
+      matched[1] === "record" && url.searchParams.get("classic") === "1";
+    const chapter = url.searchParams.get("chapter");
+    return `${path}?key=${encodeURIComponent(key)}${classic ? "&classic=1" : ""}${classic && chapter && /^q[1-4]$/.test(chapter) ? `&chapter=${chapter}` : ""}`;
   } catch {
     return null;
   }

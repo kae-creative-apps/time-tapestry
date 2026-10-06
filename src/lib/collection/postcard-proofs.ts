@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appOrigin } from "./access";
+import { appOrigin, linksFor } from "./access";
 import {
   collectionPostcardCadence,
   postcardScheduledDate,
@@ -45,6 +45,51 @@ export class PostcardProofError extends Error {
 }
 const digest = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+/** Changes only when the inputs requiring owner attention change. */
+export const postcardNoticeRevision = (c: Collection) =>
+  digest({
+    address: c.address,
+    version: c.approvedVersion,
+    messages: postcardPublicMessagesHash(c),
+  });
+
+function queuePostcardAction(
+  c: Collection,
+  kind: "postcard_ready" | "postcard_attention",
+  message: string,
+  now: string,
+  origin: string,
+) {
+  const id = `${c.id}:${kind}:${postcardNoticeRevision(c)}`;
+  if (c.notifications.some((notice) => notice.id === id)) return;
+  c.notifications.push({
+    id,
+    kind,
+    to: c.storyteller.email,
+    subject:
+      kind === "postcard_ready"
+        ? "Your Time Tapestry postcards are ready for review"
+        : "Your Time Tapestry mailing needs attention",
+    text: message,
+    url: originUrl(origin) + linksFor(c).review,
+    dueAt: now,
+    status: "pending",
+  });
+}
+export function holdPostcardsForAttention(
+  c: Collection,
+  message: string,
+  now = new Date().toISOString(),
+  origin = appOrigin(),
+) {
+  c.postcardPreparation = {
+    status: "needs_attention",
+    message,
+    updatedAt: now,
+  };
+  queuePostcardAction(c, "postcard_attention", message, now, origin);
+  return c;
+}
 /** Binds explicit public-print consent to every word and name that can appear on the card. */
 export function postcardPublicMessagesHash(c: Collection) {
   return digest([
@@ -401,6 +446,20 @@ export async function prepareAutomaticPostcards(
     c.postcardPreparation = { status, message, updatedAt: now };
     return c;
   };
+  if (
+    c.deliveries.some(
+      (delivery) =>
+        delivery.status === "returned" ||
+        (delivery.status === "failed" && delivery.providerId) ||
+        delivery.dispatch?.reconciliationRequired,
+    )
+  )
+    return holdPostcardsForAttention(
+      c,
+      "Postcard delivery needs a manual check before it can continue. Contact the Time Tapestry team using your private collection link. We have preserved the saved printing requests so no uncertain postcard is sent twice.",
+      now,
+      origin,
+    );
   if (!c.addressConfirmed || !c.address)
     return state(
       "waiting_for_address",
@@ -426,16 +485,25 @@ export async function prepareAutomaticPostcards(
       (delivery) =>
         delivery.providerId || (delivery.dispatch?.attempts || 0) > 0,
     )
-  )
-    return state(
-      "needs_attention",
-      "A mailing is already in progress. The team will check it before preparing another print version.",
+  ) {
+    const message =
+      "The mailing address or print details changed after a postcard request started. Remaining postcards are on hold. Contact the Time Tapestry team using your private collection link to reconcile the started mailing and approve a new print version for unsent cards. Your stories remain available.";
+    queuePostcardAction(c, "postcard_attention", message, now, origin);
+    return state("needs_attention", message);
+  }
+  if (!postcardPublicConsentIsCurrent(c)) {
+    queuePostcardAction(
+      c,
+      "postcard_ready",
+      "The recipient's mailing address is saved. Open your collection to review the public postcard messages and print proofs. Postcards remain on hold until you approve them.",
+      now,
+      origin,
     );
-  if (!postcardPublicConsentIsCurrent(c))
     return state(
       "needs_attention",
       "Review the public postcard messages and confirm that anyone handling the card may read them. Your private stories stay behind email verification.",
     );
+  }
   try {
     // If setup held a previous schedule in the past, start a fresh schedule with the collection's saved cadence when ready.
     const first =
@@ -458,12 +526,14 @@ export async function prepareAutomaticPostcards(
       "The approved postcards are on the automatic mailing schedule.",
     );
   } catch (error) {
-    return state(
-      "needs_attention",
+    return holdPostcardsForAttention(
+      c,
       error instanceof PostcardProofError ||
         error instanceof PostcardLayoutError
         ? error.message
         : "The stories are approved. Postcard preparation needs a setup check from the team.",
+      now,
+      origin,
     );
   }
 }

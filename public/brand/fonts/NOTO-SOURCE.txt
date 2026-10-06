@@ -1,0 +1,6 @@
+Noto Sans CJK SC Regular, Sans2.004
+Upstream: https://github.com/notofonts/noto-cjk
+Source: https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf
+SHA-256: 2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b
+License: SIL Open Font License, see OFL-NotoSansCJK.txt
+Purpose: Embedded subset fallback for characters unavailable in the approved primary story-book font.

@@ -6,7 +6,7 @@ import { collectionRequest } from "@/lib/collection/client-request";
 import type { CollectionView } from "@/lib/collection/types";
 
 import {
-  claimFilmCompletion,
+  refreshFilmCompletion,
   filmJobsByMode,
   isActiveFilmStatus as isActive,
   pollFilmStatus,
@@ -37,6 +37,7 @@ export function FilmGenerationPanel({
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const completedJobs = useRef(new Set<string>());
+  const refreshingJobs = useRef(new Set<string>());
   const callbacks = useRef({ onComplete });
   callbacks.current = { onComplete };
   const stopPolling = useRef<(() => void) | null>(null);
@@ -51,13 +52,16 @@ export function FilmGenerationPanel({
   const acceptJob = useCallback((next: PortalFilmJob | null) => {
     setRawJob(next);
     activeJob.current = isActive(next?.status);
-    if (claimFilmCompletion(next, completedJobs.current)) {
-      void callbacks.current.onComplete().catch(() => {
-        setError(
-          "Your films are ready, but the collection could not refresh. Please refresh this page.",
-        );
-      });
-    }
+    void refreshFilmCompletion(
+      next,
+      completedJobs.current,
+      refreshingJobs.current,
+      () => callbacks.current.onComplete(),
+    ).catch(() => {
+      setError(
+        "Your films are ready, but the collection could not refresh. Check your connection, then check progress again. Your films will not be remade.",
+      );
+    });
   }, []);
   const refresh = useCallback(() => {
     stopPolling.current?.();
@@ -97,6 +101,7 @@ export function FilmGenerationPanel({
   const active = originalWorking || isActive(originalJob?.status);
   useEffect(() => {
     onActiveChange(active);
+    return () => onActiveChange(false);
   }, [active, onActiveChange]);
 
   return (

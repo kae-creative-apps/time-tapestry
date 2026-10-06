@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, mutateCollection } from "@/lib/collection/store";
 import { roleFor } from "@/lib/collection/access";
+import { buildPostcardPreview } from "@/lib/collection/postcard-preview";
 import {
   normalizePublicPostcardMessages,
   publicPostcardMessage,
@@ -56,6 +57,33 @@ export async function GET(req: NextRequest, { params }: Context) {
         },
         { status: 403, headers },
       );
+    const previewOnly =
+      req.nextUrl.searchParams.get("preview") === "1" ||
+      c.status !== "approved" ||
+      !c.addressConfirmed;
+    if (previewOnly) {
+      if (c.chapters.length !== 4)
+        throw new PostcardProofError(
+          "Your four chapters are still being prepared.",
+          409,
+        );
+      return NextResponse.json(
+        {
+          proof: await buildPostcardPreview(c),
+          previewOnly: true,
+          approvedProof: null,
+          current: false,
+          readiness: postcardDeliveryReadiness(),
+          publicMessages: Object.fromEntries(
+            c.chapters.map((chapter) => [
+              chapter.id,
+              publicPostcardMessage(c, chapter.id),
+            ]),
+          ),
+        },
+        { headers },
+      );
+    }
     const first =
       req.nextUrl.searchParams.get("firstMailingAt") ||
       c.postcardProof?.firstMailingAt ||
@@ -70,6 +98,7 @@ export async function GET(req: NextRequest, { params }: Context) {
     return NextResponse.json(
       {
         proof,
+        previewOnly: false,
         approvedProof: c.postcardProof || null,
         current,
         readiness: postcardDeliveryReadiness(),
@@ -102,9 +131,9 @@ export async function POST(req: NextRequest, { params }: Context) {
       const next = await mutateCollection(id, async (c) => {
         if (roleFor(c, key) !== "owner")
           throw new PostcardProofError("Storyteller access required.", 403);
-        if (c.status !== "approved" || c.chapters.length !== 4)
+        if (c.chapters.length !== 4)
           throw new PostcardProofError(
-            "Approve your four private stories before preparing postcards.",
+            "Your four chapters are still being prepared.",
           );
         if (
           c.deliveries.some(

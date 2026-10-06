@@ -11,6 +11,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import type { Collection } from "../src/lib/collection/types";
 import { verifiedRecipientCookie } from "./verified-recipient-fixture";
+import { pcmWavFixture } from "./pcm-wav-fixture";
 
 /** One continuous journey through real route handlers. Only external transport and rendered-film bytes are fixtures. */
 test("requested gift lifecycle preserves sources, exact approval, private delivery and biweekly replies", async (t) => {
@@ -120,7 +121,11 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     const form = new FormData();
     form.append(
       "file",
-      new File([bytes], "synthetic.webm", { type: "video/webm" }),
+      key === c.recipientKey
+        ? new File([pcmWavFixture()], "synthetic-reply.wav", {
+            type: "audio/wav",
+          })
+        : new File([bytes], "synthetic.webm", { type: "video/webm" }),
     );
     const response = await upload(
       new NextRequest(

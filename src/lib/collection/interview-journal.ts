@@ -8,7 +8,15 @@ const queues = new Map<string, Promise<unknown>>();
 function locked<T>(id: string, operation: () => Promise<T>): Promise<T> {
   const next = (queues.get(id) ?? Promise.resolve())
     .catch(() => {})
-    .then(operation);
+    .then(() => {
+      // A second tab must not overwrite an answer while this tab acknowledges
+      // an upload. The per-tab queue is retained where Web Locks is unavailable.
+      const locks =
+        typeof navigator !== "undefined" ? navigator.locks : undefined;
+      return locks
+        ? locks.request(`time-tapestry:journal:${id}`, operation)
+        : operation();
+    });
   queues.set(id, next);
   void next
     .finally(() => {

@@ -230,6 +230,50 @@ test("verified email accounts require single-use, browser-bound proof and keep p
     );
     assert.equal(redirect.status, 303);
     assert.equal(redirect.headers.get("location"), ownerPath);
+    // A verified owner can resume after closing every browser tab without a saved capability.
+    mine.status = "recording";
+    mine.currentQuestion = 2;
+    mine.takes = [
+      {
+        id: "saved-audio-take",
+        questionId: "q1",
+        prompt: "A kindness",
+        kind: "voice",
+        text: "My aunt helped me",
+        mediaId: "saved-audio",
+        createdAt: mine.createdAt,
+      },
+    ];
+    mine.selectedTakeIds.q1 = "saved-audio-take";
+    await store.writeRecord(mine.id, mine);
+    assert.equal(
+      await service.accountCollectionPath(success.value.account, mine.id),
+      `/record/${mine.id}?key=${mine.ownerKey}&classic=1`,
+    );
+    mine.interviewPreparation = {
+      id: "preparation-fixture",
+      status: "queued",
+      submittedAt: mine.createdAt,
+      updatedAt: mine.updatedAt,
+      processingApprovedAt: mine.createdAt,
+    };
+    await store.writeRecord(mine.id, mine);
+    assert.equal(
+      await service.accountCollectionPath(success.value.account, mine.id),
+      `/collection/${mine.id}/complete?key=${mine.ownerKey}`,
+    );
+    const preparingLibrary = await service.accountLibrary(
+      success.value.account,
+    );
+    assert.equal(preparingLibrary.items[0].interviewState, "preparing");
+    assert.equal(
+      JSON.stringify(preparingLibrary).includes(mine.ownerKey),
+      false,
+    );
+    delete mine.interviewPreparation;
+    mine.takes = [];
+    mine.selectedTakeIds = {};
+    await store.writeRecord(mine.id, mine);
     const additional = Array.from({ length: 31 }, () =>
       make("owner@example.test"),
     );

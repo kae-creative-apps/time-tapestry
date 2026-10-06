@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rename } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { syntheticFilmCollection } from "./film-fixture";
+import {
+  syntheticFilmCollection,
+  syntheticOriginalFilmArtifact,
+} from "./film-fixture";
 import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 import type { Collection } from "../src/lib/collection/types";
+import { pcmWavFixture } from "./pcm-wav-fixture";
 
 let store: typeof import("../src/lib/collection/store");
 let accounts: typeof import("../src/lib/accounts/service");
@@ -138,6 +142,11 @@ test("additional recipients have unlimited membership, isolated verified access,
   );
   c.chapters[0].videoMediaId = film.id;
   c.chapters[0].videoStatus = "ready";
+  c.chapters[0].film = syntheticOriginalFilmArtifact(
+    c,
+    c.chapters[0].id,
+    film.id,
+  );
   const legacy = await media.saveLocalMedia(
     c.id,
     "recipient",
@@ -297,8 +306,8 @@ test("additional recipients have unlimited membership, isolated verified access,
       const form = new FormData();
       form.set(
         "file",
-        new File(["Alpha private recording"], "reply.webm", {
-          type: "video/webm",
+        new File([pcmWavFixture()], "reply.wav", {
+          type: "audio/wav",
         }),
       );
       form.set("recipientId", beta.id);
@@ -324,6 +333,43 @@ test("additional recipients have unlimited membership, isolated verified access,
       };
       assert.equal((await act(c, reply, alphaCookie)).status, 200);
       assert.equal((await act(c, reply, alphaCookie)).status, 200);
+      const recordingPath = (await store.getMedia(alphaMediaId))!.localPath!;
+      await rename(recordingPath, recordingPath + ".unavailable");
+      try {
+        assert.equal(
+          (await act(c, reply, alphaCookie)).status,
+          200,
+          "saved replies remain idempotent even when playback storage is temporarily unavailable",
+        );
+        const unavailable = await act(
+          c,
+          { ...reply, replyId: randomUUID() },
+          alphaCookie,
+        );
+        assert.equal(unavailable.status, 400);
+        assert.match(
+          unavailable.body.error,
+          /reply recording could not be read/i,
+        );
+        assert.equal(
+          JSON.stringify(unavailable.body).includes(recordingPath),
+          false,
+        );
+        const unchanged = (await store.getCollection(c.id))!;
+        assert.equal(
+          unchanged.replies.filter((item) => item.recipientId === alpha.id)
+            .length,
+          1,
+        );
+        assert.equal(
+          unchanged.notifications.filter(
+            (item) => item.id === `${c.id}:reply:${replyId}`,
+          ).length,
+          1,
+        );
+      } finally {
+        await rename(recordingPath + ".unavailable", recordingPath);
+      }
       assert.equal((await act(c, reply, betaCookie)).status, 400);
       assert.equal(
         (await act(c, { ...reply, replyId: randomUUID() }, betaCookie)).status,

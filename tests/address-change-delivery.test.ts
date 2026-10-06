@@ -145,6 +145,12 @@ test("address updates preserve started mailings and safely replace untouched sch
           return;
         }
         assert.equal(saved.postcardPreparation?.status, "needs_attention");
+        const attention = saved.notifications.filter(
+          (notice) => notice.kind === "postcard_attention",
+        );
+        assert.equal(attention.length, 1);
+        assert.equal(attention[0].to, saved.storyteller.email);
+        assert.match(attention[0].text, /Contact the Time Tapestry team/);
         assert.equal(postcardProofIsCurrent(saved), false);
         assert.equal(JSON.stringify(saved.postcardProof), savedProof);
         assert.equal(JSON.stringify(saved.deliveries), savedDeliveries);
@@ -157,6 +163,12 @@ test("address updates preserve started mailings and safely replace untouched sch
         await processDeliveryJobs();
         await processDeliveryJobs();
         saved = (await getCollection(collection.id))!;
+        assert.equal(
+          saved.notifications.filter(
+            (notice) => notice.kind === "postcard_attention",
+          ).length,
+          1,
+        );
         assert.equal(saved.postcardPreparation?.status, "needs_attention");
         assert.equal(JSON.stringify(saved.postcardProof), savedProof);
         assert.equal(JSON.stringify(saved.deliveries), savedDeliveries);

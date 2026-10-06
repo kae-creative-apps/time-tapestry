@@ -290,7 +290,9 @@ test("protected delivery automation separates email from printing and sends only
       "Saved provider acceptance prevents duplicate emails",
     );
 
-    const reviewing = await attachSyntheticOriginalFilms(await syntheticRecordedFilmCollection());
+    const reviewing = await attachSyntheticOriginalFilms(
+      await syntheticRecordedFilmCollection(),
+    );
     const readyJobId = reviewing.chapters[0].film!.jobId;
     queueFilmsReady(reviewing, readyJobId);
     queueFilmsReady(reviewing, readyJobId);
@@ -563,7 +565,8 @@ test("protected delivery automation separates email from printing and sends only
       notificationSuppressionReason(approvedPending, ownerConfirmation),
       null,
     );
-    await processDeliveryJobs();
+    // Fair passes share a bounded provider budget with other pending notices.
+    for (let pass = 0; pass < 3; pass++) await processDeliveryJobs();
     assert.equal(
       (await getCollection(pending.id))!.notifications.find(
         (n) => n.id === ownerConfirmation.id,

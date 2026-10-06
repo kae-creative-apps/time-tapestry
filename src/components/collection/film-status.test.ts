@@ -211,3 +211,42 @@ test("typed-only collections and stale jobs do not create a polling loop", async
     stop();
   }
 });
+
+test("ready film completion retries after null or failed refresh and prevents overlapping refreshes", async () => {
+  const { refreshFilmCompletion } = await import("./film-status");
+  const complete = new Set<string>();
+  const inFlight = new Set<string>();
+  const ready = job("original", "ready");
+  await assert.rejects(
+    refreshFilmCompletion(ready, complete, inFlight, async () => null),
+    /could not refresh/,
+  );
+  assert.equal(complete.size, 0);
+  assert.equal(inFlight.size, 0);
+  let resolve!: (value: unknown) => void;
+  const pending = refreshFilmCompletion(
+    ready,
+    complete,
+    inFlight,
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  let duplicated = false;
+  assert.equal(
+    await refreshFilmCompletion(ready, complete, inFlight, async () => {
+      duplicated = true;
+      return {};
+    }),
+    false,
+  );
+  assert.equal(duplicated, false);
+  resolve({ chapters: ["ready"] });
+  assert.equal(await pending, true);
+  assert.equal(complete.has(ready.id), true);
+  assert.equal(
+    await refreshFilmCompletion(ready, complete, inFlight, async () => ({})),
+    false,
+  );
+});

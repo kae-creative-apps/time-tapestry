@@ -92,6 +92,8 @@ export function approveCollection(
   } = {},
 ): Collection {
   if (c.status === "approved") return c;
+  if (c.storyIssues?.some((issue) => issue.status === "open"))
+    throw new Error("A story detail is being checked. Review the corrected version before sharing your gift.");
   if (options.recordingsReviewed !== true)
     throw new Error(
       "Review your four recorded films before approving your collection.",

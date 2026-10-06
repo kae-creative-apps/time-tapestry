@@ -5,6 +5,8 @@ import {
   assertReleasedPostcardProof,
   prepareAutomaticPostcards,
   postcardDeliveryMode,
+  postcardNoticeRevision,
+  holdPostcardsForAttention,
 } from "./postcard-proofs";
 import { postcardScheduledDate } from "./postcard-cadence";
 import { appOrigin, linksFor } from "./access";
@@ -15,7 +17,14 @@ import {
   recipientById,
   storedRecipientId,
 } from "./recipients";
-import { getCollection, getMedia, listCollections, mutateCollection } from "./store";
+import {
+  getCollection,
+  getMedia,
+  listCollections,
+  mutateCollection,
+  mutateRecord,
+  readRecord,
+} from "./store";
 import {
   lobPostcardTransport,
   serializeLobPostcardRequest,
@@ -156,6 +165,31 @@ export function notificationSuppressionReason(
   n: Notification,
 ): string | null {
   if (
+    ["preparation_attention", "postcard_ready", "postcard_attention"].includes(
+      n.kind,
+    ) &&
+    normalizeRecipientEmail(n.to) !==
+      normalizeRecipientEmail(c.storyteller.email)
+  )
+    return "This preparation notice belongs to the storyteller.";
+  if (n.kind === "preparation_attention" && c.status === "approved")
+    return "This collection has already been approved.";
+  if (
+    n.kind === "postcard_ready" &&
+    (c.status !== "approved" ||
+      !c.addressConfirmed ||
+      !c.address ||
+      c.postcardPreparation?.status === "ready" ||
+      !n.id.endsWith(postcardNoticeRevision(c)))
+  )
+    return "This postcard review request is no longer current.";
+  if (
+    n.kind === "postcard_attention" &&
+    (c.postcardPreparation?.status !== "needs_attention" ||
+      !n.id.endsWith(postcardNoticeRevision(c)))
+  )
+    return "This postcard hold no longer needs attention.";
+  if (
     [
       "collection_ready",
       "address_request",
@@ -218,16 +252,22 @@ export function notificationSuppressionReason(
       if (
         n.to !== c.storyteller.email ||
         n.url !== appOrigin() + linksFor(c).review ||
-        c.draftOutdated || c.chapters.length !== 4 ||
+        c.draftOutdated ||
+        c.chapters.length !== 4 ||
         !CHAPTERS.every(({ id }) => {
           const chapter = c.chapters.find((item) => item.id === id);
-          return chapter?.content.trim() && chapter.videoStatus === "ready" &&
+          return (
+            chapter?.content.trim() &&
+            chapter.videoStatus === "ready" &&
             chapter.film?.narrationKind === "original_recording" &&
-            chapter.film.jobId === jobId && chapter.film.chapterId === id &&
+            chapter.film.jobId === jobId &&
+            chapter.film.chapterId === id &&
             chapter.videoMediaId === chapter.film.mediaId &&
-            chapter.film.outputSha256;
+            chapter.film.outputSha256
+          );
         })
-      ) return "The four current written stories and recorded films are not all ready to review.";
+      )
+        return "The four current written stories and recorded films are not all ready to review.";
     }
   }
   if (n.kind === "address_request" && c.addressConfirmed)
@@ -394,6 +434,7 @@ export function applyLobEvent(
         : "The postcard was rerouted. Confirm the address before further mailing.";
     delivery.mailEvent = type;
     c.addressConfirmed = false;
+    holdPostcardsForAttention(c, delivery.error, iso(now), origin);
   } else if (
     ["postcard.failed", "postcard.rejected", "postcard.deleted"].includes(type)
   ) {
@@ -402,6 +443,7 @@ export function applyLobEvent(
       "The printing service reported that this postcard failed or was canceled. The Time Tapestry team needs to check before another attempt.";
     delivery.dispatch = { ...delivery.dispatch, reconciliationRequired: true };
     delivery.mailEvent = type;
+    holdPostcardsForAttention(c, delivery.error, iso(now), origin);
   } else if (
     type !== "postcard.created" &&
     !type.startsWith("postcard.rendered_")
@@ -550,6 +592,9 @@ function notificationRequest(c: Collection, n: Notification) {
     reply_invitation: "Send a reply",
     reply_received: "See their reply",
     address_request: "Add your mailing address",
+    preparation_attention: "Check preparation",
+    postcard_ready: "Review your postcards",
+    postcard_attention: "Check the postcard hold",
   };
   const actionLabel = actionLabels[n.kind];
   const preference = ["postcard_followup", "reply_invitation"].includes(n.kind)
@@ -776,6 +821,7 @@ async function processPostcard(id: string, now: number, origin: string) {
             ? error.message
             : "Postcard preparation failed.";
         d.dispatch = { ...d.dispatch, reconciliationRequired: true };
+        holdPostcardsForAttention(c, d.error, iso(now), origin);
       }
       return c;
     });
@@ -794,6 +840,7 @@ async function processPostcard(id: string, now: number, origin: string) {
       d.error =
         "We could not confirm whether this postcard was sent. The Time Tapestry team needs to check before another attempt.";
       d.dispatch = { ...d.dispatch, reconciliationRequired: true };
+      holdPostcardsForAttention(c, d.error, iso(now), origin);
       return c;
     }
     d.dispatch = claim(
@@ -841,6 +888,13 @@ async function processPostcard(id: string, now: number, origin: string) {
             ? error.message
             : "Postcard delivery could not be confirmed.";
         d.dispatch = failedDispatch(d.dispatch, error, Date.now());
+        if (d.dispatch.reconciliationRequired)
+          holdPostcardsForAttention(
+            c,
+            "Postcard delivery stopped after an unresolved request. Contact the Time Tapestry team using your private collection link before another attempt. Saved printing requests are preserved.",
+            iso(now),
+            origin,
+          );
       }
       return c;
     });
@@ -849,23 +903,64 @@ async function processPostcard(id: string, now: number, origin: string) {
 }
 
 /** Recheck current private film storage before claiming or sending its ready email. */
-export async function currentNotificationSuppressionReason(c: Collection, n: Notification) {
+export async function currentNotificationSuppressionReason(
+  c: Collection,
+  n: Notification,
+) {
   const reason = notificationSuppressionReason(c, n);
+  if (!reason && n.kind === "preparation_attention") {
+    const workId = n.id.slice(`${c.id}:preparation-attention:`.length);
+    if (workId.startsWith("prep_")) {
+      const { getInterviewPreparationJob } =
+        await import("./interview-preparation");
+      const preparation = await getInterviewPreparationJob(workId);
+      if (
+        c.interviewPreparation?.id !== workId ||
+        preparation?.status !== "needs_attention"
+      )
+        return "This preparation no longer needs attention.";
+    } else {
+      const { getFilmJob, latestFilmJob, filmJobInputsCurrent } =
+        await import("./films/jobstore");
+      const job = await getFilmJob(workId);
+      if (
+        !job ||
+        job.status !== "failed" ||
+        (await latestFilmJob(c.id))?.id !== workId ||
+        !(await filmJobInputsCurrent(job, c))
+      )
+        return "This film preparation no longer needs attention.";
+    }
+  }
   if (reason || !n.id.startsWith(`${c.id}:films-ready:`)) return reason;
-  const { getFilmJob, latestFilmJob, filmJobInputsCurrent } = await import("./films/jobstore");
+  const { getFilmJob, latestFilmJob, filmJobInputsCurrent } =
+    await import("./films/jobstore");
   const jobId = n.id.slice(`${c.id}:films-ready:`.length);
   const job = await getFilmJob(jobId);
-  if (!job || job.mode !== "original" ||
-      (await latestFilmJob(c.id))?.id !== jobId ||
-      !(await filmJobInputsCurrent(job, c)))
+  if (
+    !job ||
+    job.mode !== "original" ||
+    (await latestFilmJob(c.id))?.id !== jobId ||
+    !(await filmJobInputsCurrent(job, c))
+  )
     return "This review email does not match the current recorded film version.";
   for (const chapter of c.chapters) {
-    const artifact = job.chapters.find((item) => item.chapterId === chapter.id)?.artifact;
-    const media = chapter.videoMediaId && await getMedia(chapter.videoMediaId);
-    if (!artifact || artifact.outputSha256 !== chapter.film?.outputSha256 ||
-        artifact.mediaId !== chapter.videoMediaId ||
-        !media || media.collectionId !== c.id || media.role !== "owner" ||
-        media.mimeType !== "video/mp4" || media.bytes <= 0 || !(media.localPath || media.url))
+    const artifact = job.chapters.find(
+      (item) => item.chapterId === chapter.id,
+    )?.artifact;
+    const media =
+      chapter.videoMediaId && (await getMedia(chapter.videoMediaId));
+    if (
+      !artifact ||
+      artifact.outputSha256 !== chapter.film?.outputSha256 ||
+      artifact.mediaId !== chapter.videoMediaId ||
+      !media ||
+      media.collectionId !== c.id ||
+      media.role !== "owner" ||
+      media.mimeType !== "video/mp4" ||
+      media.bytes <= 0 ||
+      !(media.localPath || media.url)
+    )
       return "The four recorded films are waiting for verified private storage.";
   }
   return null;
@@ -950,7 +1045,7 @@ async function processNotification(
     !currentNotification ||
     currentNotification.status === "suppressed" ||
     currentNotification.dispatch?.leaseId !== lease.leaseId ||
-    await currentNotificationSuppressionReason(current, currentNotification)
+    (await currentNotificationSuppressionReason(current, currentNotification))
   ) {
     if (currentNotification)
       await mutateCollection(id, async (c) => {
@@ -958,7 +1053,7 @@ async function processNotification(
         if (n && n.dispatch?.leaseId === lease!.leaseId) {
           n.status = "suppressed";
           n.error =
-            await currentNotificationSuppressionReason(c, n) ||
+            (await currentNotificationSuppressionReason(c, n)) ||
             "This email is no longer eligible to send.";
           n.dispatch = {
             ...n.dispatch,
@@ -1019,11 +1114,25 @@ export async function processDeliveryJobs() {
   if (!emailDeliveryEnabled() && !postalDeliveryEnabled())
     throw new Error("Collection delivery is disabled.");
   const origin = originUrl(appOrigin());
-  const collections = await listCollections();
+  const collections = (await listCollections()).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  );
+  // Persist the last visited collection so a busy account cannot monopolize
+  // the bounded provider budget across recurring passes or worker restarts.
+  const cursor = await readRecord<{ afterId?: string }>(
+    "delivery-queue-cursor",
+  );
+  const split = cursor?.afterId
+    ? collections.findIndex((entry) => entry.id > cursor.afterId!)
+    : 0;
+  const ordered =
+    split > 0
+      ? [...collections.slice(split), ...collections.slice(0, split)]
+      : collections;
   const deadline = Date.now() + 40000;
   let providerAttempts = 0;
   let inspected = 0;
-  for (const entry of collections) {
+  for (const entry of ordered) {
     if (Date.now() > deadline || providerAttempts >= 3) break;
     inspected += 1;
     if (
@@ -1032,13 +1141,18 @@ export async function processDeliveryJobs() {
     )
       providerAttempts += 1;
     const current = await getCollection(entry.id);
-    if (!current) continue;
-    if (!emailDeliveryEnabled()) continue;
-    for (const n of current.notifications) {
+    for (const n of emailDeliveryEnabled()
+      ? (current?.notifications ?? [])
+      : []) {
       if (Date.now() > deadline || providerAttempts >= 3) break;
-      if (await processNotification(entry.id, n.id, Date.now(), origin))
+      if (await processNotification(entry.id, n.id, Date.now(), origin)) {
         providerAttempts += 1;
+        break;
+      }
     }
+    await mutateRecord<{ afterId: string }>("delivery-queue-cursor", () => ({
+      afterId: entry.id,
+    }));
   }
   return { inspected, providerAttempts };
 }

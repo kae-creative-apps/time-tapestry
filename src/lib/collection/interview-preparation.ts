@@ -18,7 +18,9 @@ import {
   filmJobInputsCurrent,
   getFilmJob,
   retryStoryFilms,
+  attachReadyFilms,
 } from "./films/jobstore";
+import { queuePreparationAttention } from "./recovery-notifications";
 import type { ChapterPackage, Collection, StoredMedia } from "./types";
 import type {
   InterviewPreparationJob,
@@ -55,6 +57,11 @@ export function interviewPreparationJobView(
     ...(job.missingAreas ? { missingAreas: job.missingAreas } : {}),
     ...(job.error ? { error: job.error } : {}),
     ready: false,
+    canRetry:
+      job.status === "needs_attention" &&
+      job.attempts < MAX_ATTEMPTS &&
+      !job.missingAreas?.length,
+    ...(job.nextAttemptAt ? { retryAfter: job.nextAttemptAt } : {}),
   };
 }
 
@@ -214,6 +221,15 @@ export async function enqueueInterviewPreparation(
             throw new InterviewPreparationError(
               "Preparation identity mismatch.",
             );
+          if (
+            options.retry &&
+            existing.status === "needs_attention" &&
+            existing.attempts >= MAX_ATTEMPTS
+          )
+            throw new InterviewPreparationError(
+              "Preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your recordings and completed work are saved.",
+              409,
+            );
           const failedFilms =
             options.retry &&
             existing.status === "films_queued" &&
@@ -227,6 +243,15 @@ export async function enqueueInterviewPreparation(
             (!failedFilms ||
               ["failed", "stale"].includes(failedFilms.status) ||
               !(await filmJobInputsCurrent(failedFilms, c)));
+          if (
+            retryFilms &&
+            failedFilms?.status === "failed" &&
+            failedFilms.attempts >= MAX_ATTEMPTS
+          )
+            throw new InterviewPreparationError(
+              "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Completed films and recordings are saved.",
+              409,
+            );
           if (
             options.retry &&
             ((existing.status === "needs_attention" &&
@@ -293,6 +318,8 @@ async function publishStatus(job: InterviewPreparationJob) {
     if (c.status === "approved" || c.interviewPreparation?.id !== job.id)
       return c;
     c.interviewPreparation = interviewPreparationJobView(job);
+    if (job.status === "needs_attention")
+      queuePreparationAttention(c, job.id, job.error, job.updatedAt);
     c.updatedAt = iso();
     return c;
   });
@@ -577,7 +604,29 @@ export async function runInterviewPreparationOnce(
     }
     c = await mutateCollection(job.collectionId, async (current) => {
       await currentInputs(job!, current);
-      const sameDraft = sha(current.chapters) === sha(job!.drafts);
+      // Film attachment and editorial review happen after this cached checkpoint.
+      // Compare only the written draft, never erase completed attachments on resume.
+      const draftIdentity = (chapters: ChapterPackage[]) =>
+        chapters.map(
+          ({
+            id,
+            title,
+            content,
+            postcardNote,
+            sourceTakeIds,
+            generatedWith,
+          }) => ({
+            id,
+            title,
+            content,
+            postcardNote,
+            sourceTakeIds,
+            generatedWith,
+          }),
+        );
+      const sameDraft =
+        sha(draftIdentity(current.chapters)) ===
+        sha(draftIdentity(job!.drafts!));
       if (!sameDraft) {
         if (current.chapters.length)
           current.draftHistory = [
@@ -613,6 +662,11 @@ export async function runInterviewPreparationOnce(
       throw new InterviewPreparationError(
         "This film version is out of date. Your written stories and original recordings are saved; a setup check is needed before retrying.",
       );
+    if ("status" in filmJob && filmJob.status === "ready") {
+      const readyJob = await getFilmJob(filmJob.id);
+      if (!readyJob) throw new Error("The saved film job could not be found.");
+      await attachReadyFilms(readyJob);
+    }
     await checkpoint((saved) => ({
       ...saved,
       status: "films_queued",
@@ -653,7 +707,9 @@ export async function runInterviewPreparationOnce(
         error:
           error instanceof InterviewPreparationError
             ? error.message
-            : "Preparation could not finish yet. Your original recordings and saved progress are preserved; it will retry automatically.",
+            : saved.attempts >= MAX_ATTEMPTS
+              ? "Preparation stopped after three attempts. Your original recordings and saved progress are preserved. Please contact the Time Tapestry team using your private collection link."
+              : "Preparation could not finish yet. Your original recordings and saved progress are preserved; it will retry automatically.",
       }));
       await publishStatus(job);
       return job;
@@ -678,6 +734,7 @@ export async function getInterviewPreparationView(c: Collection) {
     return {
       ...view,
       status: "needs_attention" as const,
+      canRetry: true,
       error:
         "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
     };
@@ -685,8 +742,11 @@ export async function getInterviewPreparationView(c: Collection) {
     return {
       ...view,
       status: "needs_attention" as const,
+      canRetry: films.status === "failed" && films.attempts < MAX_ATTEMPTS,
       error:
-        "Film preparation needs attention. Your written stories and original recordings are saved.",
+        films.attempts >= MAX_ATTEMPTS
+          ? "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your stories and recordings are saved."
+          : "Film preparation needs attention. Your written stories and original recordings are saved.",
     };
   view.ready =
     films.status === "ready" &&

@@ -25,7 +25,13 @@ export async function GET(
     const { id } = await params;
     const c = /^[a-zA-Z0-9_-]{8,80}$/.test(id) ? await getCollection(id) : null;
     const access = c && (await collectionAccessForRequest(req, c));
-    if (!c || !access || access.role === "requester" || c.status !== "approved")
+    const draft = req.nextUrl.searchParams.get("draft") === "1";
+    if (
+      !c ||
+      !access ||
+      access.role === "requester" ||
+      (draft ? access.role !== "owner" : c.status !== "approved")
+    )
       return NextResponse.json(
         {
           error:
@@ -43,7 +49,7 @@ export async function GET(
         { status: 403, headers },
       );
     const bytes = await renderStoryBook(
-      storyBookSnapshot(c, recipient.name.trim() || "you"),
+      storyBookSnapshot(c, recipient.name.trim() || "you", { draft }),
     );
     return new NextResponse(Buffer.from(bytes), {
       headers: {

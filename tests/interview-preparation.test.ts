@@ -332,7 +332,17 @@ test("actual missing areas stop preparation without creating text or queuing fil
   const saved = (await store.getCollection(c.id))!;
   assert.equal(saved.chapters.length, 0);
   assert.equal(saved.interviews![0].turns.length, 1);
-  assert.equal(saved.notifications.length, 0);
+  assert.equal(
+    saved.notifications.filter((notice) => notice.kind === "review_ready")
+      .length,
+    0,
+  );
+  assert.equal(
+    saved.notifications.filter(
+      (notice) => notice.kind === "preparation_attention",
+    ).length,
+    1,
+  );
 });
 
 test("source changes during recovery discard recovered output and preserve the new source", async () => {
@@ -725,6 +735,55 @@ test("source mutation during drafting prevents draft attachment and film queuein
   assert.equal((await store.getCollection(c.id))?.chapters.length, 0);
 });
 
+test("exhausted original film work queues owner attention and rejects another preparation retry", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const result = await preparation.runInterviewPreparationOnce(
+    "preparation-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      draft,
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  const id = result!.filmJobId!;
+  await store.mutateRecord<
+    import("../src/lib/collection/films/types").StoryFilmJob
+  >(id, (job) => ({ ...job!, attempts: 2 }));
+  const claimed = await films.claimNextFilmJob(
+    "last-film-worker",
+    Date.now(),
+    id,
+  );
+  assert.equal(claimed?.attempts, 3);
+  await films.failFilmJob(
+    id,
+    claimed!.lease!.token,
+    "Synthetic render failure",
+    false,
+    true,
+  );
+  const saved = (await store.getCollection(c.id))!;
+  assert.equal(
+    saved.notifications.filter(
+      (notice) => notice.kind === "preparation_attention",
+    ).length,
+    1,
+  );
+  assert.equal(
+    (await preparation.getInterviewPreparationView(saved))?.canRetry,
+    false,
+  );
+  await assert.rejects(
+    preparation.enqueueInterviewPreparation(c.id, { ...consent, retry: true }),
+    (error: unknown) =>
+      error instanceof preparation.InterviewPreparationError &&
+      error.status === 409,
+  );
+});
+
 test("draft provider budget is reserved only immediately before configured drafting", async () => {
   const c = await liveFixture();
   const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
@@ -839,6 +898,22 @@ test("three temporary preparation failures stop bounded retries with originals p
       );
   }
   assert.equal(failures, 3);
+  const stopped = (await store.getCollection(c.id))!;
+  const view = await preparation.getInterviewPreparationView(stopped);
+  assert.equal(view?.canRetry, false);
+  assert.doesNotMatch(view?.error ?? "", /retry automatically/);
+  assert.equal(
+    stopped.notifications.filter(
+      (notice) => notice.kind === "preparation_attention",
+    ).length,
+    1,
+  );
+  await assert.rejects(
+    preparation.enqueueInterviewPreparation(c.id, { ...consent, retry: true }),
+    (error: unknown) =>
+      error instanceof preparation.InterviewPreparationError &&
+      error.status === 409,
+  );
   assert.equal(
     await preparation.runInterviewPreparationOnce("worker-b", {
       onlyId: queued.preparation.id,
@@ -848,6 +923,60 @@ test("three temporary preparation failures stop bounded retries with originals p
   assert.deepEqual(
     (await store.getCollection(c.id))?.interviews?.[0].segments,
     c.interviews![0].segments,
+  );
+});
+
+test("resume after film enqueue checkpoint loss preserves ready films and review marks", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Recovery must not contact providers");
+  });
+  const c = await liveFixture();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const { attachSyntheticOriginalFilms } =
+    await import("./recorded-review-fixture");
+  const interrupted = await preparation.runInterviewPreparationOnce(
+    "crashed-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => recovered(current),
+      draft,
+      enqueueFilms: async (current) => {
+        await attachSyntheticOriginalFilms(current);
+        await store.mutateCollection(c.id, (saved) => {
+          saved.chapters[0].editorialReviewed = true;
+          saved.chapters[0].reviewedFilmSha256 =
+            saved.chapters[0].film!.outputSha256;
+          return saved;
+        });
+        throw new Error("Synthetic crash before preparation film checkpoint");
+      },
+    },
+  );
+  assert.equal(interrupted?.status, "queued");
+  const attached = (await store.getCollection(c.id))!;
+  await store.mutateRecord<InterviewPreparationJob>(
+    queued.preparation.id,
+    (job) => ({ ...job!, nextAttemptAt: undefined }),
+  );
+  const resumed = await preparation.runInterviewPreparationOnce(
+    "recovery-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async () => {
+        throw new Error("Recovery checkpoint must be reused");
+      },
+      draft: async () => {
+        throw new Error("Draft checkpoint must be reused");
+      },
+    },
+  );
+  const after = (await store.getCollection(c.id))!;
+  assert.equal(resumed?.status, "films_queued");
+  assert.deepEqual(after.chapters, attached.chapters);
+  assert.deepEqual(after.draftHistory, attached.draftHistory);
+  assert.equal(
+    (await preparation.getInterviewPreparationView(after))?.ready,
+    true,
   );
 });
 
