@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { ChapterVideoPlan } from "../src/lib/video-plan";
-import type { NarratedFilmPlan } from "../src/lib/collection/films/types";
+import type { Collection } from "../src/lib/collection/types";
 
 const exec = promisify(execFile);
 
@@ -23,12 +23,14 @@ async function main() {
       { ensureBrowser, openBrowser },
       { renderOriginalFilm },
       render,
-      filmPlan,
+      { enqueueStoryFilms },
+      { RECORDING_ONLY_FILMS_MESSAGE },
     ] = await Promise.all([
       import("@remotion/renderer"),
       import("../src/lib/collection/films/original-render"),
       import("../src/lib/collection/films/render"),
-      import("../src/lib/collection/films/plan"),
+      import("../src/lib/collection/films/jobstore"),
+      import("../src/lib/collection/films/policy"),
     ]);
     const { fileHash, probeFilm } = render;
     for (const binary of ["ffmpeg", "ffprobe"]) {
@@ -211,8 +213,10 @@ async function main() {
         outputSha256: string;
         durationSeconds: number;
         releaseEligible: boolean;
+        sourceAssets: { mediaId: string; sha256: string; durationMs: number }[];
       },
       label: string,
+      expectedSourceHash: string,
     ) {
       const { stdout } = await exec(
         "ffprobe",
@@ -257,17 +261,25 @@ async function main() {
       assert.equal(receipt.outputSha256, await fileHash(outputFile));
       assert(Math.abs(receipt.durationSeconds - 8) <= 0.2);
       assert.equal(receipt.releaseEligible, false);
+      assert.deepEqual(receipt.sourceAssets, [
+        {
+          mediaId: "synthetic-source",
+          sha256: expectedSourceHash,
+          durationMs: 1000,
+        },
+      ]);
       const savedReceipt = JSON.parse(
         await readFile(`${outputFile}.result.json`, "utf8"),
       );
       assert.equal(savedReceipt.outputSha256, receipt.outputSha256);
       assert.equal(savedReceipt.status, "rendered-awaiting-review");
       assert.equal(savedReceipt.releaseEligible, false);
+      assert.deepEqual(savedReceipt.sourceAssets, receipt.sourceAssets);
       console.log(
         `PASS: ${label}: 1920x1080 H.264/AAC, eight seconds, preserved fixture and brand hashes, matching output receipt, and review still required.`,
       );
     }
-    await verifyOutput(output, result, "original video");
+    await verifyOutput(output, result, "original video", sourceHash);
 
     const originalAudioPlan: ChapterVideoPlan = {
       ...plan,
@@ -294,49 +306,36 @@ async function main() {
           ["brand-font", { file: font, mime: "font/woff2" }],
         ]),
         sourceAssets: [
-          { mediaId: "synthetic-source", sha256: sourceHash, durationMs: 1000 },
+          { mediaId: "synthetic-source", sha256: toneHash, durationMs: 1000 },
         ],
       },
       audioOutput,
       async () => {},
       async () => {},
     );
-    await verifyOutput(audioOutput, audioResult, "original audio-only orb");
+    await verifyOutput(
+      audioOutput,
+      audioResult,
+      "original audio-only orb",
+      toneHash,
+    );
 
-    const script = "Synthetic narration fixture.";
-    const narratedPlan: NarratedFilmPlan = {
-      schemaVersion: 1,
-      jobId: "synthetic-container-smoke",
-      chapterId: "q3",
-      chapterNumber: 3,
-      storytellerName: "Synthetic fixture",
-      title: "Narrated orb container verification",
-      script,
-      sourceTakeIds: ["synthetic-take"],
-      sourceSha256: sourceHash,
-      scriptSha256: filmPlan.sha256(script),
-      audioSha256: toneHash,
-      audioDurationMs: 1000,
-      words: [
-        { text: "Synthetic", startMs: 0, endMs: 333 },
-        { text: "narration", startMs: 333, endMs: 666 },
-        { text: "fixture.", startMs: 666, endMs: 1000 },
-      ],
-      narrationKind: "ai_interviewer",
-      templateVersion: filmPlan.FILM_TEMPLATE_VERSION,
-    };
-    const narratedOutput = path.join(scratch, "synthetic-narrated-orb.mp4");
+    let voiceResolverCalled = false;
+    await assert.rejects(
+      enqueueStoryFilms({} as Collection, true, {
+        resolveVoice: async () => {
+          voiceResolverCalled = true;
+          throw new Error("A retired AI queue must never resolve a voice.");
+        },
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message === RECORDING_ONLY_FILMS_MESSAGE,
+    );
+    assert.equal(voiceResolverCalled, false);
     console.log(
-      "Rendering the narrated orb using existing synthetic audio, without a narration request.",
+      "PASS: retired AI narration cannot enter the worker queue or resolve a voice.",
     );
-    const narratedResult = await render.renderNarratedFilm(
-      narratedPlan,
-      tone,
-      narratedOutput,
-      async () => {},
-      async () => {},
-    );
-    await verifyOutput(narratedOutput, narratedResult, "narrated orb");
     console.log(
       "PASS: no collection records, credentials, or providers were used.",
     );

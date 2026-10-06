@@ -37,12 +37,19 @@ export function muteInterviewMicrophone(
   });
 }
 
+export function requireInterviewAudioTrack(stream: MediaStream | null): void {
+  if (!stream?.getAudioTracks().some((track) => track.readyState === "live"))
+    throw new Error(
+      "Your microphone did not open, so recording could not start. Choose a working microphone and try again. Both recording options need your voice.",
+    );
+}
+
 export function interviewDeviceError(error: unknown): string {
   const name = error instanceof Error ? error.name : "";
   if (name === "NotAllowedError" || name === "SecurityError")
-    return "Allow microphone and camera access in your browser, then check your devices again. You can also write your answers.";
+    return "Allow microphone access in your browser, then check your devices again. Video also needs camera access. You can choose audio only if you prefer.";
   if (name === "NotFoundError" || name === "OverconstrainedError")
-    return "The selected microphone or camera is unavailable. Choose another device, or use voice only if you do not have a camera.";
+    return "The selected microphone or camera is unavailable. Choose another device, or use audio only if you do not have a camera.";
   if (name === "NotReadableError" || name === "AbortError")
     return "Your microphone or camera could not open. Close other apps using it, then try again.";
   return error instanceof Error

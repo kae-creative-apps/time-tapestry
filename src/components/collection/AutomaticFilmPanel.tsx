@@ -14,7 +14,7 @@ const labels: Record<string, string> = {
   transcribing: "Listening to your recordings",
   matching: "Finding the moments for each story",
   preparing: "Preparing your original recordings",
-  narrating: "Preparing narration",
+  narrating: "Previous film version",
   rendering: "Creating your film",
   ready: "Ready to watch",
   failed: "Needs attention",
@@ -126,8 +126,8 @@ export function AutomaticFilmPanel({
       </div>
       <p className="mt-4 max-w-3xl text-base leading-7 text-ink-500">
         {ready
-          ? "Watch each film with its written story above. The recordings are yours, with titles and a Time Tapestry closing."
-          : "We find the moments for each story in your saved recordings, then assemble the films automatically. There are no clips to trim or files to arrange."}
+          ? "Watch or listen to each film above, then approve the collection once at the end. The recordings are yours, with titles and a Time Tapestry closing."
+          : "We find the moments for each story in your saved recordings, then assemble the films using your own voice. Video recordings keep you on screen. Audio recordings play with the Time Tapestry orb."}
       </p>
       {active && (
         <p role="status" className="mt-4 text-base font-medium">
@@ -182,8 +182,7 @@ export function AutomaticFilmPanel({
       {available === false && !active && !ready && (
         <p role="status" className="mt-4 text-base leading-7 text-ink-500">
           Automatic editing is currently offline. Your stories and original
-          recordings are saved. You can check again later, or choose written
-          stories below.
+          recordings are saved. You can check again later.
         </p>
       )}
       {!active && !ready && hasSources && (
@@ -208,8 +207,8 @@ export function AutomaticFilmPanel({
       )}
       {!hasSources && available !== null && (
         <p className="mt-4 text-base leading-7 text-ink-500">
-          No original recordings are saved yet. You can continue your interview,
-          or choose to share the written stories below.
+          No original recordings are saved yet. Return to your interview to
+          record your answers before preparing the films.
         </p>
       )}
       {(error || available === false) && (

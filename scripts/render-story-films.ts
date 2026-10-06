@@ -5,7 +5,7 @@ async function main() {
   const id = process.argv.find((value) => value.startsWith("--job="))?.slice(6);
   if (!id)
     throw new Error(
-      "Provide --job=film_HASH for an already approved queued job. Use the private review page to approve scripts first.",
+      "Provide --job=film_HASH for an already approved queued job. Use the private review page to approve processing of your original recordings first.",
     );
   const { getFilmJob, claimNextFilmJob, writeWorkerHeartbeat } =
     await import("../src/lib/collection/films/jobstore");

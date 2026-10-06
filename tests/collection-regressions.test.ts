@@ -237,25 +237,26 @@ const chapterEdit = (content: string) => ({
   },
 });
 
-test("an oversized chapter is rejected without changing story, review or encouragement", async () => {
+test("retired chapter editing rejects oversized text without changing story, review or encouragement", async () => {
   const c = await fixture();
   const response = await post(c, chapterEdit("x".repeat(100001)));
-  assert.equal(response.status, 400);
-  assert.match((await response.json()).error, /100,000 characters/);
+  assert.equal(response.status, 410);
+  assert.match((await response.json()).error, /record/i);
   assert.deepEqual(await store.getCollection(c.id), c);
 });
 
-test("a chapter at the supported limit is preserved beyond the former 30,000-character cutoff", async () => {
+test("a historical long chapter remains intact when a retired edit is attempted", async () => {
   const c = await fixture();
   const content = "x".repeat(99999) + "Z";
-  const response = await post(c, chapterEdit(content));
-  assert.equal(response.status, 200);
-  const saved = await store.getCollection(c.id);
-  assert.equal(saved?.chapters[0].content, content);
-  assert.equal(
-    saved?.chapterBlessings.q1.encouragement,
-    "A revised encouragement.",
+  c.chapters[0].content = content;
+  await store.putCollection(c);
+  const response = await post(
+    c,
+    chapterEdit("A replacement is no longer permitted."),
   );
+  assert.equal(response.status, 410);
+  assert.deepEqual(await store.getCollection(c.id), c);
+  assert.equal((await store.getCollection(c.id))?.chapters[0].content, content);
 });
 
 test("an oversized recipient reply is rejected without saving a partial message or queuing email", async () => {
@@ -296,3 +297,28 @@ test("a reply at the supported limit keeps its last character and queues one not
   assert.equal(saved?.notifications[0].kind, "reply_received");
   assert.equal(saved?.notifications[0].status, "pending");
 });
+
+for (const route of ["interview/turn", "story/generate"]) {
+  test(`retired legacy ${route} returns 410 even for administrators without parsing or provider calls`, async (t) => {
+    let externalRequests = 0;
+    t.mock.method(globalThis, "fetch", async () => {
+      externalRequests++;
+      throw new Error("Retired routes must not call providers.");
+    });
+    const { POST } = await import(`../src/app/api/${route}/route`);
+    const request = new NextRequest(`http://localhost/api/${route}`, {
+      method: "POST",
+      headers: {
+        cookie: `admin_token=${createAdminSession()}`,
+        "content-type": "application/json",
+      },
+      body: "invalid-json",
+    });
+    const response = await POST(request);
+    assert.equal(response.status, 410);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match((await response.json()).error, /retired/);
+    assert.equal(request.bodyUsed, false);
+    assert.equal(externalRequests, 0);
+  });
+}

@@ -4,7 +4,7 @@ import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, before, test, type TestContext } from "node:test";
-import { syntheticFilmCollection, testVoice } from "./film-fixture";
+import { syntheticRecordedFilmCollection } from "./film-fixture";
 import type { StoryFilmJob } from "../src/lib/collection/films/types";
 
 let store: typeof import("../src/lib/collection/store");
@@ -46,10 +46,10 @@ after(async () => {
 });
 
 async function queuedJob() {
-  const collection = syntheticFilmCollection();
+  const collection = await syntheticRecordedFilmCollection();
   await store.putCollection(collection);
-  const job = await jobs.enqueueStoryFilms(collection, true, {
-    resolveVoice: async () => testVoice,
+  const job = await jobs.enqueueAutomaticOriginalFilms(collection, {
+    processingApproved: true,
   });
   fixtureJobs.push(job.id);
   return job;
@@ -185,7 +185,7 @@ test("shutdown cannot release or refund a replacement worker's lease", async (t)
     null,
   );
   const current = await jobs.getFilmJob(job.id);
-  assert.equal(current?.status, "narrating");
+  assert.equal(current?.status, "preparing");
   assert.equal(current?.attempts, 2);
   assert.equal(current?.lease?.token, replacementToken);
 });
@@ -201,7 +201,7 @@ test("shutdown cannot refund an expired claim", async (t) => {
     null,
   );
   const current = await jobs.getFilmJob(job.id);
-  assert.equal(current?.status, "narrating");
+  assert.equal(current?.status, "preparing");
   assert.equal(current?.attempts, 1);
   assert.equal(current?.lease?.expiresAt, 1);
 });

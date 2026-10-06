@@ -8,7 +8,8 @@ import { MAX_MEDIA_BYTES } from "@/lib/collection/usage";
 import { SecurityError } from "@/lib/security/policy";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, getMedia } from "@/lib/collection/store";
-import { collectionRoleForRequest } from "@/lib/collection/request-access";
+import { collectionAccessForRequest } from "@/lib/collection/request-access";
+import { storedRecipientId } from "@/lib/collection/recipients";
 import { saveLocalMedia, finalizeCloudMedia } from "@/lib/collection/media";
 export async function POST(
   req: NextRequest,
@@ -17,7 +18,8 @@ export async function POST(
   try {
     const { id } = await params;
     const c = await getCollection(id);
-    const role = c && (await collectionRoleForRequest(req, c));
+    const access = c && (await collectionAccessForRequest(req, c));
+    const role = access?.role;
     if (!c || !role || role === "requester")
       return NextResponse.json(
         { error: "Recording access denied" },
@@ -41,7 +43,12 @@ export async function POST(
       const m = await getMedia(
         typeof b.mediaId === "string" ? b.mediaId : "invalid-id",
       );
-      if (!m || m.collectionId !== id || m.role !== role)
+      if (
+        !m ||
+        m.collectionId !== id ||
+        m.role !== role ||
+        (role === "recipient" && storedRecipientId(m) !== access?.recipientId)
+      )
         throw new Error("Recording not found");
       const saved = await finalizeCloudMedia(m.id);
       return NextResponse.json({ mediaId: saved.id });
@@ -49,7 +56,7 @@ export async function POST(
     const form = await readFormBody(req, MAX_MEDIA_BYTES + 1024 * 1024);
     const file = form.get("file");
     if (!(file instanceof File)) throw new Error("Choose a recording");
-    const media = await saveLocalMedia(id, role, file);
+    const media = await saveLocalMedia(id, role, file, access?.recipientId);
     return NextResponse.json({ mediaId: media.id });
   } catch (e) {
     const protection = securityErrorResponse(e);

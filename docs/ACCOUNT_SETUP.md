@@ -2,7 +2,7 @@
 
 The account library connects existing collections to an email address only after that person proves access to the email inbox. A name or contact email entered when a collection is created does not authenticate anyone.
 
-Recipient access always requires a verified account whose email matches the collection's current recipient email. A postcard QR is a keyless locator such as `/collection/{id}/chapter/q1`. Scanning it does not grant access. An anonymous or incorrectly signed-in visitor sees a generic email sign-in gate, with no storyteller name, recipient email, story text or media. Missing and unauthorized collections receive the same response. Old recipient keys no longer authorize collection reads, replies, recording playback or uploads.
+Recipient access always requires a verified account whose email matches the current primary recipient or an active additional digital invitation. Additional recipients can open only approved collections. A postcard QR is a keyless locator such as `/collection/{id}/chapter/q1`. Scanning it does not grant access. An anonymous or incorrectly signed-in visitor sees a generic email sign-in gate, with no storyteller name, recipient email, story text or media. Missing and unauthorized collections receive the same response. Old recipient keys no longer authorize collection reads, replies, recording playback, uploads or book downloads.
 
 Private owner and requester links retain their existing bearer permissions. Keep those links private. They are separate from the recipient's email-gated access.
 
@@ -35,7 +35,7 @@ The link request is protected by human verification, a per-client limit, and a p
 The verified email is matched against the current collection contacts. Owner permission takes precedence if the person is also a recipient or requester.
 
 - Owners can resume the interview or reopen their review portal, recordings, stories and postcard status.
-- Recipients open a keyless collection or chapter path using their verified session. They can see approved shared stories and included films, and send replies. Private source recordings remain owner-only.
+- Recipients open a keyless collection or chapter path using their verified session. They can see approved shared stories and included films, download their personalized PDF book, and send replies. Private source recordings remain owner-only. Each recipient's replies, reply uploads and preferences are isolated from other recipients. Additional recipients cannot see or change the primary postal address or delivery schedule.
 - Requesters use their requester permission, which does not expose the narrator's drafts, private recordings or recipient stories.
 
 The library list contains safe summaries and same-origin open endpoints, without owner keys or media URLs. The open endpoint rechecks membership. It sends recipients to a keyless locator and owners or requesters to their corresponding private capability link. Changing a collection contact changes which verified account can retrieve it. Owner and requester capability links remain bearer credentials and are not revoked by account sign-out; recipient keys do not grant access.
@@ -43,6 +43,8 @@ The library list contains safe summaries and same-origin open endpoints, without
 An authorized portal's **My stories** link can retain a validated local return destination in the same tab's session storage for 30 minutes. This supports **Back to my collection**, including keyless recipient chapter and address paths. It is cleared on sign-out. Private return links are not saved in persistent local storage. The saved-link input accepts only local collection or interview routes and does not bypass server authorization.
 
 The first implementation scans the collection store and filters by verified email. It is appropriate for a small pilot, with a synthetic 32-collection library check. It is not an indexed account database. Before a large launch, add a durable email-to-collection index, bounded pagination and expired-auth-record cleanup. Expiry is enforced now, but expired login/session records are not automatically deleted.
+
+Additional digital invitations have no five-person product limit and are added in bounded batches with abuse protection. Removing one rechecks access immediately on future collection, media and book requests. The primary recipient remains the only physical-mail destination. See [recipient collection and PDF operations](RECIPIENT_COLLECTION.md) for migration behavior and the remaining hosted checks.
 
 ## Verification performed
 

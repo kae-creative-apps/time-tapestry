@@ -17,7 +17,7 @@ function database(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined")
     return Promise.reject(
       new Error(
-        "This browser cannot save recordings on this device. Try an updated browser or type your answer.",
+        "This browser cannot save recordings on this device. Try an updated browser to record your answer.",
       ),
     );
   if (!opening) {

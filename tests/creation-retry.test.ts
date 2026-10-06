@@ -5,8 +5,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
+import type { AnswerTake } from "../src/lib/collection/types";
 
-test("creation retries bind one verified request and typed-only stories never enter film preparation", async () => {
+test("creation retries bind one verified request and typed-only interviews cannot submit or generate", async () => {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "tapestry-create-retry-"),
   );
@@ -168,56 +169,46 @@ test("creation retries bind one verified request and typed-only stories never en
       post(req(`/api/collection/${c.id}?key=${c.ownerKey}`, value), {
         params: Promise.resolve({ id: c.id }),
       });
+    const historical: AnswerTake[] = [];
     for (let i = 1; i <= 4; i++) {
-      const saved = await act({
-        action: "save_take",
-        take: {
-          id: randomUUID(),
-          questionId: `q${i}`,
-          prompt: "A memory",
-          kind: "text",
-          text: `This is my written memory ${i}.`,
-        },
-      });
-      assert.equal(saved.status, 200);
+      const take = {
+        id: randomUUID(),
+        questionId: `q${i}`,
+        prompt: "A memory",
+        kind: "text" as const,
+        text: `This is my historical written memory ${i}.`,
+        createdAt: c.createdAt,
+      };
+      historical.push(take);
+      const saved = await act({ action: "save_take", take });
+      assert.equal(saved.status, 400);
     }
-    const generated = await act({
-      action: "generate",
-      prepareFilms: true,
-      processingApproved: true,
+    assert.equal((await getCollection(c.id))!.takes.length, 0);
+    // Existing records still load, but cannot bypass the recording requirement.
+    await mutateCollection(c.id, (current) => {
+      current.takes = historical;
+      current.selectedTakeIds = Object.fromEntries(
+        historical.map((take) => [take.questionId, take.id]),
+      );
+      return current;
     });
-    assert.equal(generated.status, 200);
-    const result = await generated.json();
-    assert.equal(result.filmPreparationError, undefined);
-    assert.equal(result.collection.status, "draft");
-    const prepared = (await getCollection(c.id))!;
-    assert.equal(prepared.chapters.length, 4);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const generated = await act({
+        action: "generate",
+        prepareFilms: true,
+        processingApproved: true,
+      });
+      assert.equal(generated.status, 400);
+      assert.match((await generated.json()).error, /original recording/);
+    }
+    const preserved = (await getCollection(c.id))!;
+    assert.deepEqual(preserved.takes, historical);
+    assert.equal(preserved.chapters.length, 0);
     assert.equal(
-      prepared.notifications.filter((n) => n.kind === "review_ready").length,
-      1,
-    );
-    assert.ok(
-      !prepared.notifications.some((n) =>
-        n.id.includes("preparation-needs-attention"),
-      ),
+      preserved.notifications.filter((n) => n.kind === "review_ready").length,
+      0,
     );
     assert.equal(await latestFilmJob(c.id), null);
-    assert.equal(
-      (
-        await act({
-          action: "generate",
-          prepareFilms: true,
-          processingApproved: true,
-        })
-      ).status,
-      200,
-    );
-    assert.equal(
-      (await getCollection(c.id))!.notifications.filter(
-        (n) => n.kind === "review_ready",
-      ).length,
-      1,
-    );
   } finally {
     globalThis.fetch = priorFetch;
     await rm(directory, { recursive: true, force: true });

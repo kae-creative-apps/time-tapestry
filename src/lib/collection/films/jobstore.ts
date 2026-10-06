@@ -3,18 +3,15 @@ import { randomUUID } from "node:crypto";
 import {
   getCollection,
   getMedia,
+  putMedia,
   mutateCollection,
   mutateRecord,
   readRecord,
 } from "../store";
 import type { Collection } from "../types";
-import {
-  collectionFilmSourceHash,
-  filmChapters,
-  filmVersionHash,
-  FILM_TEMPLATE_VERSION,
-} from "./plan";
-import { resolveFilmVoice } from "./provider";
+import { preserveGeneratedFilmProvenance } from "../recording-validation";
+import { collectionFilmSourceHash, FILM_TEMPLATE_VERSION } from "./plan";
+import { RECORDING_ONLY_FILMS_MESSAGE } from "./policy";
 import {
   originalCollectionHash,
   originalJobInputsCurrent,
@@ -42,6 +39,9 @@ export async function latestFilmJob(collectionId: string) {
 }
 
 export function filmJobView(job: StoryFilmJob): FilmJobView {
+  if (job.mode !== "original" && job.status !== "ready") {
+    job = retiredNarrationJob(job);
+  }
   return {
     id: job.id,
     collectionId: job.collectionId,
@@ -115,6 +115,25 @@ function staleTemplateJob(job: StoryFilmJob): StoryFilmJob {
   };
 }
 
+function retiredNarrationJob(job: StoryFilmJob): StoryFilmJob {
+  return {
+    ...job,
+    status: "stale",
+    lease: undefined,
+    nextAttemptAt: undefined,
+    error: RECORDING_ONLY_FILMS_MESSAGE,
+    chapters: job.chapters.map((chapter) =>
+      chapter.artifact
+        ? chapter
+        : {
+            ...chapter,
+            status: "stale",
+            error: RECORDING_ONLY_FILMS_MESSAGE,
+          },
+    ),
+  };
+}
+
 type EnqueueOptions = { now?: Date; dailyLimit?: number };
 async function enqueuePreparedJob(
   job: StoryFilmJob,
@@ -169,44 +188,13 @@ async function enqueuePreparedJob(
   return result!;
 }
 
-/** The provider lookup happens before every storage lock. No paid work runs here. */
+/** Retired entry point retained to reject older callers before any provider work. */
 export async function enqueueStoryFilms(
-  c: Collection,
-  scriptsApproved: boolean,
-  options: EnqueueOptions & { resolveVoice?: () => Promise<FilmVoice> } = {},
-) {
-  if (!scriptsApproved)
-    throw new Error(
-      "Approve the four narration scripts and the AI interviewer voice before making films.",
-    );
-  if (c.status === "approved")
-    throw new Error("Approved stories cannot be replaced in this pilot.");
-  const chapters = filmChapters(c);
-  const sourceSha256 = collectionFilmSourceHash(c);
-  const voice = await (options.resolveVoice ?? resolveFilmVoice)();
-  const versionHash = filmVersionHash(sourceSha256, voice);
-  const timestamp = (options.now ?? new Date()).toISOString();
-  return enqueuePreparedJob(
-    {
-      schemaVersion: 1,
-      kind: "story-film-job",
-      mode: "ai_narration",
-      id: `film_${versionHash}`,
-      collectionId: c.id,
-      storytellerName: c.storyteller.name,
-      versionHash,
-      sourceSha256,
-      templateVersion: FILM_TEMPLATE_VERSION,
-      voice,
-      status: "queued",
-      chapters,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      scriptsApprovedAt: timestamp,
-      attempts: 0,
-    },
-    options,
-  );
+  _c: Collection,
+  _scriptsApproved: boolean,
+  _options: EnqueueOptions & { resolveVoice?: () => Promise<FilmVoice> } = {},
+): Promise<StoryFilmJob> {
+  throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
 }
 
 export async function enqueueOriginalFilms(
@@ -300,6 +288,9 @@ export async function filmJobInputsCurrent(job: StoryFilmJob, c: Collection) {
   // Existing finished films remain valid. An unfinished job must never resume
   // with new render code and combine its cached chapters with another template.
   return (
+    (job.mode === "original" ||
+      job.status === "ready" ||
+      filmOutputsAlreadyAttached(job, c)) &&
     (filmTemplateCurrent(job) ||
       job.status === "ready" ||
       filmOutputsAlreadyAttached(job, c)) &&
@@ -312,15 +303,20 @@ export async function retryStoryFilms(
   c: Collection,
   id: string,
   scriptsApproved: boolean,
-  expectedMode: "ai_narration" | "original" = "ai_narration",
+  expectedMode: "ai_narration" | "original" = "original",
 ) {
+  if (expectedMode !== "original")
+    throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
   if (!scriptsApproved)
-    throw new Error("Confirm the narration scripts before retrying.");
+    throw new Error(
+      "Confirm processing of your original recordings before retrying.",
+    );
   await getFilmJob(id);
   const result = await mutateRecord<StoryFilmJob>(id, async (job) => {
     if (!job || job.collectionId !== c.id)
       throw new Error("Film job not found.");
-    if ((job.mode ?? "ai_narration") !== expectedMode)
+    if (job.mode !== "original") throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
+    if (job.mode !== expectedMode)
       throw new Error("Choose the matching film retry option.");
     if (job.status === "failed" && !filmTemplateCurrent(job))
       return staleTemplateJob(job);
@@ -382,6 +378,9 @@ export async function claimNextFilmJob(
     let claimed: StoryFilmJob | null = null;
     await mutateRecord<StoryFilmJob>(id, async (job) => {
       if (!job) throw new Error("Film job not found.");
+      if (job.mode !== "original") {
+        return { ...retiredNarrationJob(job), updatedAt: nowIso() };
+      }
       if (
         [
           "transcribing",
@@ -455,7 +454,7 @@ export async function claimNextFilmJob(
       if ((await beforeClaim?.(job)) === false) return job;
       claimed = {
         ...job,
-        status: job.mode === "original" ? "preparing" : "narrating",
+        status: "preparing",
         attempts: job.attempts + 1,
         nextAttemptAt: undefined,
         error: undefined,
@@ -529,8 +528,12 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       throw new Error(
         "The stories changed while rendering. Completed films are preserved but have not been shared.",
       );
+    if (job.mode !== "original") throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
     for (const chapter of job.chapters) {
       const artifact = chapter.artifact!;
+      if (artifact.narrationKind !== "original_recording") {
+        throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
+      }
       const media = await getMedia(artifact.mediaId);
       if (
         !media ||
@@ -544,6 +547,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       const target = c.chapters.find(
         (entry) => entry.id === chapter.chapterId,
       )!;
+      await preserveGeneratedFilmProvenance(c.id, target, getMedia, putMedia);
       target.videoMediaId = chapter.artifact!.mediaId;
       target.videoStatus = "ready";
       target.editorialReviewed = false;

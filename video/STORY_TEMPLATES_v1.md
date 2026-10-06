@@ -1,5 +1,7 @@
 # Four story-film templates
 
+> October 5, 2026 policy update: this version remains a historical visual specification. Its fictional AI-narrated previews and typed-story narration descriptions are archival design samples, not the current production film path. New films use original recorded voice/video only. Read [editing rules v2](STORY_EDITING_RULES_v2.md) and [current QA](../docs/QA_2026-10-05_RECORDING_ONLY.md). Existing finished artifacts are preserved; older verification results below do not verify the new policy or a deployed worker.
+
 These templates share one visual system for every storyteller. The theme changes, while the type, spacing, captions, orb, pacing and logo finish stay consistent.
 
 | Studio composition | Theme |

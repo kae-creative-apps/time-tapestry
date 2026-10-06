@@ -1,3 +1,9 @@
+import { syntheticRecordedFilmCollection } from "./film-fixture";
+import {
+  attachSyntheticOriginalFilms,
+  recordedApproval,
+} from "./recorded-review-fixture";
+import { historicalApprovedCollection } from "./historical-delivery-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -32,7 +38,6 @@ test("protected delivery automation separates email from printing and sends only
   ])
     delete process.env[key];
   const { prepareCollection } = await import("../src/lib/collection/create");
-  const { approveCollection } = await import("../src/lib/collection/content");
   const { getCollection, writeRecord, mutateCollection } =
     await import("../src/lib/collection/store");
   const { processDeliveryJobs, notificationSuppressionReason } =
@@ -185,7 +190,7 @@ test("protected delivery automation separates email from printing and sends only
     );
   };
   try {
-    const c = approveCollection(draft(), new Date().toISOString(), {
+    const c = historicalApprovedCollection(draft(), new Date().toISOString(), {
       deliveryMode: "digital",
     });
     const digital = {
@@ -298,11 +303,14 @@ test("protected delivery automation separates email from printing and sends only
     );
 
     process.env.COLLECTION_DELIVERY_ENABLED = "true";
-    process.env.LOB_API_KEY = "fixture-private-lob";
+    process.env.LOB_API_KEY = "live_fixture_private_lob";
     process.env.LOB_FROM_ADDRESS_ID = "adr_fixture";
     process.env.LOB_WEBHOOK_SECRET = "fixture-signing-secret";
     // Noon is fixed by the printed schedule; use yesterday only after release to exercise an overdue due card.
-    const postal = approveCollection(draft(), new Date().toISOString());
+    const postal = historicalApprovedCollection(
+      draft(),
+      new Date().toISOString(),
+    );
     const today = new Date().toISOString();
     const proof = await buildPostcardProof(postal, today);
     approvePostcardProof(postal, proof, proof.hash);
@@ -324,6 +332,23 @@ test("protected delivery automation separates email from printing and sends only
       false,
     );
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "fixture-public-site-key";
+    process.env.LOB_API_KEY = "test_fixture_private_lob";
+    const scheduleBeforeTestMode = JSON.stringify(heldForSignIn.deliveries);
+    await processDeliveryJobs();
+    const heldForTestMode = (await getCollection(postal.id))!;
+    assert.equal(
+      heldForTestMode.postcardPreparation?.status,
+      "waiting_for_setup",
+    );
+    assert.equal(
+      JSON.stringify(heldForTestMode.deliveries),
+      scheduleBeforeTestMode,
+    );
+    assert.equal(
+      calls.some((call) => call.url.includes("lob.com")),
+      false,
+    );
+    process.env.LOB_API_KEY = "live_fixture_private_lob";
     failNextPostcard = true;
     await processDeliveryJobs();
     const firstAttempt = calls.find((call) => call.url.includes("lob.com"))!;
@@ -384,7 +409,7 @@ test("protected delivery automation separates email from printing and sends only
       printCount,
     );
 
-    const legacy = approveCollection(draft(), today);
+    const legacy = historicalApprovedCollection(draft(), today);
     const legacyProof = await buildPostcardProof(legacy, today);
     approvePostcardProof(legacy, legacyProof, legacyProof.hash);
     releasePostcardProof(legacy, legacyProof.hash);
@@ -409,7 +434,7 @@ test("protected delivery automation separates email from printing and sends only
       printCount,
     );
 
-    const mismatched = approveCollection(draft(), today);
+    const mismatched = historicalApprovedCollection(draft(), today);
     const another = await buildPostcardProof(mismatched, today);
     approvePostcardProof(mismatched, another, another.hash);
     releasePostcardProof(mismatched, another.hash);
@@ -451,7 +476,7 @@ test("protected delivery automation separates email from printing and sends only
     );
     assert.equal(heldLegacyRequest.attempts, 1);
 
-    const stale = approveCollection(draft(), today);
+    const stale = historicalApprovedCollection(draft(), today);
     const staleProof = await buildPostcardProof(stale, today);
     approvePostcardProof(stale, staleProof, staleProof.hash);
     releasePostcardProof(stale, staleProof.hash);
@@ -491,8 +516,19 @@ test("protected delivery automation separates email from printing and sends only
     process.env.SECURITY_TEST_BYPASS = "true";
     const { POST: updateCollection } =
       await import("../src/app/api/collection/[id]/route");
-    const pending = draft();
-    await writeRecord(pending.id, pending);
+    const pending = await syntheticRecordedFilmCollection();
+    const deliveryDetails = draft();
+    pending.storyteller = deliveryDetails.storyteller;
+    pending.recipient = deliveryDetails.recipient;
+    pending.requester = deliveryDetails.requester;
+    pending.address = deliveryDetails.address;
+    pending.addressConfirmed = deliveryDetails.addressConfirmed;
+    pending.postcardPublicConsent = {
+      version: 2,
+      messagesHash: postcardPublicMessagesHash(pending),
+      approvedAt: pending.createdAt,
+    };
+    const filmsReady = await attachSyntheticOriginalFilms(pending);
     const apiApproval = await updateCollection(
       new NextRequest(
         `http://localhost/api/collection/${pending.id}?key=${pending.ownerKey}`,
@@ -503,6 +539,7 @@ test("protected delivery automation separates email from printing and sends only
             action: "approve",
             deliveryMode: "digital",
             autoPostcards: true,
+            ...recordedApproval(filmsReady),
           }),
         },
       ),
@@ -514,8 +551,9 @@ test("protected delivery automation separates email from printing and sends only
     assert.equal(approvedPending.status, "approved");
     assert.equal(approvedPending.postcardProof?.releaseStatus, "held");
     assert.equal(
-      approvedPending.notifications.some((n) => n.kind === "collection_ready"),
-      false,
+      approvedPending.notifications.filter((n) => n.kind === "collection_ready")
+        .length,
+      1,
     );
     const ownerConfirmation = approvedPending.notifications.find(
       (n) => n.id === `${pending.id}:owner-approved`,

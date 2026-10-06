@@ -1,10 +1,11 @@
+import { historicalApprovedCollection } from "./historical-delivery-fixture";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { NextRequest } from "next/server";
 import QRCode from "qrcode";
 
-test("all four postcards dispatch once at calendar quarters through authenticated jobs and signed mailing events", async (t) => {
+test("legacy postcards retain calendar-quarter dispatch through authenticated jobs and signed mailing events", async (t) => {
   const origin = "https://example.com";
   const syntheticLobKey = "live_fixture_never_sent_to_lob";
   Object.assign(process.env, {
@@ -114,7 +115,6 @@ test("all four postcards dispatch once at calendar quarters through authenticate
   try {
     const { CHAPTERS } = await import("../src/lib/interview-state");
     const { prepareCollection } = await import("../src/lib/collection/create");
-    const { approveCollection } = await import("../src/lib/collection/content");
     const { getCollection, putCollection, mutateCollection } =
       await import("../src/lib/collection/store");
     const { prepareAutomaticPostcards, postcardPublicMessagesHash } =
@@ -136,6 +136,8 @@ test("all four postcards dispatch once at calendar quarters through authenticate
       },
     });
     draft.status = "draft";
+    // Existing collections without a stored cadence retain their approved quarterly journey.
+    delete draft.postcardCadence;
     draft.chapters = CHAPTERS.map((chapter) => ({
       id: chapter.id,
       title: chapter.title,
@@ -146,9 +148,13 @@ test("all four postcards dispatch once at calendar quarters through authenticate
       editorialReviewed: true,
       generatedWith: "source_text",
     }));
-    const approved = approveCollection(draft, new Date().toISOString(), {
-      deliveryMode: "digital",
-    });
+    const approved = historicalApprovedCollection(
+      draft,
+      new Date().toISOString(),
+      {
+        deliveryMode: "digital",
+      },
+    );
     approved.autoPostcards = true;
     approved.replyRemindersEnabled = false;
     await prepareAutomaticPostcards(approved);

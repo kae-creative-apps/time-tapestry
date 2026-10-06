@@ -3,7 +3,6 @@ import { getCollection } from "@/lib/collection/store";
 import { requireOwner, roleFor } from "@/lib/collection/access";
 import {
   attachReadyFilms,
-  enqueueStoryFilms,
   enqueueOriginalFilms,
   enqueueAutomaticOriginalFilms,
   getFilmJob,
@@ -20,7 +19,7 @@ import {
   OriginalEditConflict,
 } from "@/lib/collection/films/original-plan";
 import { automaticFilmsAvailable } from "@/lib/collection/films/transcription";
-import { filmsAvailable } from "@/lib/collection/films/provider";
+import { RECORDING_ONLY_FILMS_MESSAGE } from "@/lib/collection/films/policy";
 import { guardRequest } from "@/lib/security/request";
 import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 
@@ -49,7 +48,7 @@ export async function GET(req: NextRequest, { params }: Context) {
       filmWorkerHealthy(),
     ]);
     const view = job ? filmJobView(job) : null;
-    if (job && view && !(await filmJobInputsCurrent(job, c))) {
+    if (job?.mode === "original" && view && !(await filmJobInputsCurrent(job, c))) {
       view.status = "stale";
       view.error =
         "Your story or selected recordings changed. Review the current version and create new films.";
@@ -59,7 +58,8 @@ export async function GET(req: NextRequest, { params }: Context) {
         job: view,
         originalPlan,
         sources,
-        available: filmsAvailable() && workerAvailable,
+        available: false,
+        recordingOnly: true,
         originalAvailable: workerAvailable,
         automaticAvailable: automaticFilmsAvailable() && workerAvailable,
         workerAvailable,
@@ -95,6 +95,9 @@ export async function POST(req: NextRequest, { params }: Context) {
     requireOwner(c, role);
     const body = await readJsonBody(req, 32768);
     const action = String(body.action);
+    if (["generate", "enqueue", "retry"].includes(action)) {
+      return NextResponse.json({error: RECORDING_ONLY_FILMS_MESSAGE}, {status: 410, headers});
+    }
     if (action === "save_original_plan") {
       await guardRequest(req, { action: "collection_write", resourceId: id });
       const originalPlan = await saveOriginalFilmEdit(
@@ -106,9 +109,6 @@ export async function POST(req: NextRequest, { params }: Context) {
     }
     if (
       ![
-        "generate",
-        "enqueue",
-        "retry",
         "generate_original",
         "retry_original",
         "prepare_automatic",
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest, { params }: Context) {
           ? "Confirm automatic transcription and editing of your original recordings first."
           : original
             ? "Review every selected clip and confirm original sound without timed captions."
-            : "Review all four scripts and approve AI narration with your interviewer's voice first.",
+            : RECORDING_ONLY_FILMS_MESSAGE,
       );
     await guardRequest(req, { action: "render_film", resourceId: id });
     if (!(await filmWorkerHealthy()))
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest, { params }: Context) {
         c,
         typeof body.jobId === "string" ? body.jobId : "",
         true,
-        original ? "original" : "ai_narration",
+        "original",
       );
     } else if (automatic)
       job = await enqueueAutomaticOriginalFilms(c, {
@@ -174,12 +174,13 @@ export async function POST(req: NextRequest, { params }: Context) {
         true,
         true,
       );
-    else job = await enqueueStoryFilms(c, true);
+    else throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
     if (job.status === "ready") await attachReadyFilms(job);
     return NextResponse.json(
       {
         job: filmJobView(job),
-        available: filmsAvailable(),
+        available: false,
+        recordingOnly: true,
         originalAvailable: true,
         automaticAvailable: automaticFilmsAvailable(),
         workerAvailable: true,

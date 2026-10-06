@@ -1,3 +1,4 @@
+import { historicalApprovedCollection } from "./historical-delivery-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -23,7 +24,6 @@ test("address updates preserve started mailings and safely replace untouched sch
   for (const key of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "VERCEL"])
     delete process.env[key];
   const { prepareCollection } = await import("../src/lib/collection/create");
-  const { approveCollection } = await import("../src/lib/collection/content");
   const { CHAPTERS } = await import("../src/lib/interview-state");
   const {
     buildPostcardProof,
@@ -74,7 +74,7 @@ test("address updates preserve started mailings and safely replace untouched sch
           editorialReviewed: true,
           generatedWith: "source_text",
         }));
-        const collection = approveCollection(draft, start, {
+        const collection = historicalApprovedCollection(draft, start, {
           deliveryMode: "digital",
         });
         collection.autoPostcards = true;

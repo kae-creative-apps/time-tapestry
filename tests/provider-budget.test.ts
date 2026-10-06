@@ -66,8 +66,20 @@ async function fixture(withAnswers = false) {
         id,
         questionId,
         prompt: "A fixture question",
-        kind: "text",
+        kind: "voice",
+        mediaId: `${c.id}-${questionId}-recording`,
         text: "A synthetic answer for a test.",
+        createdAt: c.createdAt,
+      });
+      await store.putMedia({
+        id: `${c.id}-${questionId}-recording`,
+        collectionId: c.id,
+        role: "owner",
+        provenance: "uploaded_recording",
+        mimeType: "audio/webm",
+        originalName: "synthetic-recording.webm",
+        bytes: 100,
+        url: "https://recording.example.test/synthetic.webm",
         createdAt: c.createdAt,
       });
       c.selectedTakeIds[questionId] = id;

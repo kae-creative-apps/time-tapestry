@@ -3,7 +3,6 @@ import LegacyAccessNotice from "@/components/LegacyAccessNotice";
 import { StoryDisplay } from "@/components/StoryDisplay";
 import { Logo } from "@/components/Logo";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { getSession } from "@/lib/session";
 import Link from "next/link";
@@ -45,17 +44,18 @@ export default async function ReviewPage({
         <Logo className="mb-8" />
         <Card className="mb-8 text-center">
           <h1 className="mb-3 font-serif text-2xl text-ink">
-            Review your story
+            Your saved story
           </h1>
           <p className="mb-6 leading-relaxed text-ink-500">
-            Read it over. When you are ready, approve it to be handed down.
+            This earlier session is kept for viewing. Start a new recording to
+            create and share a collection with your own recorded voice.
           </p>
-          <form action={`/api/story/generate`} method="POST">
-            <input type="hidden" name="sessionId" value={id} />
-            <Button type="submit" className="w-full sm:w-auto">
-              Approve and share
-            </Button>
-          </form>
+          <Link
+            href="/share"
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-oxblood px-5 py-3 font-medium text-white"
+          >
+            Start a new recording
+          </Link>
         </Card>
         {hasStory ? (
           <StoryDisplay
@@ -70,8 +70,9 @@ export default async function ReviewPage({
         ) : (
           <Card className="text-center">
             <p className="text-ink-500">
-              Your story hasn&apos;t been generated yet. Finish the interview
-              and come back here to review it.
+              No written story was saved for this earlier session. Any saved
+              interview records are kept. You can start a new recording using
+              the link above.
             </p>
           </Card>
         )}

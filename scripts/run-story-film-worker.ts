@@ -58,7 +58,7 @@ async function main() {
         });
     }, 20000);
     console.log(
-      "Story film worker is ready. Only queued jobs with recorded processing or narration approval are processed.",
+      "Story film worker is ready. Only approved original-recording jobs are processed.",
     );
     while (!stopping) {
       const job = await runFilmWorkerOnce(workerId, {

@@ -296,21 +296,24 @@ export function GenerosityNotes({
   }
 
   return (
-    <details className="mt-6 rounded-2xl border border-sage-200 bg-sage-50 p-5 text-espresso sm:p-7">
+    <details
+      id="generosity-notes"
+      className="mt-6 scroll-mt-6 rounded-2xl border border-sage-200 bg-sage-50 p-5 text-espresso sm:p-7"
+    >
       <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-        Where you sowed{" "}
+        People and causes you cared for{" "}
         <span className="ml-2 text-sm font-normal text-ink-500">
           Optional private notes
         </span>
       </summary>
       <div className="max-w-3xl">
         <h3 className="mt-3 text-2xl font-semibold">
-          Anything you’d rather write down?
+          Keep the details behind your generosity.
         </h3>
         <p className="mt-3 text-base leading-7 text-ink-600">
-          A few details can help your family understand what mattered to you.
-          You decide which memories and details to keep. Every field is
-          optional.
+          Remember the people, churches and causes you supported, what drew you
+          to them, and what you hope continues. Time, hospitality and practical
+          care matter here too. Amounts are optional.
         </p>
         <p className="mt-3 text-sm leading-7 text-ink-500">
           These notes stay in your private workspace. They are not used to

@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Collection, CollectionView } from "./types";
+import {
+  PRIMARY_RECIPIENT_ID,
+  recipientById,
+  storedRecipientId,
+} from "./recipients";
 export function secretMatches(a: string, b: string) {
   return Boolean(
     a &&
@@ -33,6 +38,7 @@ export function linksFor(c: Collection) {
 export function publicView(
   c: Collection,
   role: CollectionView["role"],
+  recipientId = PRIMARY_RECIPIENT_ID,
 ): CollectionView {
   const {
     ownerKey,
@@ -52,7 +58,17 @@ export function publicView(
   view.notifications = view.notifications.map(
     ({ dispatch, ...notification }) => notification,
   );
+  view.replies = view.replies.map((reply) => {
+    const author = recipientById(c, storedRecipientId(reply), true);
+    return {
+      ...reply,
+      recipientId: storedRecipientId(reply),
+      authorName: author?.name || "",
+      authorEmail: author?.email || "",
+    };
+  });
   if (role !== "owner") {
+    view.additionalRecipients = undefined;
     view.postcardPublicConsent = undefined;
     view.postcardPreparation = undefined;
     view.postcardProof = undefined;
@@ -88,9 +104,34 @@ export function publicView(
     if (role === "requester") {
       view.chapterBlessings = {};
       view.replies = [];
+      view.recipientViewedChapters = {};
     }
     view.storyteller = { name: c.storyteller.name, email: "" };
     view.requester = { name: c.requester.name, email: "" };
+    if (role === "recipient") {
+      const recipient = recipientById(c, recipientId);
+      view.replies = recipient
+        ? view.replies.filter(
+            (reply) => storedRecipientId(reply) === recipientId,
+          )
+        : [];
+      view.recipient = {
+        name: recipient?.name || "",
+        email: recipient?.email || "",
+      };
+      if (!recipient?.primary) {
+        const member = c.additionalRecipients?.find(
+          (item) => item.id === recipientId,
+        );
+        view.address = undefined;
+        view.addressConfirmed = false;
+        view.deliveries = [];
+        view.requester = { name: "", email: "" };
+        view.recipientViewedChapters = { ...member?.viewedChapters };
+        view.replyRemindersEnabled = member?.replyRemindersEnabled ?? false;
+        view.postcardPublicMessages = undefined;
+      }
+    }
     if (role === "requester" && c.requester.email !== c.recipient.email) {
       view.address = undefined;
       view.recipient = { name: c.recipient.name, email: "" };
@@ -103,6 +144,12 @@ export function publicView(
       ? { privateGenerosityNotes }
       : {}),
     role,
+    ...(role === "recipient"
+      ? {
+          recipientId,
+          isPrimaryRecipient: recipientId === PRIMARY_RECIPIENT_ID,
+        }
+      : {}),
     links: role === "owner" ? linksFor(c) : undefined,
     capabilities: {
       tts: Boolean(

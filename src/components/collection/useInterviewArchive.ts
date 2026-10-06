@@ -20,6 +20,7 @@ import {
 import type { InterviewSegment } from "@/lib/collection/types";
 import {
   interviewCaptureConstraints,
+  requireInterviewAudioTrack,
   type InterviewDevices,
 } from "@/lib/collection/interview-devices";
 
@@ -398,6 +399,7 @@ export function useInterviewArchive({
     const currentStream = media.current;
     if (!currentSession || !currentStream)
       throw new Error("Start the interview before recording.");
+    requireInterviewAudioTrack(currentStream);
     if (currentStream.getTracks().some((track) => track.readyState !== "live"))
       throw new Error(
         "Your camera or microphone disconnected. Continue to reconnect your device.",

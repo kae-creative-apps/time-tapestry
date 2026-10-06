@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { syntheticFilmCollection, testVoice } from "./film-fixture";
+import { syntheticFilmCollection } from "./film-fixture";
 import {
   matchSourceWords,
   cutsForMatchedWords,
@@ -154,7 +154,7 @@ test("manual edit protects stale tabs and rejects unrelated or foreign media", a
   await store.putMedia({ ...media, collectionId: "foreign_collection" });
   assert.equal(await jobs.filmJobInputsCurrent(job, c), false);
 });
-test("automatic enqueue is provider free, idempotent after duration cache, and shares AI version fence", async () => {
+test("automatic enqueue is provider free, idempotent after duration cache, and fences old presentations", async () => {
   const c = await fixture();
   const first = await jobs.enqueueAutomaticOriginalFilms(c, {
     processingApproved: true,
@@ -172,8 +172,9 @@ test("automatic enqueue is provider free, idempotent after duration cache, and s
     processingApproved: true,
   });
   assert.equal(first.id, second.id);
-  await jobs.enqueueStoryFilms(c, true, {
-    resolveVoice: async () => testVoice,
+  await jobs.enqueueAutomaticOriginalFilms(c, {
+    processingApproved: true,
+    presentation: "audio",
   });
   assert.equal(
     await jobs.claimNextFilmJob("worker", Date.now(), first.id),

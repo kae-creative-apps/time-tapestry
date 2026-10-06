@@ -4,8 +4,18 @@ import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { syntheticFilmCollection, testVoice } from "./film-fixture";
+import {
+  syntheticFilmCollection,
+  syntheticRecordedFilmCollection,
+  testVoice,
+} from "./film-fixture";
 import type { StoryFilmJob } from "../src/lib/collection/films/types";
+import {
+  collectionFilmSourceHash,
+  filmChapters,
+  filmVersionHash,
+  FILM_TEMPLATE_VERSION,
+} from "../src/lib/collection/films/plan";
 let store: typeof import("../src/lib/collection/store");
 let jobs: typeof import("../src/lib/collection/films/jobstore");
 let route: typeof import("../src/app/api/collection/[id]/films/route");
@@ -29,35 +39,251 @@ before(async () => {
   jobs = await import("../src/lib/collection/films/jobstore");
   route = await import("../src/app/api/collection/[id]/films/route");
 });
-const voice = { resolveVoice: async () => testVoice };
-test("explicit script approval and idempotent concurrent enqueue", async () => {
+const original = { processingApproved: true as const };
+
+async function legacyNarrationFixture(ready = false, attached = false) {
+  const c = syntheticFilmCollection();
+  const sourceSha256 = collectionFilmSourceHash(c);
+  const versionHash = filmVersionHash(sourceSha256, testVoice);
+  const job: StoryFilmJob = {
+    schemaVersion: 1,
+    kind: "story-film-job",
+    id: `film_${versionHash}`,
+    mode: "ai_narration",
+    collectionId: c.id,
+    storytellerName: c.storyteller.name,
+    versionHash,
+    sourceSha256,
+    templateVersion: FILM_TEMPLATE_VERSION,
+    voice: testVoice,
+    status: ready ? "ready" : "queued",
+    chapters: filmChapters(c),
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+    scriptsApprovedAt: c.createdAt,
+    attempts: ready ? 1 : 0,
+  };
+  if (ready) {
+    for (const chapter of job.chapters) {
+      const mediaId = `legacy_${c.id}_${chapter.chapterId}`;
+      await store.putMedia({
+        id: mediaId,
+        collectionId: c.id,
+        role: "owner",
+        mimeType: "video/mp4",
+        originalName: "historical-film.mp4",
+        bytes: 10,
+        createdAt: c.createdAt,
+        localPath: "/historical-fixture",
+      });
+      chapter.status = "ready";
+      chapter.artifact = {
+        jobId: job.id,
+        chapterId: chapter.chapterId,
+        mediaId,
+        narrationKind: "ai_interviewer",
+        sourceTakeIds: chapter.sourceTakeIds,
+        sourceSha256: chapter.sourceSha256,
+        scriptSha256: chapter.scriptSha256,
+        audioSha256: "a".repeat(64),
+        outputSha256: String(chapter.chapterNumber).repeat(64),
+        voiceId: testVoice.voiceId,
+        modelId: testVoice.modelId,
+        durationSeconds: 10,
+        createdAt: c.createdAt,
+      };
+      if (attached) {
+        const target = c.chapters.find(
+          (item) => item.id === chapter.chapterId,
+        )!;
+        target.videoMediaId = mediaId;
+        target.videoStatus = "ready";
+        target.film = chapter.artifact;
+        target.reviewedFilmSha256 = chapter.artifact.outputSha256;
+      }
+    }
+  }
+  await store.putCollection(c);
+  await store.mutateRecord(job.id, () => job);
+  await store.mutateRecord(`film-index-${c.id}`, () => ({ ids: [job.id] }));
+  await store.mutateRecord<{ ids: string[] }>(
+    "story-film-registry",
+    (registry) => ({
+      ids: [...(registry?.ids ?? []), job.id],
+    }),
+  );
+  return { c, job };
+}
+
+test("AI narration enqueue rejects before resolving a voice or calling a provider", async (t) => {
   const c = syntheticFilmCollection();
   await store.putCollection(c);
-  await assert.rejects(jobs.enqueueStoryFilms(c, false, voice), /Approve/);
+  let resolved = false;
+  const provider = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Retired narration must not call providers.");
+  });
+  for (const approved of [false, true])
+    await assert.rejects(
+      jobs.enqueueStoryFilms(c, approved, {
+        resolveVoice: async () => {
+          resolved = true;
+          return testVoice;
+        },
+      }),
+      /own recorded voice/,
+    );
+  assert.equal(resolved, false);
+  assert.equal(provider.mock.callCount(), 0);
+  assert.equal(await jobs.latestFilmJob(c.id), null);
+});
+
+test("retired film API actions return 410 without queuing or provider work", async (t) => {
+  const c = syntheticFilmCollection();
+  await store.putCollection(c);
+  const provider = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Retired film actions must not call providers.");
+  });
+  for (const action of ["generate", "enqueue", "retry"]) {
+    const response = await route.POST(
+      new NextRequest(
+        `http://localhost/api/collection/${c.id}/films?key=${c.ownerKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, scriptsApproved: true }),
+        },
+      ),
+      { params: Promise.resolve({ id: c.id }) },
+    );
+    assert.equal(response.status, 410);
+    assert.match((await response.json()).error, /own recorded voice/);
+  }
+  assert.equal(provider.mock.callCount(), 0);
+  assert.equal(await jobs.latestFilmJob(c.id), null);
+});
+
+test("unfinished legacy narration queues become stale without a claim or retry", async () => {
+  for (const mode of [undefined, "ai_narration"] as const) {
+    const { c, job } = await legacyNarrationFixture();
+    job.mode = mode;
+    await store.mutateRecord(job.id, () => job);
+    let checkedCapacity = false;
+    assert.equal(
+      await jobs.claimNextFilmJob(
+        "legacy-worker",
+        Date.now(),
+        job.id,
+        async () => {
+          checkedCapacity = true;
+          return true;
+        },
+      ),
+      null,
+    );
+    assert.equal(checkedCapacity, false);
+    const retired = (await jobs.getFilmJob(job.id))!;
+    assert.equal(retired.status, "stale");
+    assert.equal(retired.attempts, 0);
+    assert.equal(retired.lease, undefined);
+    assert.match(retired.error!, /own recorded voice/);
+    await assert.rejects(
+      jobs.retryStoryFilms(c, job.id, true),
+      /own recorded voice/,
+    );
+    await assert.rejects(
+      jobs.retryStoryFilms(c, job.id, true, "ai_narration"),
+      /own recorded voice/,
+    );
+    assert.deepEqual(await store.getCollection(c.id), c);
+  }
+});
+
+test("a previously claimed narration job stops before transcription or provider work", async (t) => {
+  const { c, job } = await legacyNarrationFixture();
+  job.status = "narrating";
+  job.attempts = 1;
+  job.lease = { token: "legacy-worker-token", expiresAt: Date.now() + 120000 };
+  await store.mutateRecord(job.id, () => job);
+  const provider = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("A retired worker must not call providers.");
+  });
+  let transcribed = false;
+  const { processFilmJob } = await import("../src/lib/collection/films/worker");
+  const stopped = await processFilmJob(job, {
+    transcribe: async () => {
+      transcribed = true;
+      throw new Error("A retired worker must not transcribe.");
+    },
+  });
+  assert.equal(stopped?.status, "stale");
+  assert.match(stopped!.error!, /own recorded voice/);
+  assert.equal(stopped?.lease, undefined);
+  assert.equal(transcribed, false);
+  assert.equal(provider.mock.callCount(), 0);
+  assert.deepEqual(await store.getCollection(c.id), c);
+});
+
+test("unpublished legacy narration artifacts cannot be newly attached", async () => {
+  const { c, job } = await legacyNarrationFixture(true);
+  await assert.rejects(jobs.attachReadyFilms(job), /own recorded voice/);
+  assert.deepEqual(await store.getCollection(c.id), c);
+  assert.ok(await store.getMedia(job.chapters[0].artifact!.mediaId));
+  assert.equal((await jobs.getFilmJob(job.id))?.status, "ready");
+});
+
+test("already attached historical films remain readable and retain their review", async () => {
+  const { c, job } = await legacyNarrationFixture(true, true);
+  const response = await route.GET(
+    new NextRequest(
+      `http://localhost/api/collection/${c.id}/films?key=${c.ownerKey}`,
+    ),
+    { params: Promise.resolve({ id: c.id }) },
+  );
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.job.status, "ready");
+  assert.deepEqual(result.job.chapters[0].artifact, job.chapters[0].artifact);
+  assert.equal(result.available, false);
+  assert.equal(result.recordingOnly, true);
+  assert.equal(
+    await jobs.claimNextFilmJob("new-worker", Date.now(), job.id),
+    null,
+  );
+  assert.deepEqual(await store.getCollection(c.id), c);
+});
+test("explicit original processing approval and idempotent concurrent enqueue", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  await assert.rejects(
+    jobs.enqueueAutomaticOriginalFilms(c, {
+      processingApproved: false as true,
+    }),
+    /Confirm automatic transcription/,
+  );
   const [a, b] = await Promise.all([
-    jobs.enqueueStoryFilms(c, true, voice),
-    jobs.enqueueStoryFilms(c, true, voice),
+    jobs.enqueueAutomaticOriginalFilms(c, original),
+    jobs.enqueueAutomaticOriginalFilms(c, original),
   ]);
   assert.equal(a.id, b.id);
   assert.equal((await jobs.latestFilmJob(c.id))?.id, a.id);
   assert.equal(a.attempts, 0);
 });
 test("daily versions are bounded but existing job reads do not consume a version", async () => {
-  const c = syntheticFilmCollection();
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  await jobs.enqueueStoryFilms(c, true, { ...voice, dailyLimit: 1 });
-  await jobs.enqueueStoryFilms(c, true, { ...voice, dailyLimit: 1 });
+  await jobs.enqueueAutomaticOriginalFilms(c, { ...original, dailyLimit: 1 });
+  await jobs.enqueueAutomaticOriginalFilms(c, { ...original, dailyLimit: 1 });
   c.chapters[0].content += " A correction.";
   await store.putCollection(c);
   await assert.rejects(
-    jobs.enqueueStoryFilms(c, true, { ...voice, dailyLimit: 1 }),
+    jobs.enqueueAutomaticOriginalFilms(c, { ...original, dailyLimit: 1 }),
     /film versions per day/,
   );
 });
-test("only one worker claims a job, expired leases fail for explicit bounded retry", async () => {
-  const c = syntheticFilmCollection();
+test("only one worker claims a job, expired original leases resume with bounded retry", async () => {
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  const queued = await jobs.enqueueStoryFilms(c, true, voice);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
   const attempts = await Promise.all([
     jobs.claimNextFilmJob("worker-a", Date.now(), queued.id),
     jobs.claimNextFilmJob("worker-b", Date.now(), queued.id),
@@ -72,11 +298,18 @@ test("only one worker claims a job, expired leases fail for explicit bounded ret
     await jobs.claimNextFilmJob("worker-c", Date.now(), queued.id),
     null,
   );
-  assert.equal((await jobs.getFilmJob(queued.id))?.status, "failed");
+  const resumed = await jobs.getFilmJob(queued.id);
+  assert.equal(resumed?.status, "queued");
+  assert.equal(resumed?.attempts, 1);
+  assert.ok(Date.parse(resumed!.nextAttemptAt!) > Date.now());
   await assert.rejects(
     jobs.updateFilmJob(queued.id, claimed.lease!.token, (job) => job),
     /lease expired/,
   );
+  await store.mutateRecord<StoryFilmJob>(queued.id, (job) => ({
+    ...job!,
+    status: "failed",
+  }));
   assert.equal(
     (await jobs.retryStoryFilms(c, queued.id, true)).status,
     "queued",
@@ -92,9 +325,9 @@ test("only one worker claims a job, expired leases fail for explicit bounded ret
   );
 });
 test("edited scripts are stale and private job endpoint never exposes scripts to recipient", async () => {
-  const c = syntheticFilmCollection();
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  await jobs.enqueueStoryFilms(c, true, voice);
+  await jobs.enqueueAutomaticOriginalFilms(c, original);
   c.chapters[0].content += " Changed after enqueue.";
   await store.putCollection(c);
   const context = { params: Promise.resolve({ id: c.id }) };
@@ -119,9 +352,9 @@ test("edited scripts are stale and private job endpoint never exposes scripts to
   assert.equal(await jobs.filmWorkerHealthy(), true);
 });
 test("all four outputs attach atomically and repeated attachment preserves review", async () => {
-  const c = syntheticFilmCollection();
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  const queued = await jobs.enqueueStoryFilms(c, true, voice);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
   const claimed = (await jobs.claimNextFilmJob(
     "attach-worker",
     Date.now(),
@@ -144,16 +377,39 @@ test("all four outputs attach atomically and repeated attachment preserves revie
       jobId: claimed.id,
       chapterId: chapter.chapterId,
       mediaId,
-      narrationKind: "ai_interviewer",
+      narrationKind: "original_recording",
       sourceTakeIds: chapter.sourceTakeIds,
       sourceSha256: chapter.sourceSha256,
-      scriptSha256: chapter.scriptSha256,
-      audioSha256: "a".repeat(64),
+      presentation: "video",
+      planSha256: "a".repeat(64),
+      sourceRanges: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          inMs: 0,
+          outMs: 1000,
+        },
+      ],
+      sourceAssets: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          sha256: "b".repeat(64),
+          durationMs: 12000,
+        },
+      ],
       outputSha256: String(chapter.chapterNumber).repeat(64),
-      voiceId: testVoice.voiceId,
-      modelId: testVoice.modelId,
       durationSeconds: 10,
       createdAt: c.createdAt,
+    };
+    chapter.sourceEdit = {
+      chapterId: chapter.chapterId,
+      presentation: "video",
+      clips: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          inMs: 0,
+          outMs: 1000,
+        },
+      ],
     };
     chapter.status = "ready";
   }
@@ -177,15 +433,13 @@ test("all four outputs attach atomically and repeated attachment preserves revie
   await assert.rejects(jobs.attachReadyFilms(claimed), /stories changed/);
 });
 
-test("a newly approved voice version prevents an older job from claiming or publishing", async () => {
-  const c = syntheticFilmCollection();
+test("a newly approved presentation prevents an older original job from claiming or publishing", async () => {
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  const older = await jobs.enqueueStoryFilms(c, true, voice);
-  const newer = await jobs.enqueueStoryFilms(c, true, {
-    resolveVoice: async () => ({
-      ...testVoice,
-      voiceId: "newly-approved-interviewer",
-    }),
+  const older = await jobs.enqueueAutomaticOriginalFilms(c, original);
+  const newer = await jobs.enqueueAutomaticOriginalFilms(c, {
+    ...original,
+    presentation: "audio",
   });
   assert.notEqual(older.id, newer.id);
   assert.equal(
@@ -200,9 +454,9 @@ test("a newly approved voice version prevents an older job from claiming or publ
 });
 
 async function completedClaim() {
-  const c = syntheticFilmCollection();
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  const queued = await jobs.enqueueStoryFilms(c, true, voice);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
   const claimed = (await jobs.claimNextFilmJob(
     "completion-worker",
     Date.now(),
@@ -224,16 +478,39 @@ async function completedClaim() {
       jobId: claimed.id,
       chapterId: chapter.chapterId,
       mediaId,
-      narrationKind: "ai_interviewer",
+      narrationKind: "original_recording",
       sourceTakeIds: chapter.sourceTakeIds,
       sourceSha256: chapter.sourceSha256,
-      scriptSha256: chapter.scriptSha256,
-      audioSha256: "a".repeat(64),
+      presentation: "video",
+      planSha256: "a".repeat(64),
+      sourceRanges: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          inMs: 0,
+          outMs: 1000,
+        },
+      ],
+      sourceAssets: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          sha256: "b".repeat(64),
+          durationMs: 12000,
+        },
+      ],
       outputSha256: String(chapter.chapterNumber).repeat(64),
-      voiceId: testVoice.voiceId,
-      modelId: testVoice.modelId,
       durationSeconds: 10,
       createdAt: c.createdAt,
+    };
+    chapter.sourceEdit = {
+      chapterId: chapter.chapterId,
+      presentation: "video",
+      clips: [
+        {
+          mediaId: c.takes[chapter.chapterNumber - 1].mediaId!,
+          inMs: 0,
+          outMs: 1000,
+        },
+      ],
     };
     chapter.status = "ready";
   }
@@ -260,7 +537,7 @@ test("worker completion reuses four preserved artifacts and settles ready withou
   }
 });
 
-test("a crash after atomic attachment settles ready without a narration retry", async () => {
+test("a crash after atomic attachment settles ready without a source-processing retry", async () => {
   const { claimed } = await completedClaim();
   await jobs.attachReadyFilms(claimed);
   await store.mutateRecord(claimed.id, (job: any) => ({
@@ -277,9 +554,9 @@ test("a crash after atomic attachment settles ready without a narration retry", 
 });
 
 test("expired owner can record failure but cannot overwrite a replacement owner", async () => {
-  const c = syntheticFilmCollection();
+  const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);
-  const queued = await jobs.enqueueStoryFilms(c, true, voice);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
   const claimed = (await jobs.claimNextFilmJob(
     "failed-worker",
     Date.now(),
@@ -308,28 +585,8 @@ test("expired owner can record failure but cannot overwrite a replacement owner"
   );
 });
 
-async function templateFixture(mode: "narration" | "manual" | "automatic") {
-  const c = syntheticFilmCollection();
-  if (mode === "narration") {
-    await store.putCollection(c);
-    return { c, queued: await jobs.enqueueStoryFilms(c, true, voice) };
-  }
-  for (const take of c.takes) {
-    take.kind = "voice";
-    take.mediaId = `original_${take.id}`;
-    take.durationSeconds = 12;
-    await store.putMedia({
-      id: take.mediaId,
-      collectionId: c.id,
-      role: "owner",
-      mimeType: "audio/wav",
-      originalName: "synthetic.wav",
-      bytes: 10,
-      createdAt: c.createdAt,
-      localPath: "/synthetic-fixture",
-    });
-  }
-  await store.putCollection(c);
+async function templateFixture(mode: "manual" | "automatic") {
+  const c = await syntheticRecordedFilmCollection();
   if (mode === "automatic") {
     return {
       c,
@@ -354,7 +611,7 @@ async function templateFixture(mode: "narration" | "manual" | "automatic") {
   };
 }
 
-for (const mode of ["narration", "manual", "automatic"] as const) {
+for (const mode of ["manual", "automatic"] as const) {
   test(`${mode} jobs require their current template before claim and retry`, async () => {
     const { c, queued } = await templateFixture(mode);
     assert.equal(await jobs.filmJobInputsCurrent(queued, c), true);
@@ -378,12 +635,7 @@ for (const mode of ["narration", "manual", "automatic"] as const) {
       status: "failed",
     }));
     await assert.rejects(
-      jobs.retryStoryFilms(
-        c,
-        old.id,
-        true,
-        mode === "narration" ? "ai_narration" : "original",
-      ),
+      jobs.retryStoryFilms(c, old.id, true, "original"),
       /template changed/,
     );
     assert.equal((await jobs.getFilmJob(old.id))?.status, "stale");
@@ -430,7 +682,7 @@ test("a partial old-template job keeps completed artifacts while preventing mixe
             status: "queued",
             artifact: undefined,
           },
-      ),
+    ),
   }));
   const preservedChapters = (await jobs.getFilmJob(claimed.id))!.chapters;
   assert.equal(

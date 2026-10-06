@@ -1,12 +1,15 @@
 export const MAX_FOLLOW_UPS = 2;
 
+/** Optional q2 prompt, still recorded as the same second part. */
+export const NEUTRAL_DECISION_QUESTION =
+  "Tell me about a decision that mattered to you and what you learned from it.";
+
 /** The interview and the published story share these four section boundaries. */
 export const CHAPTERS = [
   {
     id: "q1",
     title: "Kindness received",
-    question:
-      "Tell me about someone whose kindness has stayed with you.",
+    question: "Tell me about someone whose kindness has stayed with you.",
     followUps: [
       "What do you remember most clearly about that moment?",
       "What did their kindness help you understand?",
@@ -16,10 +19,10 @@ export const CHAPTERS = [
     id: "q2",
     title: "A life of faith",
     question:
-      "Tell me about a time following Jesus shaped a choice you made.",
+      "Tell me about a decision you made while following Jesus that later changed your life for the better.",
     followUps: [
-      "What was happening in your life at the time?",
-      "Looking back, what does that decision mean to you now?",
+      "What helped you make that choice?",
+      "Looking back, how has that decision affected your life?",
     ],
   },
   {
@@ -60,7 +63,7 @@ export function getChapterQuestion(
   if (!chapter) throw new Error(`Unknown interview chapter: ${chapterId}`);
 
   if (chapterId === "q2" && context.faithFraming === "beliefs") {
-    return "Tell me about a time your beliefs shaped a decision you made.";
+    return "Tell me about a decision guided by your beliefs that later changed your life for the better.";
   }
   const recipientName = context.recipientName?.trim();
   if (chapterId === "q4" && recipientName) {
@@ -77,6 +80,10 @@ export const CORE_QUESTIONS = CHAPTERS.map(({ id, question }) => ({
 
 /** Compatibility export. Follow-ups belong to a core section, never Q5 or Q6. */
 export const OPTIONAL_QUESTIONS: Array<{ id: string; text: string }> = [];
+
+/** An optional direction within an existing follow-up, never a fifth section. */
+export const OPTIONAL_SCRIPTURE_FOLLOW_UP =
+  "Is there a Scripture that helped you with that decision, if you would like to share it?";
 
 export type InterviewPhase =
   "intro" | "question" | "followup" | "continue_prompt" | "paused" | "finished";

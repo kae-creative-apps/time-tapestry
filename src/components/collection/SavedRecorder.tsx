@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerTake } from "@/lib/collection/types";
+import { requireInterviewAudioTrack } from "@/lib/collection/interview-devices";
 import {
   answerFromLocal,
   appendTakeChunk,
@@ -63,12 +64,12 @@ function friendlyRecordingError(error: unknown): string {
     error instanceof DOMException &&
     ["NotAllowedError", "PermissionDeniedError"].includes(error.name)
   )
-    return "Camera or microphone access was not allowed. You can enable it in your browser settings, record voice only, or type your answer.";
+    return "Camera or microphone access was not allowed. Enable microphone access in your browser settings and try again. You can choose audio only if you prefer.";
   if (error instanceof DOMException && error.name === "NotFoundError")
-    return "No camera or microphone was found. Connect one, or type your answer.";
+    return "No camera or microphone was found. Connect a microphone, then choose audio only if you do not have a camera.";
   return error instanceof Error
     ? error.message
-    : "Recording could not start. You can try again or type your answer.";
+    : "Recording could not start. Check your microphone and browser permissions, then try again.";
 }
 
 async function responseData(response: Response) {
@@ -296,7 +297,7 @@ export default function SavedRecorder({
         contentType: blob.type.split(";")[0],
         handleUploadUrl: `${endpoint}/media/upload${query}`,
         clientPayload: JSON.stringify({
-                  bytes: blob.size,
+          bytes: blob.size,
           mediaId,
           mimeType: blob.type.split(";")[0],
           name,
@@ -389,6 +390,9 @@ export default function SavedRecorder({
           body: JSON.stringify({
             action: "save_take",
             take: answerFromLocal(current),
+            ...(/^q[1-4]$/.test(current.questionId)
+              ? { replaceChapterId: current.questionId }
+              : {}),
           }),
         }),
       );
@@ -428,12 +432,26 @@ export default function SavedRecorder({
               /* Both media uploads are already backed up. */
             }
           }
+          // Link an uploaded audio sidecar before the server transcribes it.
+          if (current.audioMediaId) {
+            await responseData(
+              await fetch(`${endpoint}${query}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "save_take",
+                  take: answerFromLocal(current),
+                }),
+              }),
+            );
+          }
           const transcription = await responseData(
             await fetch(`${endpoint}/transcribe${query}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 mediaId: current.audioMediaId ?? current.mediaId,
+                takeId: current.id,
               }),
             }),
           );
@@ -442,31 +460,11 @@ export default function SavedRecorder({
             text: transcription.text,
             transcriptionStatus: "ready",
           };
-          await responseData(
-            await fetch(`${endpoint}${query}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "save_take",
-                take: answerFromLocal(current),
-              }),
-            }),
-          );
           onSavedRef.current?.(answerFromLocal(current));
         }
       } catch {
         current = { ...current, transcriptionStatus: "failed" };
-        await fetch(`${endpoint}${query}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "save_take",
-            take: answerFromLocal(current),
-          }),
-        })
-          .then(responseData)
-          .then(() => onSavedRef.current?.(answerFromLocal(current)))
-          .catch(() => undefined);
+        onSavedRef.current?.(answerFromLocal(current));
         if (mounted.current)
           setMessage(
             "Your recording is backed up. Check its transcription status below.",
@@ -519,7 +517,7 @@ export default function SavedRecorder({
         typeof MediaRecorder === "undefined"
       )
         throw new Error(
-          "This browser does not support recording. Try an updated browser, or type your answer.",
+          "This browser does not support recording. Open your interview link in an updated browser to record your answer.",
         );
       const persistent = await requestRecordingStorage();
       if (!persistent)
@@ -538,6 +536,7 @@ export default function SavedRecorder({
             : false,
       });
       stream.current = mediaStream;
+      requireInterviewAudioTrack(mediaStream);
       if (!mounted.current) {
         mediaStream.getTracks().forEach((track) => track.stop());
         return;

@@ -19,17 +19,12 @@ import {
   updateFilmJob,
   writeWorkerHeartbeat,
 } from "./jobstore";
-import {
-  fileHash,
-  prepareNarration,
-  privateJson,
-  probeFilm,
-  renderNarratedFilm,
-} from "./render";
+import { fileHash, privateJson, probeFilm } from "./render";
 import { prepareAutomaticSources } from "./automatic";
 import { prepareOriginalChapter, renderOriginalFilm } from "./original-render";
 import { TransientFilmError } from "./transcription";
-import { FILM_CLOSER_SECONDS, FILM_INTRO_SECONDS, sha256 } from "./plan";
+import { sha256 } from "./plan";
+import { RECORDING_ONLY_FILMS_MESSAGE } from "./policy";
 import { chapterDurationFrames, VIDEO_FPS } from "../../video-plan";
 import {
   assertFilmDiskSpace,
@@ -37,12 +32,7 @@ import {
   filmRenderScratchBytes,
   filmSourceScratchBytes,
 } from "./disk-space";
-import type {
-  FilmChapter,
-  NarratedFilmPlan,
-  StoryFilmArtifact,
-  StoryFilmJob,
-} from "./types";
+import type { FilmChapter, StoryFilmArtifact, StoryFilmJob } from "./types";
 import type { StoredMedia } from "../types";
 
 async function sourceScratchBytes(job: StoryFilmJob) {
@@ -91,6 +81,8 @@ async function savePrivateFilm(
       mediaId: id,
       bytes,
     });
+    if (existing.provenance != "generated_film")
+      await putMedia({ ...existing, provenance: "generated_film" });
     return id;
   }
   await reserveMediaUpload({
@@ -102,8 +94,9 @@ async function savePrivateFilm(
     id,
     collectionId: job.collectionId,
     role: "owner",
+    provenance: "generated_film",
     mimeType: "video/mp4",
-    originalName: `story-${chapter.chapterNumber}-${job.mode === "original" ? "original-voice" : "ai-narration"}.mp4`,
+    originalName: `story-${chapter.chapterNumber}-original-voice.mp4`,
     bytes,
     createdAt: new Date().toISOString(),
   };
@@ -193,7 +186,6 @@ export async function processFilmJob(
   if (!token) throw new Error("Claim the film job before processing it.");
   let leaseError: unknown;
   let diskError: FilmDiskSpaceError | undefined;
-  let processingStarted = false;
   const checkDiskSpace = async (additionalBytes = 0) => {
     try {
       await assertFilmDiskSpace(dataRoot, additionalBytes);
@@ -254,14 +246,14 @@ export async function processFilmJob(
     }));
   };
   try {
+    if (claimed.mode !== "original")
+      throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
     const sourceBytes = await sourceScratchBytes(claimed);
     if (sourceBytes === null)
       throw new Error(
         "An original recording is unavailable or its stored size is invalid.",
       );
     await checkDiskSpace(sourceBytes);
-    if (claimed.mode !== "original" && !process.env.ELEVENLABS_API_KEY)
-      throw new Error("ElevenLabs narration is not configured on the worker.");
     if (
       (process.env.VERCEL || process.env.KV_REST_API_URL) &&
       !process.env.BLOB_READ_WRITE_TOKEN
@@ -272,7 +264,6 @@ export async function processFilmJob(
       throw new Error(
         "This collection needs more storage before making films.",
       );
-    processingStarted = true;
     if (
       claimed.mode === "original" &&
       claimed.preparation === "automatic" &&
@@ -359,78 +350,7 @@ export async function processFilmJob(
           sourceAssets: prepared.sourceAssets,
         };
       } else {
-        const voice = claimed.voice;
-        if (!voice)
-          throw new Error("The AI narration voice snapshot is missing.");
-        await progress(chapter.chapterId, "narrating", 0);
-        const audio = await prepareNarration(
-          claimed,
-          chapter,
-          work,
-          (fraction) => progress(chapter.chapterId, "narrating", fraction),
-          assertCurrent,
-        );
-        const plan: NarratedFilmPlan = {
-          schemaVersion: 1,
-          jobId: claimed.id,
-          chapterId: chapter.chapterId,
-          chapterNumber: chapter.chapterNumber,
-          storytellerName: claimed.storytellerName,
-          title: chapter.title,
-          script: chapter.script,
-          sourceTakeIds: chapter.sourceTakeIds,
-          sourceSha256: chapter.sourceSha256,
-          scriptSha256: chapter.scriptSha256,
-          audioSha256: audio.audioSha256,
-          audioDurationMs: audio.durationMs,
-          words: audio.words,
-          narrationKind: "ai_interviewer",
-          templateVersion: claimed.templateVersion,
-        };
-        await privateJson(path.join(work, "plan.json"), plan);
-        await progress(chapter.chapterId, "rendering", 0);
-        const rendered = await cachedRender(
-          work,
-          sha256(JSON.stringify(plan)),
-          async (file) => {
-            await checkDiskSpace(
-              filmRenderScratchBytes(
-                plan.audioDurationMs / 1000 +
-                  FILM_INTRO_SECONDS +
-                  FILM_CLOSER_SECONDS,
-              ),
-            );
-            return renderNarratedFilm(
-              plan,
-              audio.audioFile,
-              file,
-              (fraction) => progress(chapter.chapterId, "rendering", fraction),
-              assertCurrent,
-            );
-          },
-        );
-        await assertCurrent();
-        const mediaId = await savePrivateFilm(
-          claimed,
-          chapter,
-          rendered.file,
-          rendered.outputSha256,
-        );
-        artifact = {
-          jobId: claimed.id,
-          chapterId: chapter.chapterId,
-          mediaId,
-          narrationKind: "ai_interviewer",
-          sourceTakeIds: chapter.sourceTakeIds,
-          sourceSha256: chapter.sourceSha256,
-          scriptSha256: chapter.scriptSha256,
-          audioSha256: audio.audioSha256,
-          outputSha256: rendered.outputSha256,
-          voiceId: voice.voiceId,
-          modelId: voice.modelId,
-          durationSeconds: rendered.durationSeconds,
-          createdAt: new Date().toISOString(),
-        };
+        throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
       }
       await updateFilmJob(claimed.id, token, (job) => ({
         ...job,
@@ -468,7 +388,7 @@ export async function processFilmJob(
         : "Film creation stopped. Completed work is preserved.";
     if (failure instanceof FilmDiskSpaceError && !stale) {
       reportDiskPause(failure);
-      if (claimed.mode === "original" || !processingStarted) {
+      if (claimed.mode === "original") {
         // updateFilmJob fences both token and expiry before changing attempts.
         // Keep saved artifacts/receipts and let capacity, not retry count, gate
         // the next attempt. No files are removed or overwritten here.
@@ -486,10 +406,6 @@ export async function processFilmJob(
           ),
         })).catch(() => getFilmJob(claimed.id));
       }
-      // Narration may have been billed before an audio receipt was saved.
-      // Preserve the existing explicit-retry policy for that uncertain case.
-      message +=
-        " Check the worker before retrying; an unfinished narration request may already have been processed.";
     }
     return await failFilmJob(
       claimed.id,

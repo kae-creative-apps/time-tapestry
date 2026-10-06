@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import { appOrigin } from "./access";
-import { addCalendarMonths } from "./content";
+import {
+  collectionPostcardCadence,
+  postcardScheduledDate,
+} from "./postcard-cadence";
 import { PostcardLayoutError } from "./postcard-fit";
 import { originUrl, postcardArtwork } from "./postcard-artwork";
-import type { Collection, PostalAddress } from "./types";
+import type { Collection, PostalAddress, PostcardCadence } from "./types";
 import { publicPostcardMessage } from "./postcard-public-message";
 import { accountEmailAvailable } from "../accounts/mail";
 import { hostedSecurityConfigured } from "../security/policy";
@@ -11,6 +14,7 @@ import { CHAPTERS } from "../interview-state";
 
 export type PostcardProofSnapshot = {
   version: 1 | 2;
+  cadence?: PostcardCadence;
   accessPolicy?: "verified_recipient_email";
   publicMessageHash?: string;
   hash: string;
@@ -133,6 +137,10 @@ function sourceHash(c: Collection, origin: string) {
       chapter.film?.outputSha256 || "",
       c.chapterBlessings[chapter.id] || null,
     ]),
+    // Keep legacy source hashes byte-for-byte stable when cadence was absent.
+    ...(c.postcardCadence
+      ? [{ postcardCadence: collectionPostcardCadence(c) }]
+      : []),
   ]);
 }
 function proofHash(
@@ -155,6 +163,7 @@ function proofHash(
       card.front,
       card.back,
     ]),
+    ...(proof.cadence ? [proof.cadence] : []),
   ]);
 }
 export async function buildPostcardProof(
@@ -170,12 +179,13 @@ export async function buildPostcardProof(
       chapterId: chapter.id,
       title: `Postcard ${index + 1}`,
       note: publicPostcardMessage(c, chapter.id),
-      scheduledFor: addCalendarMonths(first, index * 3),
+      scheduledFor: postcardScheduledDate(c, first, index),
       ...(await postcardArtwork(c, chapter.id, secureOrigin)),
     })),
   );
   const proof = {
     version: 2 as const,
+    ...(c.postcardCadence ? { cadence: collectionPostcardCadence(c) } : {}),
     accessPolicy: "verified_recipient_email" as const,
     publicMessageHash: postcardPublicMessagesHash(c),
     sourceHash: source,
@@ -197,6 +207,7 @@ export function postcardProofIsCurrent(
     return Boolean(
       proof &&
       proof.version === 2 &&
+      (proof.cadence ?? "quarterly") === collectionPostcardCadence(c) &&
       proof.accessPolicy === "verified_recipient_email" &&
       proof.publicMessageHash === postcardPublicMessagesHash(c) &&
       proof.hash === proofHash(proof) &&
@@ -251,12 +262,27 @@ export function approvePostcardProof(
   c.deliveries = [];
   return c;
 }
+export function postcardDeliveryMode(): "test" | "live" | "unconfigured" {
+  const key = process.env.LOB_API_KEY?.trim() || "";
+  return key.startsWith("live_")
+    ? "live"
+    : key.startsWith("test_")
+      ? "test"
+      : "unconfigured";
+}
 export function postcardDeliveryReadiness(origin = appOrigin()) {
+  const mode = postcardDeliveryMode();
   const reasons: string[] = [];
   if (process.env.COLLECTION_DELIVERY_ENABLED !== "true")
     reasons.push("Mailing is not enabled.");
-  if (!process.env.LOB_API_KEY || !process.env.LOB_FROM_ADDRESS_ID)
-    reasons.push("The printing service is not connected.");
+  if (mode === "unconfigured" || !process.env.LOB_FROM_ADDRESS_ID)
+    reasons.push(
+      "The printing service is not connected with a live key and return address.",
+    );
+  if (mode === "test")
+    reasons.push(
+      "The printing service is in test mode. Test keys cannot send real mail.",
+    );
   if (
     !process.env.LOB_WEBHOOK_SECRET ||
     process.env.LOB_WEBHOOK_SECRET === "secret"
@@ -283,7 +309,7 @@ export function postcardDeliveryReadiness(origin = appOrigin()) {
   } catch {
     reasons.push("The printed QR code needs a public HTTPS website address.");
   }
-  return { ready: reasons.length === 0, reasons };
+  return { mode, ready: reasons.length === 0, reasons };
 }
 export function assertReleasedPostcardProof(
   c: Collection,
@@ -411,7 +437,7 @@ export async function prepareAutomaticPostcards(
       "Review the public postcard messages and confirm that anyone handling the card may read them. Your private stories stay behind email verification.",
     );
   try {
-    // If setup held a previous schedule in the past, start a fresh quarterly schedule when ready.
+    // If setup held a previous schedule in the past, start a fresh schedule with the collection's saved cadence when ready.
     const first =
       c.postcardProof &&
       postcardProofIsCurrent(c, c.postcardProof, origin) &&

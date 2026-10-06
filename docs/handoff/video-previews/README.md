@@ -2,6 +2,8 @@
 
 Eight completed review exports are committed with the editable source. These are review material, not a deployment change. The story examples use fictional people and generated narration. Original private interviews are not included.
 
+**October 5 policy update:** the four narrated story exports below are archival design samples. They illustrate the visual templates and are not examples of the current production film pipeline. New interviews use recorded video with sound or audio only, and new story films retain the storyteller's original recorded voice. Existing completed assets remain preserved. See [editing rules v2](../../../video/STORY_EDITING_RULES_v2.md), [current QA](../../QA_2026-10-05_RECORDING_ONLY.md) and [worker operations](../../STORY_FILM_WORKER.md).
+
 ## Four story templates
 
 - [Kindness received](story-templates-v1/01-Kindness-Received-Time-Tapestry-v1.mp4)

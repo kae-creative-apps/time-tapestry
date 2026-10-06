@@ -8,6 +8,10 @@ import {
 } from "../collection/store";
 import { secretMatches } from "../collection/access";
 import type { Collection } from "../collection/types";
+import {
+  normalizeRecipientEmail,
+  recipientForEmail,
+} from "../collection/recipients";
 import { SecurityError } from "../security/policy";
 import {
   accountEmailAvailable,
@@ -258,21 +262,29 @@ export async function revokeAccountSession(token: unknown, now = Date.now()) {
   }));
 }
 export function accountRole(c: Collection, email: string): AccountRole | null {
-  const matches = (value?: string) => value?.trim().toLowerCase() === email;
+  const matches = (value?: string) =>
+    value?.trim().toLowerCase() === normalizeRecipientEmail(email);
   if (matches(c.storyteller.email)) return "owner";
-  if (matches(c.recipient.email)) return "recipient";
+  if (recipientForEmail(c, email)) return "recipient";
   if (matches(c.requester.email)) return "requester";
   return null;
 }
-function libraryItem(c: Collection, role: AccountRole): LibraryItem {
+function libraryItem(
+  c: Collection,
+  role: AccountRole,
+  email: string,
+): LibraryItem {
   const approved = c.status === "approved",
     owner = role === "owner";
+  const recipient = role === "recipient" ? recipientForEmail(c, email) : null;
+  const deliveries =
+    role === "recipient" && !recipient?.primary ? [] : c.deliveries;
   return {
     id: c.id,
     role,
     status: c.status,
     storytellerName: c.storyteller.name,
-    recipientName: c.recipient.name,
+    recipientName: recipient ? recipient.name : c.recipient.name,
     updatedAt: c.updatedAt,
     storyCount:
       owner || (approved && role === "recipient") ? c.chapters.length : 0,
@@ -291,8 +303,8 @@ function libraryItem(c: Collection, role: AccountRole): LibraryItem {
         ? c.chapters.filter((ch) => ch.videoMediaId).length
         : 0,
     postcards: {
-      scheduled: c.deliveries.filter((d) => d.status === "scheduled").length,
-      mailed: c.deliveries.filter((d) => d.status === "mailed").length,
+      scheduled: deliveries.filter((d) => d.status === "scheduled").length,
+      mailed: deliveries.filter((d) => d.status === "mailed").length,
       needsAttention: owner
         ? c.deliveries.filter((d) => ["failed", "returned"].includes(d.status))
             .length
@@ -305,7 +317,7 @@ export async function accountLibrary(account: Account) {
   const items: LibraryItem[] = [];
   for (const c of await listCollections()) {
     const role = accountRole(c, account.email);
-    if (role) items.push(libraryItem(c, role));
+    if (role) items.push(libraryItem(c, role, account.email));
   }
   items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return { email: account.email, items, total: items.length };

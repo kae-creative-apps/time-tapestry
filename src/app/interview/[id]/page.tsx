@@ -1,19 +1,15 @@
-import { InterviewSession } from '@/components/InterviewSession';
-import { Logo } from '@/components/Logo';
-import { Footer } from '@/components/Footer';
+import type { Metadata } from "next";
+import { InterviewSession } from "@/components/InterviewSession";
+import { Logo } from "@/components/Logo";
+import { Footer } from "@/components/Footer";
 
-export default function InterviewPage({
-  params
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return (
-    <InterviewPageInner params={params} />
-  );
-}
+export const metadata: Metadata = {
+  title: "Earlier interview | Time Tapestry",
+  robots: { index: false, follow: false },
+};
 
-async function InterviewPageInner({
-  params
+export default async function InterviewPage({
+  params,
 }: {
   params: Promise<{ id: string }>;
 }) {
