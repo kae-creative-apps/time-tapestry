@@ -119,6 +119,50 @@ test("separate accepted turns never include an excluded answer or intervening pa
   assert.ok(clips[1].inMs >= f.wordGroups[2][0].startMs - 140);
 });
 
+test("an untimed word in excluded speech stays in the original transcript without blocking verified answers", async () => {
+  const f = fixture();
+  const excludedWord = f.wordGroups[1][1];
+  excludedWord.endMs = excludedWord.startMs;
+  const original = structuredClone(f.words);
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
+  );
+  assert.equal(result.chapters.length, 4);
+  assert.ok(
+    result.chapters.every((chapter) => chapter.sourceEdit!.clips.length > 0),
+  );
+  assert.ok(
+    result.chapters.every((chapter) =>
+      chapter.sourceEdit!.clips.every((clip) =>
+        (clip.captions ?? []).every((caption) => caption.endMs > caption.startMs),
+      ),
+    ),
+  );
+  assert.deepEqual(f.words, original);
+});
+
+test("a selected untimed word prevents all four films from being assembled", async () => {
+  const f = fixture();
+  const selectedWord = f.wordGroups[0][3];
+  selectedWord.endMs = selectedWord.startMs;
+  const original = structuredClone(f.c);
+  await assert.rejects(
+    assembleSourceEdits(
+      f.c,
+      f.job,
+      new Map([[f.words[0].mediaId, f.words]]),
+      f.durations,
+      [],
+    ),
+    /selected source word.*positive duration/,
+  );
+  assert.deepEqual(f.c, original);
+});
+
 test("live source matching removes only a safely bounded filler from actual retained ranges and captions", async () => {
   const f = fixture();
   f.wordGroups[0][3].text = "um,";
@@ -434,4 +478,39 @@ test("byte-identical recordings reuse a private transcript across upload IDs and
     1,
     "invalid cached timing must not start another paid request",
   );
+});
+
+test("cached untimed alignment tokens are reused unchanged without a second transcription request", async () => {
+  const cacheRoot = await mkdtemp(
+    path.join(os.tmpdir(), "film-transcript-untimed-test-"),
+  );
+  const words: SourceWord[] = [
+    { text: "Example", startMs: 10, endMs: 100, mediaId: "first" },
+    { text: "yes", startMs: 120, endMs: 120, mediaId: "first" },
+  ];
+  let requests = 0;
+  const options = {
+    cacheRoot,
+    sourceSha256: "b".repeat(64),
+    durationMs: 1000,
+    mediaId: "first",
+    attempt: 1,
+    request: async () => {
+      requests++;
+      return words;
+    },
+  };
+  assert.deepEqual(await cachedSourceTranscript(options), words);
+  const reused = await cachedSourceTranscript({
+    ...options,
+    mediaId: "second",
+    attempt: 2,
+  });
+  assert.equal(requests, 1);
+  assert.deepEqual(
+    reused,
+    words.map((word) => ({ ...word, mediaId: "second" })),
+  );
+  assert.throws(() => captionsForWords(reused), /positive duration/);
+  assert.equal(requests, 1, "selected timing failure must not re-spend on Scribe");
 });

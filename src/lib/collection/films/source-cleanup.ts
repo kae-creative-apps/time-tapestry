@@ -1,5 +1,9 @@
 import type { OriginalClipSelection } from "./types";
-import { captionsForWords, type SourceWord } from "./word-matching";
+import {
+  assertTimedSourceWords,
+  captionsForWords,
+  type SourceWord,
+} from "./word-matching";
 
 export const SOURCE_CLEANUP_VERSION = "conservative-source-cleanup-v1";
 export type SourceSilence = { inMs: number; outMs: number };
@@ -51,6 +55,10 @@ export function cleanSourcePassage(
   removed: SourceRemoval[];
   skippedReason?: "clip_limit";
 } {
+  // Source search can retain a provider's untimed lexical token, but cleanup
+  // must never turn a selected one into a playable range or silently erase it.
+  if (words.some((word) => word.endMs === word.startMs))
+    assertTimedSourceWords(words);
   const unchanged = () => ({ clips: [clip], removed: [] as SourceRemoval[] });
   if (
     !Number.isFinite(clip.inMs) ||
