@@ -93,7 +93,7 @@ export function InterviewPreview() {
         className={`${threadBorderClassName} inline-flex min-h-14 items-center justify-center gap-4 rounded-full border border-white/50 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4`}
       >
         <ThreadBorder />
-        Preview the interview <AppIcon name="play" size={20} />
+        Preview a conversation <AppIcon name="play" size={20} />
       </button>
       <dialog
         ref={dialog}
@@ -127,10 +127,10 @@ export function InterviewPreview() {
               id="interview-preview-title"
               className="mt-2 text-2xl sm:text-3xl"
             >
-              Meet your interviewer.
+              Begin with a conversation.
             </h2>
             <p className="mt-3 text-base leading-7 text-ink-600">
-              A sample of her voice. Your microphone stays off, and nothing is
+              Listen to a sample question. Your microphone stays off, and nothing is
               recorded.
             </p>
             <div className="my-4 flex justify-center" aria-hidden="true">
@@ -138,9 +138,9 @@ export function InterviewPreview() {
             </div>
             <div className="min-h-7 text-base text-ink-600" role="status">
               {loading
-                ? "Loading the voice sample…"
+                ? "Loading the sample…"
                 : playing
-                  ? "Your interviewer is speaking"
+                  ? "Playing the sample"
                   : heard
                     ? "Take your time."
                     : "Ready when you are."}
@@ -182,7 +182,7 @@ export function InterviewPreview() {
                   ? "Pause the sample"
                   : heard
                     ? "Listen again"
-                    : "Hear the interviewer"}
+                    : "Listen to the sample"}
               </button>
               <button
                 type="button"
@@ -207,8 +207,8 @@ export function InterviewPreview() {
           </div>
           <div className="mt-5 border-t border-warmgray-200 pt-4 text-center">
             <p className="text-base leading-7 text-ink-600">
-              In your interview, she listens and asks about your memories. You
-              can pause and come back.
+              Questions follow the memories you share. You can pause and come
+              back.
             </p>
             <Link
               href="/share"

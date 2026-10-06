@@ -20,7 +20,7 @@ export const sha256 = (value: string | Uint8Array) =>
 
 /** Read the complete reviewed text. No invented linking facts or shortened themes. */
 export function narrationScript(name: string, title: string, content: string) {
-  const script = `${title}. A story from ${name}, narrated by the Time Tapestry AI interviewer. These are ${name}'s reviewed words.\n\n${content.trim()}`;
+  const script = `${title}. A story from ${name}, read by an AI voice. These are ${name}'s reviewed words.\n\n${content.trim()}`;
   if (!content.trim() || script.length > MAX_SCRIPT_CHARACTERS)
     throw new Error(
       `Each complete film script must contain 1 to ${MAX_SCRIPT_CHARACTERS} characters. Shorten the reviewed story explicitly before trying again; nothing has been truncated.`,

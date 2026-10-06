@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { BRAND_COLORS } from "../brand-art";
+import { CHAPTERS } from "../interview-state";
 import {
   assertReleasedPostcardProof,
   prepareAutomaticPostcards,
@@ -7,13 +8,14 @@ import {
 } from "./postcard-proofs";
 import { postcardScheduledDate } from "./postcard-cadence";
 import { appOrigin, linksFor } from "./access";
+import { INTERVIEW_PACING_COPY } from "./interview-progress";
 import {
   PRIMARY_RECIPIENT_ID,
   normalizeRecipientEmail,
   recipientById,
   storedRecipientId,
 } from "./recipients";
-import { getCollection, listCollections, mutateCollection } from "./store";
+import { getCollection, getMedia, listCollections, mutateCollection } from "./store";
 import {
   lobPostcardTransport,
   serializeLobPostcardRequest,
@@ -211,6 +213,21 @@ export function notificationSuppressionReason(
         return "The storyteller confirmation address and link need to be checked.";
     } else if (c.status !== "draft") {
       return "This draft is no longer awaiting review.";
+    } else if (n.id.startsWith(`${c.id}:films-ready:`)) {
+      const jobId = n.id.slice(`${c.id}:films-ready:`.length);
+      if (
+        n.to !== c.storyteller.email ||
+        n.url !== appOrigin() + linksFor(c).review ||
+        c.draftOutdated || c.chapters.length !== 4 ||
+        !CHAPTERS.every(({ id }) => {
+          const chapter = c.chapters.find((item) => item.id === id);
+          return chapter?.content.trim() && chapter.videoStatus === "ready" &&
+            chapter.film?.narrationKind === "original_recording" &&
+            chapter.film.jobId === jobId && chapter.film.chapterId === id &&
+            chapter.videoMediaId === chapter.film.mediaId &&
+            chapter.film.outputSha256;
+        })
+      ) return "The four current written stories and recorded films are not all ready to review.";
     }
   }
   if (n.kind === "address_request" && c.addressConfirmed)
@@ -524,7 +541,7 @@ function notificationRequest(c: Collection, n: Notification) {
     );
   }
   const actionLabels: Record<Notification["kind"], string> = {
-    invitation: "Start your interview",
+    invitation: "Start your conversation",
     review_ready: "Review your stories",
     collection_ready: "See your stories",
     recipient_invitation: "Watch the collection",
@@ -538,7 +555,11 @@ function notificationRequest(c: Collection, n: Notification) {
   const preference = ["postcard_followup", "reply_invitation"].includes(n.kind)
     ? "\nYou can turn off follow-up emails on your story page."
     : "";
-  const text = n.text + "\n\n" + actionLabel + ": " + n.url + preference;
+  const message =
+    n.kind === "invitation" && !n.text.includes(INTERVIEW_PACING_COPY)
+      ? `${n.text}\n\n${INTERVIEW_PACING_COPY}\n\nYou can choose video with sound or audio only. You review your stories before anything is shared.`
+      : n.text;
+  const text = message + "\n\n" + actionLabel + ": " + n.url + preference;
   return JSON.stringify({
     from: process.env.RESEND_FROM_EMAIL,
     to: [n.to],
@@ -550,7 +571,7 @@ function notificationRequest(c: Collection, n: Notification) {
       '"><h1 style="font-family:Arial Rounded MT Bold,Arial,sans-serif;font-size:26px;line-height:1.3">' +
       escapeHtml(n.subject) +
       "</h1>" +
-      n.text
+      message
         .split("\n")
         .map((p) => "<p>" + escapeHtml(p) + "</p>")
         .join("") +
@@ -827,6 +848,29 @@ async function processPostcard(id: string, now: number, origin: string) {
   return true;
 }
 
+/** Recheck current private film storage before claiming or sending its ready email. */
+export async function currentNotificationSuppressionReason(c: Collection, n: Notification) {
+  const reason = notificationSuppressionReason(c, n);
+  if (reason || !n.id.startsWith(`${c.id}:films-ready:`)) return reason;
+  const { getFilmJob, latestFilmJob, filmJobInputsCurrent } = await import("./films/jobstore");
+  const jobId = n.id.slice(`${c.id}:films-ready:`.length);
+  const job = await getFilmJob(jobId);
+  if (!job || job.mode !== "original" ||
+      (await latestFilmJob(c.id))?.id !== jobId ||
+      !(await filmJobInputsCurrent(job, c)))
+    return "This review email does not match the current recorded film version.";
+  for (const chapter of c.chapters) {
+    const artifact = job.chapters.find((item) => item.chapterId === chapter.id)?.artifact;
+    const media = chapter.videoMediaId && await getMedia(chapter.videoMediaId);
+    if (!artifact || artifact.outputSha256 !== chapter.film?.outputSha256 ||
+        artifact.mediaId !== chapter.videoMediaId ||
+        !media || media.collectionId !== c.id || media.role !== "owner" ||
+        media.mimeType !== "video/mp4" || media.bytes <= 0 || !(media.localPath || media.url))
+      return "The four recorded films are waiting for verified private storage.";
+  }
+  return null;
+}
+
 async function processNotification(
   id: string,
   notificationId: string,
@@ -834,7 +878,7 @@ async function processNotification(
   origin: string,
 ) {
   let lease: DispatchState | undefined;
-  await mutateCollection(id, (c) => {
+  await mutateCollection(id, async (c) => {
     const n = c.notifications.find((item) => item.id === notificationId);
     if (
       !n ||
@@ -843,7 +887,7 @@ async function processNotification(
       !canRetry(n.dispatch, now)
     )
       return c;
-    const suppression = notificationSuppressionReason(c, n);
+    const suppression = await currentNotificationSuppressionReason(c, n);
     if (suppression) {
       n.status = "suppressed";
       n.error = suppression;
@@ -906,15 +950,15 @@ async function processNotification(
     !currentNotification ||
     currentNotification.status === "suppressed" ||
     currentNotification.dispatch?.leaseId !== lease.leaseId ||
-    notificationSuppressionReason(current, currentNotification)
+    await currentNotificationSuppressionReason(current, currentNotification)
   ) {
     if (currentNotification)
-      await mutateCollection(id, (c) => {
+      await mutateCollection(id, async (c) => {
         const n = c.notifications.find((item) => item.id === notificationId);
         if (n && n.dispatch?.leaseId === lease!.leaseId) {
           n.status = "suppressed";
           n.error =
-            notificationSuppressionReason(c, n) ||
+            await currentNotificationSuppressionReason(c, n) ||
             "This email is no longer eligible to send.";
           n.dispatch = {
             ...n.dispatch,

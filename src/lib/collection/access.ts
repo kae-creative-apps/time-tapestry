@@ -68,6 +68,7 @@ export function publicView(
     };
   });
   if (role !== "owner") {
+    view.interviewPreparation = undefined;
     view.additionalRecipients = undefined;
     view.postcardPublicConsent = undefined;
     view.postcardPreparation = undefined;

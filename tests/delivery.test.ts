@@ -16,6 +16,7 @@ import {
 } from "../src/lib/collection/delivery";
 import type { LobEvent } from "../src/lib/collection/delivery";
 import type { Collection } from "../src/lib/collection/types";
+import { appOrigin, linksFor } from "../src/lib/collection/access";
 
 const origin = "https://example.test";
 const start = "2026-01-31T12:00:00.000Z";
@@ -97,6 +98,31 @@ function submitted() {
   return c;
 }
 const eventNow = new Date("2026-02-04T12:00:00.000Z").getTime();
+
+test("film-ready email waits for all four current original films and the correct storyteller link", () => {
+  const c = collection();
+  c.status = "draft";
+  c.draftOutdated = false;
+  const jobId = `film_${"a".repeat(64)}`;
+  const n = {id: `${c.id}:films-ready:${jobId}`, kind: "review_ready" as const,
+    to: c.storyteller.email, subject: "Ready", text: "Ready", url: appOrigin() + linksFor(c).review,
+    dueAt: start, status: "pending" as const};
+  for (const chapter of c.chapters) {
+    chapter.videoStatus = "ready";
+    chapter.videoMediaId = `video-${chapter.id}`;
+    chapter.film = {jobId, chapterId: chapter.id, mediaId: chapter.videoMediaId,
+      sourceTakeIds: [], sourceSha256: "s", outputSha256: "o", durationSeconds: 20,
+      createdAt: start, narrationKind: "original_recording", presentation: "video",
+      planSha256: "p", sourceRanges: [], sourceAssets: []};
+  }
+  assert.equal(notificationSuppressionReason(c, n), null);
+  const missing = structuredClone(c); missing.chapters[3].videoStatus = "awaiting_edit";
+  assert.match(notificationSuppressionReason(missing, n)!, /not all ready/);
+  assert.match(notificationSuppressionReason({...c, draftOutdated: true}, n)!, /not all ready/);
+  assert.match(notificationSuppressionReason(c, {...n, to: c.recipient.email})!, /not all ready/);
+  const old = structuredClone(c); old.chapters[0].film!.jobId = "older-version";
+  assert.match(notificationSuppressionReason(old, n)!, /not all ready/);
+});
 
 test("four mailings use calendar months, including month-end clamping", () => {
   const c = collection();

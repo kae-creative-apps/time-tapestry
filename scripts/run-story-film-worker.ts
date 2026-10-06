@@ -40,6 +40,8 @@ async function main() {
       await import("../src/lib/collection/films/worker");
     const { writeWorkerHeartbeat } =
       await import("../src/lib/collection/films/jobstore");
+    const { runInterviewPreparationOnce } =
+      await import("../src/lib/collection/interview-preparation");
     const workerId = `${config.hosted ? "hosted" : "local"}-${process.pid}`;
     if (stopping) return;
     await writeWorkerHeartbeat(workerId);
@@ -58,9 +60,17 @@ async function main() {
         });
     }, 20000);
     console.log(
-      "Story film worker is ready. Only approved original-recording jobs are processed.",
+      "Story film worker is ready. Consented interview preparation and original-recording film jobs are processed.",
     );
     while (!stopping) {
+      const preparation = await runInterviewPreparationOnce(workerId, {
+        shouldStop: () => stopping,
+      });
+      if (preparation)
+        console.log(
+          `Interview preparation ${preparation.id.slice(0, 18)}: ${preparation.status}`,
+        );
+      if (stopping) break;
       const job = await runFilmWorkerOnce(workerId, {
         shouldStop: () => stopping,
       });

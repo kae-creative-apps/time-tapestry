@@ -1,6 +1,6 @@
 # Railway film worker setup
 
-The Next.js website stays on Vercel. One private Railway worker reads the same durable film queue and private media store, produces the four chapter films, and attaches them for owner review. It does not mail postcards or bypass story approval. Deploying this container is separate from proving a complete hosted interview.
+The Next.js website stays on Vercel. One private Railway worker first processes the durable interview-preparation queue, then the original-film queue. It recovers authenticated saved conversation turns, verifies original sources for all four areas, saves four written stories and postcard note drafts, and produces four chapter films for owner review. Missing source areas stop for attention. It does not mail postcards or bypass final sharing approval. Deploying this container is separate from proving a complete hosted interview.
 
 ## Deploy the service
 
@@ -20,6 +20,7 @@ The image runs as the default root user because Railway volumes mount as root. D
 | `KV_REST_API_TOKEN` | The matching Redis token |
 | `BLOB_READ_WRITE_TOKEN` | The same private Vercel Blob store used by the website |
 | `ELEVENLABS_API_KEY` | The existing account that owns the Time Tapestry interviewer and has Scribe access |
+| `ELEVENLABS_AGENT_ID` | The same existing agent ID as the website, required to verify saved interview transcripts |
 | `SECURITY_HASH_SECRET` | Exactly the website's current secret, so shared provider budgets use the same buckets |
 | `NEXT_PUBLIC_APP_URL` | The website's canonical public HTTPS origin, with no route, query, or fragment |
 | `COLLECTION_DATA_DIR` | `/data`, already set in the image |
@@ -28,7 +29,7 @@ The image runs as the default root user because Railway volumes mount as root. D
 | `COLLECTION_STORAGE_LIMIT_BYTES` | Match any website override; default 2 GiB per collection |
 | `STORY_FILM_MIN_FREE_BYTES` | Default `1073741824`, a 1 GiB free-space safety floor |
 
-The current worker processes original-recording films only, using ElevenLabs for source transcription where needed. Synthetic narration jobs are retired. Live interviewer agent lookup and film enqueue limits belong to the website. Preserve its `ELEVENLABS_AGENT_ID` and `STORY_FILM_DAILY_LIMIT` there. OpenAI, Gloo, Resend, Lob, `ADMIN_SECRET`, and `CRON_SECRET` are not required by this service and should not be copied to it unnecessarily. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
+The worker uses ElevenLabs to read and verify already recorded conversation transcripts and to transcribe original media where needed. It creates no new voice sessions and does not change the agent or voice. Synthetic narration jobs are retired. `GLOO_API_KEY` is optional for written-story editing; without it, complete source-text drafts are saved. Film enqueue limits remain durable per collection. Resend, Lob, `ADMIN_SECRET`, `CRON_SECRET`, and OpenAI are not required by this worker and should not be copied to it unnecessarily. Only the successful four-film attachment queues the owner review-ready notification; the separate protected delivery service sends it. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
 
 Set restart policy Always on a plan that supports it. Configure a bounded termination grace period, for example 60 seconds, and avoid overlapping replicas. A long render may exceed the grace period. Persisted leases and original-job retries provide recovery, not a promise that every deployment finishes the current render. Unfinished AI narration jobs cannot be retried under the current policy; their retirement preserves completed artifacts.
 

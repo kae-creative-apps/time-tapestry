@@ -220,7 +220,7 @@ export function SourceArchive({
         </span>
       </summary>
       <p className="mt-2 max-w-3xl text-sm leading-7 text-ink-500">
-        These are your unedited recordings. They may include the interviewer and
+        These are your unedited recordings. They may include spoken questions and
         other answers. Your finished story films are separate versions and do
         not replace these originals.
       </p>

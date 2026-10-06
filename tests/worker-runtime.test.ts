@@ -30,6 +30,7 @@ const configured = (): Record<string, string | undefined> => ({
   KV_REST_API_TOKEN: "synthetic-kv-secret",
   BLOB_READ_WRITE_TOKEN: "synthetic-blob-secret",
   ELEVENLABS_API_KEY: "synthetic-elevenlabs-secret",
+  ELEVENLABS_AGENT_ID: "synthetic-existing-agent",
   SECURITY_HASH_SECRET: "synthetic-hash-secret",
   NEXT_PUBLIC_APP_URL: "https://app.example.org",
   COLLECTION_DATA_DIR: path.join(os.tmpdir(), "synthetic-worker-data"),
@@ -61,7 +62,7 @@ test("Railway and the explicit hosted flag enable fail-closed startup", () => {
 test("empty and partially configured hosted workers reject every required setting", () => {
   assert.throws(
     () => resolveFilmWorkerConfig({ STORY_FILM_WORKER_HOSTED: "true" }),
-    /KV_REST_API_URL.*KV_REST_API_TOKEN.*BLOB_READ_WRITE_TOKEN.*ELEVENLABS_API_KEY.*SECURITY_HASH_SECRET.*NEXT_PUBLIC_APP_URL.*COLLECTION_DATA_DIR/,
+    /KV_REST_API_URL.*KV_REST_API_TOKEN.*BLOB_READ_WRITE_TOKEN.*ELEVENLABS_API_KEY.*ELEVENLABS_AGENT_ID.*SECURITY_HASH_SECRET.*NEXT_PUBLIC_APP_URL.*COLLECTION_DATA_DIR/,
   );
   for (const name of Object.keys(configured()).filter(
     (name) => name !== "STORY_FILM_WORKER_HOSTED",

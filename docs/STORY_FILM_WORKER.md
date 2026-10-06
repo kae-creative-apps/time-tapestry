@@ -2,7 +2,9 @@
 
 Current operations, October 5, 2026. [Recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) and [editing rules v2](../video/STORY_EDITING_RULES_v2.md) supersede earlier narration instructions and archived generated-voice previews.
 
-All new story films use the storyteller's own recorded microphone audio and camera video. After written drafts are saved and processing consent is recorded, a durable job transcribes the actual source recordings with ElevenLabs Scribe v2. It matches saved user answers to word timestamps, assembles all four themes, levels an audio copy with ffmpeg, adds source-timed captions and the branded title and closer, and attaches the four films together. It never clones a personal voice, modifies an original, or uses transcript arrival times as cuts.
+All new story films use the storyteller's own recorded microphone audio and camera video. Finishing a conversation first stops and saves the original recordings, then submits a consented durable preparation job. The browser can close after that job is saved. Preparation recovers any missing transcript turns from the authenticated saved ElevenLabs conversation, preserves existing raw words and recordings, and verifies that all four areas have saved words backed by original media. Missing areas stop for attention. It does not invent answers or silently substitute another take.
+
+Preparation saves four written stories and four postcard note drafts before queuing the original-film job. Gloo editing is optional; without Gloo, the complete saved source text is used. The film job transcribes the actual source recordings with ElevenLabs Scribe v2, matches saved user answers to word timestamps, assembles all four themes, levels an audio copy with ffmpeg, adds source-timed captions and the branded title and closer, and attaches the four films together. It never clones a personal voice, modifies an original, or uses transcript arrival times as cuts. Postcard notes are drafts only, not print approval or permission to dispatch mail.
 
 All four finished films still need the owner's final approval of their exact output hashes before sharing. The end-user review submits those hashes in one final approval rather than editing and saving four written stories. Successful attachment queues one owner review-ready notification. The protected delivery job sends it. It does not send family links before approval.
 
@@ -30,7 +32,9 @@ npm run video:films -- --job=film_HASH
 
 | Variable | Purpose |
 | --- | --- |
-| `ELEVENLABS_API_KEY` | Server-only Scribe transcription access. Manual reviewed original cuts do not need it. |
+| `ELEVENLABS_API_KEY` | Server-only access to saved conversation transcripts and Scribe source transcription. Manual reviewed original cuts do not need it. Required for hosted preparation. |
+| `ELEVENLABS_AGENT_ID` | The website's existing conversation agent, used to verify that saved transcripts belong to the recorded interview. Required for hosted preparation. It does not select a narration voice. |
+| `GLOO_API_KEY` | Optional written-story editing. If absent, preparation saves complete source-text drafts. |
 | `COLLECTION_DATA_DIR` | Local store or hosted working volume. Local web and worker processes must share the same absolute directory. Hosted web and worker share KV and private Blob; only the worker needs its persistent scratch volume. Local default `.data/collections`. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Shared hosted metadata and durable job storage. |
 | `BLOB_READ_WRITE_TOKEN` | Private media storage, required with shared KV or Vercel. |
@@ -43,7 +47,7 @@ npm run video:films -- --job=film_HASH
 
 The renderer uses `public/brand/fonts/quicksand-latin.woff2`. A temporary localhost server exposes only that job's verified assets through unguessable paths, not a private directory.
 
-The website still needs its existing `ELEVENLABS_AGENT_ID` for the live interviewer. It is not a worker narration setting under the current policy. Older narration model settings and snapshotted voices belong to archived artifacts, not new original-recording jobs.
+The website and worker use the same existing `ELEVENLABS_AGENT_ID`. Recovery only reads the saved conversation and verifies its agent, collection and interview session. It does not start a new conversation or change the agent, voice or model. Resend and Lob remain responsibilities of the protected delivery service. Older narration model settings and snapshotted voices belong to archived artifacts, not new original-recording jobs.
 
 ## Automatic editing and its limits
 
@@ -57,7 +61,11 @@ The normal portal does not require clip selection. The owner-authenticated origi
 
 ## Jobs, version fences and recovery
 
-`GET /api/collection/:id/films?key=OWNER_KEY` returns job progress, mode, preparation method and availability. Automatic jobs have `mode: original` and `preparation: automatic`, with stages `queued`, `transcribing`, `matching`, `preparing`, `rendering`, `ready`, `failed` or `stale`. `POST` action `prepare_automatic` requires `processingApproved: true`. `retry_automatic` requires the same consent and `jobId`. Collection draft generation can enqueue directly after saving, so closing the browser does not abandon preparation.
+Owner-authenticated `POST /api/collection/:id` action `submit_interview` requires `processingApproved: true` and a saved original recording. It returns HTTP 202 only after the preparation record, collection status and queue registry are persisted. It deliberately does not require all four browser transcript areas at acceptance, because authenticated provider recovery happens in the worker. Repeated submissions reuse the current source version. `retry: true` can retry recoverable preparation or downstream original-film failures within their limits.
+
+Owner-only `GET /api/collection/:id/preparation` returns `queued`, `preparing`, `films_queued` or `needs_attention`, with actual missing areas when applicable. Its `ready` flag requires all four current original films to be attached, rather than a configured or healthy worker. Private snapshots and leases are not exposed. Preparation leases expire after two minutes, renew every thirty seconds, and permit at most three preparation attempts. Saved recovery and written drafts are reused on interrupted jobs; a missing-area retry can read a later completed provider transcript.
+
+`GET /api/collection/:id/films?key=OWNER_KEY` still returns film progress, mode, preparation method and availability. Automatic jobs have `mode: original` and `preparation: automatic`, with stages `queued`, `transcribing`, `matching`, `preparing`, `rendering`, `ready`, `failed` or `stale`. The owner-authenticated recovery actions `prepare_automatic` and `retry_automatic` retain their explicit processing consent requirements.
 
 New original-recording jobs use a latest-version fence. Versions cover current chapter content, source selections, original metadata, presentation settings and template version. A newer job or changed source prevents an older worker from attaching. All four outputs attach atomically and reset each exact-output review. Historical narration fields remain readable for preservation, not as permission to restart retired work.
 

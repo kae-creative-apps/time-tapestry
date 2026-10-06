@@ -522,7 +522,7 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                     {ch.film?.narrationKind === "original_recording"
                       ? " · Original voice or video"
                       : ch.film
-                        ? " · AI interviewer narration"
+                        ? " · AI narration"
                         : ""}
                   </p>
                 </article>
@@ -539,7 +539,7 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                   {session.turns.map((turn) => (
                     <div key={turn.id} className="mt-4">
                       <p className="text-sm font-medium text-ink-600">
-                        {turn.role === "agent" ? "Interviewer" : "Storyteller"}
+                        {turn.role === "agent" ? "Question" : "Storyteller"}
                         {session.excludedTurnIds.includes(turn.id)
                           ? " · Excluded from story"
                           : ""}

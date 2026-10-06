@@ -1,4 +1,5 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { stripConversationPerformanceCues } from "./collection/conversation-copy";
 
 const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
 
@@ -38,7 +39,7 @@ const finite = (value: unknown, fallback: number, min: number, max: number) =>
 export async function resolveInterviewerVoice(): Promise<InterviewerVoice> {
   if (!elevenlabs || !interviewerVoiceConfigured())
     throw new Error(
-      "The interviewer voice is not configured. Your written questions and original recordings are still available.",
+      "The voice is not configured. Your written questions and original recordings are still available.",
     );
   // Realtime agent models may require a different transport. Keep one explicit,
   // supported REST model for both read-aloud and film narration, never another voice.
@@ -60,12 +61,12 @@ export async function resolveInterviewerVoice(): Promise<InterviewerVoice> {
     agent = await elevenlabs.conversationalAi.agents.get(agentId);
   } catch {
     throw new Error(
-      "The interviewer voice could not be verified. Please try again.",
+      "The voice could not be verified. Please try again.",
     );
   }
   const tts = agent.conversationConfig.tts;
   if (!tts?.voiceId?.trim())
-    throw new Error("The configured interviewer has no narration voice.");
+    throw new Error("The conversation has no narration voice configured.");
   return {
     agentId,
     voiceId: tts.voiceId,
@@ -84,11 +85,14 @@ export async function streamTextToSpeech(
   text: string,
   beforeGenerate: () => Promise<void>,
 ): Promise<ReadableStream<Uint8Array>> {
+  const spokenText = stripConversationPerformanceCues(text);
+  if (!spokenText.trim())
+    throw new Error("There is no question to read.");
   const voice = await resolveInterviewerVoice();
   // Verify the current voice before consuming the shared paid-provider allowance.
   await beforeGenerate();
   const response = await elevenlabs!.textToSpeech.stream(voice.voiceId, {
-    text,
+    text: spokenText,
     modelId: voice.modelId,
     voiceSettings: voice.settings,
   });

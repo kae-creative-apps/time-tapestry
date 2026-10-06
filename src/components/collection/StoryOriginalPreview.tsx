@@ -208,7 +208,7 @@ export function StoryOriginalPreview({
             />
             <p className="mt-3 text-sm leading-7 text-ink-500">
               {selected.fromInterview
-                ? "This plays the full saved segment. It may include the interviewer and other answers. It has not been trimmed into an edited story."
+                ? "This plays the full saved segment. It may include spoken questions and other answers. It has not been trimmed into an edited story."
                 : "This plays your complete saved answer, including any pauses. Your written corrections do not change this recording."}
             </p>
           </div>

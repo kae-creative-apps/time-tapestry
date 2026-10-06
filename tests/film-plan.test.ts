@@ -17,7 +17,7 @@ test("narration includes the full reviewed story verbatim with an AI disclosure"
   const c = syntheticFilmCollection();
   for (const [i, chapter] of filmChapters(c).entries()) {
     assert.ok(chapter.script.endsWith(c.chapters[i].content));
-    assert.match(chapter.script, /AI interviewer/);
+    assert.match(chapter.script, /read by an AI voice/);
     assert.equal(chapter.scriptSha256, sha256(chapter.script));
     assert.deepEqual(chapter.sourceTakeIds, c.chapters[i].sourceTakeIds);
   }

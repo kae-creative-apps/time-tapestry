@@ -227,7 +227,7 @@ test("session endpoint authenticates owners and keeps token responses out of cac
   const unavailable = await request(c, c.ownerKey);
   assert.equal(unavailable.status, 503);
   assert.equal(unavailable.body.configured, false);
-  assert.match(unavailable.body.error, /not connected/);
+  assert.match(unavailable.body.error, /voice connection is not available/i);
   assert.match(unavailable.headers.get("cache-control") || "", /no-store/);
   assert.equal(unavailable.headers.get("referrer-policy"), "no-referrer");
   assert.equal(
@@ -331,6 +331,7 @@ test("alternative connection is owner-only, validated, and returns a signed WebS
 
 test("resume includes all accepted user turns and selected originals, never agent claims", () => {
   const c = collection();
+  c.storyteller.name = "Tayloe Hansen";
   c.interviews = [interview()];
   c.takes = [
     {
@@ -361,12 +362,29 @@ test("resume includes all accepted user turns and selected originals, never agen
     ],
   );
   assert.equal(context.currentThemeId, "q2");
+  assert.equal(context.storytellerName, "Tayloe");
+  assert.equal(c.storyteller.name, "Tayloe Hansen");
   assert.equal(context.contextOmittedEntries, 0);
   const serialized = JSON.stringify(context);
   assert.equal(serialized.includes("Paris"), false);
   assert.equal(serialized.includes("private-recipient@example.com"), false);
   assert.equal(serialized.includes(c.ownerKey), false);
   assert.equal(serialized.includes(c.invitationNote), false);
+});
+
+test("spoken address uses an available first name without changing stored contact names", () => {
+  const c = collection();
+  c.storyteller.name = "  Tayloe   Hansen  ";
+  c.recipient.name = "Anna Example";
+  assert.equal(buildInterviewContext(c).storytellerName, "Tayloe");
+  assert.equal(buildInterviewContext(c).recipientName, "Anna Example");
+  assert.equal(c.storyteller.name, "  Tayloe   Hansen  ");
+
+  Object.assign(c.storyteller, { firstName: "Tay" });
+  assert.equal(buildInterviewContext(c).storytellerName, "Tay");
+  Object.assign(c.storyteller, { firstName: "" });
+  c.storyteller.name = "   ";
+  assert.equal(buildInterviewContext(c).storytellerName, "");
 });
 
 test("story content stays in serialized data, separate from the fixed system prompt", () => {
@@ -455,14 +473,21 @@ test("mocked provider session returns only a short-lived token and actual durati
   process.env.ELEVENLABS_AGENT_ID = "agent_test";
   try {
     const c = collection();
-    const result = await createInterviewSession(c, c.ownerKey, undefined, {
+    c.storyteller.name = "Tayloe Hansen";
+    const provider = {
       getAgent: async () => agent(),
       getTool: noToolLookup,
       getToken: async () => ({
         token: "short-lived-test-token",
         conversationId: "provider-conversation-test",
       }),
-    });
+    };
+    const result = await createInterviewSession(
+      c,
+      c.ownerKey,
+      undefined,
+      provider,
+    );
     assert.equal(result.conversationToken, "short-lived-test-token");
     assert.equal(result.maxDurationSeconds, 2700);
     assert.equal(result.resumed, false);
@@ -471,8 +496,35 @@ test("mocked provider session returns only a short-lived token and actual durati
       JSON.stringify(result).includes(process.env.ELEVENLABS_API_KEY),
       false,
     );
-    assert.match(result.overrides.agent.firstMessage, /AI interviewer/);
+    assert.equal(
+      result.overrides.agent.firstMessage,
+      "Take your time. Tell me about a moment when someone's kindness made a difference in your life.",
+    );
     assert.equal(result.overrides.agent.prompt.prompt, INTERVIEW_AGENT_PROMPT);
+    assert.equal(
+      JSON.parse(result.dynamicVariables.interview_context_json)
+        .storytellerName,
+      "Tayloe",
+    );
+    c.interviews = [interview()];
+    const resumed = await createInterviewSession(
+      c,
+      c.ownerKey,
+      "interview-test-01",
+      provider,
+    );
+    assert.equal(resumed.resumed, true);
+    assert.equal(resumed.currentThemeId, "q2");
+    assert.equal(
+      resumed.overrides.agent.firstMessage,
+      "Welcome back. What would you like to pick up from here?",
+    );
+    assert.equal(
+      JSON.parse(resumed.dynamicVariables.interview_context_json)
+        .storytellerName,
+      "Tayloe",
+    );
+    assert.equal(c.storyteller.name, "Tayloe Hansen");
     await assert.rejects(
       createInterviewSession(c, c.ownerKey, undefined, {
         getAgent: async () => {
