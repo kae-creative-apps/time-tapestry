@@ -35,12 +35,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; mediaId: string }> },
 ) {
-  if (!adminAuthorized(req))
-    return new NextResponse("Unauthorized", {
-      status: 401,
-      headers: adminReadHeaders,
-    });
   try {
+    if (!(await adminAuthorized(req)))
+      return new NextResponse("Unauthorized", {
+        status: 401,
+        headers: adminReadHeaders,
+      });
     const { id, mediaId } = await params;
     if (![id, mediaId].every((value) => /^[a-zA-Z0-9_-]{8,80}$/.test(value)))
       return new NextResponse("Recording not found", {

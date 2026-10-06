@@ -159,6 +159,21 @@ async function main() {
       );
     }
   }
+  for (const clip of plan.clips) {
+    if ((clip.audioFadeInMs || clip.audioFadeOutMs) && !clip.audioDerivative)
+      throw new Error("A cleaned source cut is missing its sample-smoothed audio.");
+    if (clip.audioDerivative) {
+      const derivative = clip.audioDerivative;
+      if (assetFiles.has(derivative.assetId))
+        throw new Error("A cut audio asset ID conflicts with another source.");
+      assetFiles.set(derivative.assetId, await verify(
+        derivative.relativePath,
+        derivative.sha256,
+        derivative.sampleCount / derivative.sampleRate * 1000,
+        "audio",
+      ));
+    }
+  }
   if (plan.brandCloser)
     assetFiles.set(
       "brand-closer",
@@ -275,6 +290,9 @@ async function main() {
       throw new Error("Rendered duration failed QA");
     if (!metadata.types.includes("video"))
       throw new Error("Rendered file has no video stream");
+    if (plan.clips.some(clip => clip.kind === "audio" || clip.kind === "video") &&
+        !metadata.types.includes("audio"))
+      throw new Error("Rendered recording has no audio stream");
     const outputHash = await sha256(actualOutput);
     const result = {
       schemaVersion: 1,
@@ -297,6 +315,7 @@ async function main() {
         sourceHashes: "passed",
         localOriginalArchive: "passed",
         videoStream: "passed",
+        audioStream: metadata.types.includes("audio") ? "passed" : "not-applicable",
       },
       humanReview: { status: "pending", checklist: VIDEO_REVIEW_CHECKLIST },
       releaseEligible: false,

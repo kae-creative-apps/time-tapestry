@@ -17,7 +17,7 @@ const bytes = (n: number) =>
     : `${(n / 1024 ** 2).toFixed(1)} MiB`;
 const date = (s: string) => new Date(s).toLocaleString();
 const button =
-  "inline-flex min-h-12 items-center justify-center rounded-full border border-warmgray-300 bg-white px-5 py-3 text-base font-medium hover:bg-sage-100 disabled:opacity-50";
+  "inline-flex min-h-[52px] items-center justify-center rounded-full border border-warmgray-300 bg-white px-5 py-3 text-base font-medium hover:bg-sage-100 disabled:opacity-50";
 const panel = "rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7";
 
 function useAdminData<T>(url: string, returnPath: string) {
@@ -267,7 +267,18 @@ export function CollectionAdminList() {
                   <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-600">
                     <span>{item.mediaCount} saved files</span>
                     <span>{bytes(item.usage.usedBytes)} stored</span>
+                    <span>
+                      {item.submittedAt
+                        ? `Submitted ${date(item.submittedAt)}`
+                        : "Interview not submitted"}
+                    </span>
+                    <span>
+                      Preparation: {item.preparationStatus || "not started"}
+                    </span>
                     <span>Films: {item.filmStatus || "not started"}</span>
+                    {item.livingMomentCount > 0 && (
+                      <span>{item.livingMomentCount} new moments</span>
+                    )}
                     <span>Updated {date(item.updatedAt)}</span>
                   </div>
                   {item.failureCount > 0 && (
@@ -382,10 +393,40 @@ function RecordingRow({
 }
 
 export function CollectionAdminDetail({ id }: { id: string }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryMessage, setRetryMessage] = useState("");
   const { data, loading, error, reload } = useAdminData<Detail>(
     `/api/admin/collections/${id}`,
     `/admin/collections/${id}`,
   );
+  async function retryPreparation() {
+    if (!data || retrying) return;
+    setRetrying(true);
+    setRetryMessage("");
+    try {
+      const response = await fetch(`/api/admin/collections/${id}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "retry_preparation",
+          expectedUpdatedAt: data.collection.updatedAt,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error || "Preparation could not be queued.");
+      setRetryMessage(
+        "Preparation queued from the saved originals. Refresh to check progress.",
+      );
+      reload();
+    } catch (error) {
+      setRetryMessage(
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }
   return (
     <div className="min-h-screen bg-paper">
       <AdminNav />
@@ -439,7 +480,41 @@ export function CollectionAdminDetail({ id }: { id: string }) {
               contain private access keys.
             </p>
             <section className={`${panel} mt-7`}>
-              <h2 className="text-xl">Processing and storage</h2>
+              <h2 className="text-xl">Submission and preparation</h2>
+              <p className="mt-3 leading-7">
+                {data.operations.submittedAt
+                  ? `Submitted ${date(data.operations.submittedAt)}. ${data.operations.preparation?.ready ? "All four recorded films are ready." : `Preparation: ${data.operations.preparation?.status || "check needed"}.`}`
+                  : "This interview has not been submitted for processing."}
+              </p>
+              {data.operations.preparation?.error && (
+                <p role="alert" className="mt-4 rounded-xl bg-clay-50 p-4">
+                  {data.operations.preparation.error}
+                </p>
+              )}
+              {data.operations.retryAvailable && (
+                <div className="mt-4">
+                  <p className="mb-3 text-sm leading-6 text-ink-600">
+                    Retry only after checking the reported cause. This queues
+                    the existing approved processing request and preserves the
+                    original files.
+                  </p>
+                  <button
+                    className={button}
+                    disabled={retrying}
+                    onClick={retryPreparation}
+                  >
+                    {retrying
+                      ? "Queueing…"
+                      : "Retry saved interview preparation"}
+                  </button>
+                </div>
+              )}
+              {retryMessage && (
+                <p role="status" className="mt-4 leading-7">
+                  {retryMessage}
+                </p>
+              )}
+              <h3 className="mt-6 text-lg">Processing and storage</h3>
               <div className="mt-4 grid gap-5 sm:grid-cols-3">
                 <div>
                   <p className="text-sm text-ink-600">Originals and films</p>
@@ -486,6 +561,83 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                 </ul>
               )}
             </section>
+            <section className={`${panel} mt-5`}>
+              <h2 className="text-xl">Story book</h2>
+              <p className="mt-3 leading-7">
+                {data.operations.book.status === "ready"
+                  ? "The approved four-chapter book is generated on download."
+                  : data.operations.book.status === "draft"
+                    ? "A branded draft book is available for a private check. It is marked as a draft."
+                    : data.operations.book.reason}
+              </p>
+              {data.operations.book.status !== "unavailable" && (
+                <a
+                  className={`${button} mt-4`}
+                  href={`/api/admin/collections/${id}/book`}
+                >
+                  {data.operations.book.status === "draft"
+                    ? "Download draft PDF"
+                    : "Download approved PDF"}
+                </a>
+              )}
+            </section>
+            {data.collection.livingStory && (
+              <section className={`${panel} mt-5`}>
+                <h2 className="text-xl">New family moments</h2>
+                <p className="mt-3 leading-7">
+                  {
+                    data.collection.livingStory.batches.filter(
+                      (batch) => !batch.closedAt,
+                    ).length
+                  }{" "}
+                  open request batches. New moments stay separate from the
+                  original four chapters.
+                </p>
+                {data.collection.livingStory.moments.map((moment) => (
+                  <div
+                    key={moment.id}
+                    className="mt-4 border-t border-warmgray-200 pt-4"
+                  >
+                    <h3 className="text-lg">{moment.title}</h3>
+                    <p className="mt-2 text-sm">
+                      {moment.status} · {moment.kind || "No recording yet"} ·{" "}
+                      {date(moment.createdAt)}
+                    </p>
+                    {moment.sourceMediaId && (
+                      <p className="mt-2 text-sm">
+                        Original file: {moment.sourceMediaId}
+                      </p>
+                    )}
+                    {moment.videoMediaId && (
+                      <p className="mt-2 text-sm">
+                        Edited film: {moment.videoMediaId}
+                      </p>
+                    )}
+                    {moment.processing && (
+                      <p className="mt-2 text-sm">
+                        Processing: {moment.processing.state} ·{" "}
+                        {moment.processing.attempts} attempts
+                      </p>
+                    )}
+                    {moment.processingError && (
+                      <p role="alert" className="mt-2 text-oxblood">
+                        {moment.processingError}
+                      </p>
+                    )}
+                    {moment.content && (
+                      <details className="mt-3">
+                        <summary className="min-h-[52px] cursor-pointer">
+                          Written chapter
+                        </summary>
+                        <p className="whitespace-pre-wrap leading-7">
+                          {moment.content}
+                        </p>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
             <section className={`${panel} mt-5`}>
               <h2 className="text-xl">Saved recordings</h2>
               <p className="mt-2 text-base leading-7 text-ink-600">
@@ -591,26 +743,70 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                 </p>
               )}
               <h3 className="mt-6 text-lg">Email status</h3>
+              <p className="mt-2 text-sm leading-6 text-ink-600">
+                Sent means accepted by the email provider. It does not confirm
+                that a person opened the message.
+              </p>
               {data.collection.notifications.map((n) => (
                 <div key={n.id} className="mt-3 rounded-xl bg-paper p-4">
                   <p>{n.subject}</p>
                   <p className="mt-1 text-sm">
                     {n.status} · Due {date(n.dueAt)}
                   </p>
+                  <p className="mt-1 break-words text-sm">
+                    To {n.to} · {n.attempts} attempt
+                    {n.attempts === 1 ? "" : "s"}
+                    {n.nextAttemptAt ? ` · Next ${date(n.nextAttemptAt)}` : ""}
+                  </p>
+                  {n.providerId && (
+                    <p className="mt-1 break-all text-sm">
+                      Provider reference: {n.providerId}
+                    </p>
+                  )}
+                  {n.reconciliationRequired && (
+                    <p className="mt-2 font-medium">
+                      Provider reconciliation required before any resend.
+                    </p>
+                  )}
                   {n.error && <p className="mt-2 text-oxblood">{n.error}</p>}
                 </div>
               ))}
               <h3 className="mt-6 text-lg">Postcard status</h3>
+              <p className="mt-2 leading-7">
+                {data.operations.delivery.ready
+                  ? "Live mailing configuration is ready. Provider status below is the delivery record."
+                  : "Mailing is on hold."}
+              </p>
+              {!data.operations.delivery.ready && (
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm">
+                  {data.operations.delivery.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
               {data.collection.deliveries.length ? (
                 data.collection.deliveries.map((d) => (
                   <p key={d.chapterId} className="mt-3 leading-7">
                     {d.chapterId}: {d.status}, {date(d.scheduledFor)}
+                    {d.providerId ? ` · Lob reference: ${d.providerId}` : ""}
+                    {d.nextAttemptAt
+                      ? ` · Next attempt ${date(d.nextAttemptAt)}`
+                      : ""}
+                    {d.reconciliationRequired
+                      ? " · Reconcile the existing Lob request before any resend."
+                      : ""}
                     {d.error ? `. ${d.error}` : ""}
                   </p>
                 ))
               ) : (
                 <p className="mt-2 text-ink-600">No postcards scheduled.</p>
               )}
+              <h3 className="mt-6 text-lg">Recovery guidance</h3>
+              <ul className="mt-3 list-disc space-y-3 pl-5 leading-7">
+                {data.operations.recovery.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
             </details>
           </>
         )}

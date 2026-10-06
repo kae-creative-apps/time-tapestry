@@ -1,4 +1,3 @@
-import { createAdminSession } from "../src/lib/admin-auth";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -91,7 +90,7 @@ for (const route of legacyRoutes) {
         params: Promise.resolve({ id: "legacy-session" }),
       });
       assert.equal(response.status, 401, credential);
-      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.match(response.headers.get("cache-control") || "", /no-store/);
       assert.match((await response.json()).error, /admin access/i);
       assert.equal(
         request.bodyUsed,
@@ -119,7 +118,8 @@ test("legacy guard delegates an authenticated request once and preserves its arg
   const request = new NextRequest("http://localhost/api/archived-tool", {
     method: "POST",
     headers: {
-      cookie: `admin_token=${createAdminSession()}`,
+      cookie: await verifiedRecipientCookie("team@foronestudios.com"),
+      origin: "http://localhost",
       "content-type": "application/json",
     },
     body: JSON.stringify({ message: "An authenticated archived operation" }),
@@ -132,7 +132,7 @@ test("legacy guard delegates an authenticated request once and preserves its arg
   assert.equal(calls, 1);
 });
 
-test("legacy guard fails closed when no admin secret is configured", async () => {
+test("legacy guard rejects the retired shared-secret cookie whether or not it is configured", async () => {
   const saved = process.env.ADMIN_SECRET;
   let calls = 0;
   const guarded = withLegacyAdmin(async (_request: NextRequest) => {
@@ -309,14 +309,15 @@ for (const route of ["interview/turn", "story/generate"]) {
     const request = new NextRequest(`http://localhost/api/${route}`, {
       method: "POST",
       headers: {
-        cookie: `admin_token=${createAdminSession()}`,
+        cookie: await verifiedRecipientCookie("team@foronestudios.com"),
+        origin: "http://localhost",
         "content-type": "application/json",
       },
       body: "invalid-json",
     });
     const response = await POST(request);
     assert.equal(response.status, 410);
-    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("cache-control") || "", /no-store/);
     assert.match((await response.json()).error, /retired/);
     assert.equal(request.bodyUsed, false);
     assert.equal(externalRequests, 0);

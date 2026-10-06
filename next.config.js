@@ -9,6 +9,11 @@ const nextConfig = {
       "./public/brand/fonts/NotoSansCJKsc-Regular.otf",
       "./public/brand/time-tapestry-lockup.png",
     ],
+    "/api/admin/collections/*/book": [
+      "./public/brand/fonts/quicksand-print-medium-v1.ttf",
+      "./public/brand/fonts/NotoSansCJKsc-Regular.otf",
+      "./public/brand/time-tapestry-lockup.png",
+    ],
   },
   experimental: {
     serverActions: { bodySizeLimit: "50mb" },

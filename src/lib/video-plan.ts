@@ -61,6 +61,8 @@ export type ChapterVideoPlan = {
   chapterNumber: 1 | 2 | 3 | 4;
   revision: number;
   title: string;
+  /** Living-story question shown in a readable, silent opening card. */
+  promptQuestion?: string;
   storytellerName: string;
   sources: VideoSource[];
   clips: VideoClip[];
@@ -139,9 +141,23 @@ export function clipFrames(clip: VideoClip): number {
   return clipTiming(clip).durationFrames;
 }
 
+export function chapterIntroSeconds(
+  plan: Pick<ChapterVideoPlan, "promptQuestion">,
+): number {
+  if (!plan.promptQuestion) return VIDEO_INTRO_SECONDS;
+  // Allow unhurried reading before the storyteller's own voice begins.
+  return Math.min(
+    12,
+    Math.max(
+      6,
+      Math.ceil(plan.promptQuestion.trim().split(/\s+/u).length / 2.5 + 1),
+    ),
+  );
+}
+
 export function chapterDurationFrames(plan: ChapterVideoPlan): number {
   return (
-    (VIDEO_INTRO_SECONDS + VIDEO_CLOSER_SECONDS) * VIDEO_FPS +
+    (chapterIntroSeconds(plan) + VIDEO_CLOSER_SECONDS) * VIDEO_FPS +
     plan.clips.reduce((sum, clip) => sum + clipFrames(clip), 0)
   );
 }
@@ -194,6 +210,14 @@ export function validateVideoPlan(
     Number(input.chapterNumber) > 4
   )
     return fail("chapterNumber must be 1 to 4");
+  if (
+    input.promptQuestion !== undefined &&
+    (!nonempty(input.promptQuestion, 220) ||
+      /[\x00-\x1f]/.test(String(input.promptQuestion)))
+  )
+    return fail(
+      "promptQuestion is missing, too long, or contains control characters",
+    );
   if (!Number.isInteger(input.revision) || Number(input.revision) < 1)
     return fail("revision must be positive");
   if (!Array.isArray(input.sources) || input.sources.length > 500)

@@ -20,6 +20,7 @@ function fixture(text: string) {
     startMs: 200 + index * 600,
     endMs: 400 + index * 600,
     speakerId: "storyteller",
+    languageCode: "eng",
   }));
   const clip = {
     mediaId: "source_123",
@@ -35,8 +36,21 @@ const captionText = (result: ReturnType<typeof cleanSourcePassage>) =>
     .map((caption) => caption.text)
     .join(" ");
 
+test("lexical filler removal needs a confirmed English source language", () => {
+  for (const languageCode of [undefined, "deu", "por"]) {
+    const { words, clip } = fixture("Wir treffen uns um sieben vor dem Haus.");
+    words.forEach((word) => {
+      word.languageCode = languageCode;
+    });
+    assert.deepEqual(cleanSourcePassage(clip, words), {
+      clips: [clip],
+      removed: [],
+    });
+  }
+});
+
 test("isolated timestamped fillers create real retained source ranges, with safe fades and retained captions", () => {
-  for (const filler of ["um,", "UMMM...", "uh;", "erm,"]) {
+  for (const filler of ["um,", "Ummm...", "uh;", "erm,"]) {
     const { words, clip } = fixture(
       `I remember the ${filler} blue notebook beside our window.`,
     );
@@ -86,6 +100,7 @@ test("isolated timestamped fillers create real retained source ranges, with safe
 
 test("meaningful responses, language, repetition and quoted or reported fillers stay intact", () => {
   for (const sentence of [
+    "My daughter studied at UM before moving back home.",
     "I like the blue notebook you know so well.",
     "I remember hmm the blue notebook beside our window.",
     "I remember uh-huh the blue notebook beside our window.",

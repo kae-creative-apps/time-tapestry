@@ -11,8 +11,10 @@ import {
 } from "@/lib/interview-state";
 import type { AnswerTake, CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
-import { getTakeBlob, listLocalTakes } from "@/lib/collection/local-takes";
+import { listLocalTakes } from "@/lib/collection/local-takes";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { interviewReviewPath } from "@/lib/collection/interview-recording-review";
+import { requireInterviewReviewBackup } from "@/lib/collection/interview-review-backup";
 import SavedRecorder from "./SavedRecorder";
 import {
   interviewResumeState,
@@ -239,6 +241,7 @@ export default function Interview({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedChapter = searchParams.get("chapter");
+  const returnToReview = searchParams.get("returnToReview") === "1";
   const endpoint = `/api/collection/${encodeURIComponent(collectionId)}`;
   const query = `?key=${encodeURIComponent(accessKey)}`;
   const [collection, setCollection] = useState<CollectionView | null>(null);
@@ -536,38 +539,8 @@ export default function Interview({
     setError("");
     stopSpeaking();
     try {
-      const local = await listLocalTakes(collectionId);
-      const candidates = local.filter(
-        (take) =>
-          take.state !== "backed_up" &&
-          !collection?.takes.some((saved) => saved.id === take.id),
-      );
-      const checked = await Promise.all(
-        candidates.map(async (take) => {
-          try {
-            return (await getTakeBlob(take)).size ? take : null;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const pending = checked.filter((take): take is NonNullable<typeof take> =>
-        Boolean(take),
-      );
-      if (pending.length) {
-        const places = [
-          ...new Set(
-            pending.map(
-              (take) =>
-                `part ${take.questionId[1]}, ${take.kind === "voice" ? "Audio only" : "Video with sound"}`,
-            ),
-          ),
-        ].join("; ");
-        throw new Error(
-          `You have ${pending.length} recording${pending.length === 1 ? "" : "s"} saved only on this device (${places}). Open those answers and back them up before preparing your story.`,
-        );
-      }
       const latest = await load();
+      await requireInterviewReviewBackup(latest);
       const missing = interviewResumeState(latest).missingChapterIds;
       if (missing.length) {
         await goTo(CHAPTERS.findIndex((chapter) => chapter.id === missing[0]));
@@ -592,6 +565,26 @@ export default function Interview({
         error instanceof Error
           ? error.message
           : "Your draft could not be prepared yet.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openRecordingReview() {
+    if (allBusy) return;
+    setBusy(true);
+    setError("");
+    stopSpeaking();
+    try {
+      const latest = await load();
+      await requireInterviewReviewBackup(latest);
+      router.push(interviewReviewPath(collectionId, accessKey, chapter.id));
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Finish saving this recording before returning to your recordings.",
       );
     } finally {
       setBusy(false);
@@ -695,6 +688,23 @@ export default function Interview({
           />
         </div>
       </header>
+      {returnToReview && (
+        <div className="mt-6 rounded-xl border border-warmgray-200 bg-paper-100 p-5">
+          <p className="text-base leading-7">
+            Record this part again when you are ready. Your earlier answer stays
+            selected until the new recording is backed up. All original
+            recordings are kept.
+          </p>
+          <button
+            type="button"
+            className={`${secondary} mt-4`}
+            disabled={allBusy}
+            onClick={() => void openRecordingReview()}
+          >
+            Return to your recordings
+          </button>
+        </div>
+      )}
       <nav
         aria-label="Interview parts"
         className="mt-7 grid grid-cols-2 gap-2 sm:grid-cols-4"
@@ -948,6 +958,16 @@ export default function Interview({
               {busy ? "Submitting recordings…" : "Finish interview"}
             </button>
           )}
+          <button
+            type="button"
+            className={secondary}
+            disabled={allBusy}
+            onClick={() => void openRecordingReview()}
+          >
+            {returnToReview
+              ? "Return to your recordings"
+              : "Listen or record again"}
+          </button>
         </div>
         {chapterIndex === CHAPTERS.length - 1 && (
           <p className="mt-3 text-base leading-7 text-ink-500">

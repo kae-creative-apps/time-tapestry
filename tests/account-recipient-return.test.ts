@@ -231,6 +231,52 @@ test("recipient sign-in stores only a validated locator and returns to it after 
       nextUrl: `/collection/${locator.collectionId}/address`,
     });
 
+    const storiesLocator = {
+      collectionId: locator.collectionId,
+      view: "stories",
+    };
+    assert.deepEqual(
+      service.normalizeRecipientLocator(storiesLocator),
+      storiesLocator,
+    );
+    assert.throws(
+      () =>
+        service.normalizeRecipientLocator({
+          ...storiesLocator,
+          chapterId: "q1",
+        }),
+      /not valid/,
+    );
+    const storiesRequest = await requestLink(
+      request("/api/account/request-link", {
+        email: "stories@example.test",
+        recipientLocator: storiesLocator,
+      }),
+    );
+    assert.equal(storiesRequest.status, 202);
+    assert.equal(providerCalls, 3);
+    const storiesNonce = storiesRequest.cookies.get("tt_login_request")!.value;
+    const storiesRecord = await store.readRecord<EmailVerification>(
+      `login-${hash(routeToken)}`,
+    );
+    assert.deepEqual(storiesRecord?.recipientLocator, storiesLocator);
+    const storiesVerified = await verify(
+      request(
+        "/api/account/verify",
+        {
+          token: routeToken,
+          nextUrl: "/admin",
+          view: "address",
+        },
+        `tt_login_request=${storiesNonce}`,
+      ),
+    );
+    assert.equal(storiesVerified.status, 200);
+    assert.deepEqual(await storiesVerified.json(), {
+      ok: true,
+      nextUrl: `/collection/${locator.collectionId}/stories`,
+    });
+
     const c = prepareCollection({
       initiationPath: "share",
       storyteller: { name: "Narrator", email: "owner@example.test" },

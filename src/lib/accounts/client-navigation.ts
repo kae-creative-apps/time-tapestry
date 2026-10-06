@@ -16,7 +16,7 @@ export function privateCollectionPath(
     : /^https?:\/\/[^/?#]+([^?#]*)/i.exec(value)?.[1];
   // Check the raw path as well: URL parsing otherwise normalizes dot segments.
   const route =
-    /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(?:\/(review|complete|address|chapter\/q[1-4]))?\/?$/;
+    /^\/(record|collection)\/([a-zA-Z0-9_-]{8,80})(?:\/(review|complete|address|stories|chapter\/q[1-4]))?\/?$/;
   const matched = rawPath && route.exec(rawPath);
   if (!matched || (matched[3] && matched[1] !== "collection")) return null;
   try {

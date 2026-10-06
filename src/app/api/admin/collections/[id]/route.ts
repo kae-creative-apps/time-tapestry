@@ -10,12 +10,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!adminAuthorized(req))
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: adminReadHeaders },
-    );
   try {
+    if (!(await adminAuthorized(req)))
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: adminReadHeaders },
+      );
     const { id } = await params;
     if (!/^[a-zA-Z0-9_-]{8,80}$/.test(id))
       return NextResponse.json(

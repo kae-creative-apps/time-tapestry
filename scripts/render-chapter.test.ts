@@ -105,3 +105,34 @@ test("refuses a source without its original archive declaration", () => {
     /preserved/,
   );
 });
+
+test("prompt question openers are bounded and included in the one-hour render limit", () => {
+  const plan = {
+    ...textPlan(),
+    promptQuestion: "What memory would you like your family to keep?",
+  };
+  const validated = validateVideoPlan(plan, { requireApproval: false });
+  assert.equal(validated.promptQuestion, plan.promptQuestion);
+  assert.equal(chapterDurationFrames(validated), 600);
+  assert.throws(
+    () =>
+      validateVideoPlan(
+        { ...plan, promptQuestion: "x".repeat(221) },
+        { requireApproval: false },
+      ),
+    /promptQuestion/,
+  );
+  assert.throws(
+    () =>
+      validateVideoPlan(
+        { ...plan, promptQuestion: "hello\nworld" },
+        { requireApproval: false },
+      ),
+    /promptQuestion/,
+  );
+  plan.clips[0].outMs = 3593000;
+  assert.throws(
+    () => validateVideoPlan(plan, { requireApproval: false }),
+    /one hour/,
+  );
+});

@@ -1,4 +1,5 @@
 import { collectionRequest } from "../collection/client-request";
+import { adminReturnPath } from "../admin-policy";
 
 export type AccountVerificationView = {
   emailHint: string;
@@ -25,9 +26,15 @@ export async function finishAccountVerification(token: string) {
     },
     20000,
   );
+  // Navigation is not authorization. The destination rechecks the verified session.
+  if (
+    typeof result.nextUrl === "string" &&
+    result.nextUrl === adminReturnPath(result.nextUrl)
+  )
+    return result.nextUrl;
   // Only server-derived, keyless recipient routes may follow sign-in.
   return typeof result.nextUrl === "string" &&
-    /^\/collection\/[a-zA-Z0-9_-]{8,80}(?:\/(?:chapter\/q[1-4]|address))?$/.test(
+    /^\/collection\/[a-zA-Z0-9_-]{8,80}(?:\/(?:chapter\/q[1-4]|address|stories))?$/.test(
       result.nextUrl,
     )
     ? result.nextUrl

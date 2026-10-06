@@ -2,10 +2,28 @@
 
 import Link from "next/link";
 import { Logo } from "./Logo";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 export function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function signOut() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/logout", { method: "POST" });
+      if (!response.ok) throw new Error();
+      router.replace("/admin/login");
+      router.refresh();
+    } catch {
+      setError("Sign-out did not finish. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
   const isAdmin = pathname?.startsWith("/admin");
 
   return (
@@ -31,15 +49,21 @@ export function AdminNav() {
             Back to site
           </Link>
           {isAdmin && (
-            <Link
-              href="/api/admin/logout"
-              className="text-warmgray-500 hover:text-oxblood"
+            <button
+              onClick={signOut}
+              disabled={busy}
+              className="min-h-[52px] text-warmgray-500 hover:text-oxblood disabled:opacity-50"
             >
-              Sign out
-            </Link>
+              {busy ? "Signing out…" : "Sign out"}
+            </button>
           )}
         </div>
       </div>
+      {error && (
+        <p role="alert" className="mx-auto max-w-6xl py-2 text-oxblood">
+          {error}
+        </p>
+      )}
     </nav>
   );
 }

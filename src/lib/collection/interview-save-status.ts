@@ -5,6 +5,15 @@ type Recording = {
   error?: string;
 };
 
+/** Device storage or a completed upload is not a server attachment acknowledgement. */
+export function hasUnconfirmedRecording(
+  recordings: Iterable<Pick<Recording, "state" | "empty">>,
+): boolean {
+  for (const recording of recordings)
+    if (!recording.empty && recording.state !== "backed_up") return true;
+  return false;
+}
+
 /** A session ID or uploaded file alone does not establish a saved interview. */
 export function interviewSaveStatus(input: {
   recording: boolean;

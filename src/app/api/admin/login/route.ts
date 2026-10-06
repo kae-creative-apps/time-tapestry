@@ -1,52 +1,61 @@
-import { guardRequest } from "@/lib/security/request";
-import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
+import { guardRequest } from "@/lib/security/request";
+import { readJsonBody } from "@/lib/security/http";
+import { consumeLimit, opaqueIdentifier } from "@/lib/security/rate-limit";
+import { SecurityError } from "@/lib/security/policy";
 import {
-  verifyAdminSecret,
-  createAdminSession,
-  ADMIN_SESSION_SECONDS,
-} from "@/lib/admin-auth";
+  beginAccountLogin,
+  LOGIN_LIFETIME_SECONDS,
+  normalizeAccountEmail,
+  randomCredential,
+} from "@/lib/accounts/service";
+import {
+  accountFailure,
+  accountHeaders,
+  cookieOptions,
+  REQUEST_COOKIE,
+} from "@/lib/accounts/http";
+import { adminReturnPath, isAdminEmail } from "@/lib/admin-policy";
 
-const ADMIN_COOKIE = "admin_token";
-const headers = {
-  "Cache-Control": "no-store",
-  "Referrer-Policy": "no-referrer",
-};
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    await guardRequest(request, { action: "admin_login" });
-    const { secret } = (await readJsonBody(request)) as { secret?: string };
-
-    if (!verifyAdminSecret(secret)) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401, headers },
+    await guardRequest(req, { action: "admin_login" });
+    const body = await readJsonBody(req, 8192);
+    const email = normalizeAccountEmail(body.email);
+    await guardRequest(req, {
+      action: "account_login",
+      requireHuman: true,
+      humanToken: body.humanToken,
+    });
+    if (!isAdminEmail(email))
+      throw new SecurityError(
+        "Use an approved team email to request admin access.",
+        403,
       );
-    }
-
-    if (!secret) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401, headers },
-      );
-    }
-
-    const response = NextResponse.json({ ok: true }, { headers });
-    response.cookies.set(ADMIN_COOKIE, createAdminSession(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: ADMIN_SESSION_SECONDS,
-      path: "/",
+    await consumeLimit(`account-email:${opaqueIdentifier(email)}`, 4, 3600);
+    await consumeLimit(
+      `account-email-cooldown:${opaqueIdentifier(email)}`,
+      1,
+      60,
+    );
+    const nonce = randomCredential();
+    const result = await beginAccountLogin(
+      email,
+      nonce,
+      undefined,
+      undefined,
+      adminReturnPath(body.redirect),
+    );
+    const response = NextResponse.json(result, {
+      status: 202,
+      headers: accountHeaders,
+    });
+    response.cookies.set(REQUEST_COOKIE, nonce, {
+      ...cookieOptions,
+      maxAge: LOGIN_LIFETIME_SECONDS,
     });
     return response;
   } catch (error) {
-    const protection = securityErrorResponse(error);
-    if (protection) return protection;
-    return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400, headers },
-    );
+    return accountFailure(error);
   }
 }

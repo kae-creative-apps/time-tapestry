@@ -9,7 +9,7 @@ export type RecipientLocator = {
   collectionId: string;
 } & (
   | { chapterId?: "q1" | "q2" | "q3" | "q4"; view?: never }
-  | { view: "address"; chapterId?: never }
+  | { view: "address" | "stories"; chapterId?: never }
 );
 export type EmailVerification = {
   recordType: "account-email-verification";
@@ -20,6 +20,8 @@ export type EmailVerification = {
   usedAt?: string;
   cancelledAt?: string;
   recipientLocator?: RecipientLocator;
+  /** Navigation only. Admin access is separately checked against the verified session. */
+  adminReturnPath?: string;
 };
 export type AccountSession = {
   recordType: "account-session";

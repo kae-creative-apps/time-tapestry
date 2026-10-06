@@ -39,6 +39,43 @@ export async function latestFilmJob(collectionId: string) {
   return index?.ids.length ? getFilmJob(index.ids.at(-1)!) : null;
 }
 
+/** These checks use the same cached word timing on every retry. A worker or
+ * editor must repair the source evidence before trying that version again. */
+function deterministicSourceFailure(job: StoryFilmJob) {
+  if (job.preparation !== "automatic") return false;
+  const errors = [job.error, ...job.chapters.map((chapter) => chapter.error)]
+    .filter(Boolean)
+    .join("\n");
+  return /selected source word has no verified positive duration|same answer occurs more than once|complete answer boundaries could not be verified|source-word match did not preserve|saved answer could not be matched confidently|overlapping source words need review|short answer needs a verified neighboring answer|short answer could not be verified|recorded answer is too short to match uniquely|answer needs a smaller source search|multiple detected speakers|source transcription cache failed verification/i.test(
+    errors,
+  );
+}
+
+export function filmRetryEligibility(job: StoryFilmJob): {
+  retryAllowed: boolean;
+  retryBlockedReason?: string;
+} {
+  if (
+    job.status !== "failed" ||
+    job.mode !== "original" ||
+    !filmTemplateCurrent(job)
+  )
+    return { retryAllowed: false };
+  if (job.attempts >= 3)
+    return {
+      retryAllowed: false,
+      retryBlockedReason:
+        "This film job needs an operator check after three attempts. Completed work and original recordings are preserved.",
+    };
+  if (deterministicSourceFailure(job))
+    return {
+      retryAllowed: false,
+      retryBlockedReason:
+        "The saved word timing needs an editor check before these films can be prepared. Your original recordings are preserved. Repeating this attempt will not resolve the timing.",
+    };
+  return { retryAllowed: true };
+}
+
 export function filmJobView(job: StoryFilmJob): FilmJobView {
   if (job.mode !== "original" && job.status !== "ready") {
     job = retiredNarrationJob(job);
@@ -53,6 +90,8 @@ export function filmJobView(job: StoryFilmJob): FilmJobView {
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     scriptsApprovedAt: job.scriptsApprovedAt,
+    attempts: job.attempts,
+    ...filmRetryEligibility(job),
     ...(job.error ? { error: job.error } : {}),
     chapters: job.chapters.map(
       ({ chapterId, title, status, progress, error, artifact }) => ({
@@ -331,9 +370,11 @@ export async function retryStoryFilms(
       );
     if (job.status !== "failed")
       throw new Error("Only a failed film job can be retried.");
-    if (job.attempts >= 3)
+    const eligibility = filmRetryEligibility(job);
+    if (!eligibility.retryAllowed)
       throw new Error(
-        "This film job needs an operator check after three attempts. Completed work is preserved.",
+        eligibility.retryBlockedReason ||
+          "This film job needs an operator check before another attempt.",
       );
     return {
       ...job,
@@ -587,7 +628,11 @@ export async function failFilmJob(
     if (!job || job.lease?.token !== token)
       throw new Error("Another worker owns this job.");
     const retry =
-      !stale && retryable && job.mode === "original" && job.attempts < 3;
+      !stale &&
+      retryable &&
+      job.mode === "original" &&
+      job.attempts < 3 &&
+      !deterministicSourceFailure({ ...job, error: message });
     return {
       ...job,
       status: stale ? "stale" : retry ? "queued" : "failed",

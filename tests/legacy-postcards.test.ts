@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NextRequest } from "next/server";
-import { createAdminSession } from "../src/lib/admin-auth";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 test("retired postcard sender remains admin protected and cannot dispatch with a live key configured", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "legacy-admin-"));
   const settings = {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    COLLECTION_DATA_DIR: directory,
     ADMIN_SECRET: "synthetic-admin-secret",
     LOB_API_KEY: "live_synthetic_never_sent",
     LOB_FROM_ADDRESS_ID: "adr_synthetic_never_sent",
@@ -15,7 +22,8 @@ test("retired postcard sender remains admin protected and cannot dispatch with a
     Object.keys(settings).map((key) => [key, process.env[key]]),
   );
   Object.assign(process.env, settings);
-  t.after(() => {
+  t.after(async () => {
+    await rm(directory, { recursive: true, force: true });
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -33,15 +41,16 @@ test("retired postcard sender remains admin protected and cannot dispatch with a
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost",
         ...(authenticated
-          ? { cookie: `admin_token=${createAdminSession()}` }
+          ? { cookie: await verifiedRecipientCookie("team@foronestudios.com") }
           : {}),
       },
       body: "not-json",
     });
     const response = await POST(request);
     assert.equal(response.status, authenticated ? 410 : 401);
-    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("cache-control") || "", /no-store/);
     assert.equal(
       request.bodyUsed,
       false,

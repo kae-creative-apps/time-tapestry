@@ -50,12 +50,17 @@ export function AutomaticFilmPanel({
   const [working, setWorking] = useState(false);
   const endpoint = `/api/collection/${encodeURIComponent(c.id)}/films?key=${encodeURIComponent(accessKey)}`;
   const active = working || activeStatus(job?.status);
+  const retryBlocked =
+    job?.mode === "original" &&
+    job.preparation === "automatic" &&
+    job.status === "failed" &&
+    job.retryAllowed !== true;
   useEffect(() => {
     onWorkingChange(working);
   }, [working, onWorkingChange]);
   useEffect(() => () => onWorkingChange(false), [onWorkingChange]);
   async function prepare() {
-    if (disabled || active || !hasSources) return;
+    if (disabled || active || !hasSources || retryBlocked) return;
     setWorking(true);
     onError("");
     try {
@@ -166,8 +171,10 @@ export function AutomaticFilmPanel({
             Your recordings are saved. The edit needs attention.
           </p>
           <p className="mt-2 text-base leading-7 text-ink-500">
-            We could not finish a reliable edit. Nothing has been shared. You
-            can retry, and the saved job is available to the support team.
+            {retryBlocked
+              ? job.retryBlockedReason ||
+                "The saved job needs an operator check before another attempt. Your original recordings are preserved."
+              : "We could not finish a reliable edit. Nothing has been shared. You can retry, and the saved job is available to the support team."}
           </p>
           <details className="mt-3">
             <summary className="min-h-11 cursor-pointer text-sm font-medium">
@@ -185,7 +192,7 @@ export function AutomaticFilmPanel({
           recordings are saved. You can check again later.
         </p>
       )}
-      {!active && !ready && hasSources && (
+      {!active && !ready && hasSources && !retryBlocked && (
         <div className="mt-5">
           <button
             type="button"

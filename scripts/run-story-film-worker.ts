@@ -46,6 +46,8 @@ async function main() {
       await import("../src/lib/collection/films/jobstore");
     const { runInterviewPreparationOnce } =
       await import("../src/lib/collection/interview-preparation");
+    const { runLivingStoryWorkerOnce } =
+      await import("../src/lib/collection/living-story-worker");
     const { processDeliveryJobs, emailDeliveryEnabled, postalDeliveryEnabled } =
       await import("../src/lib/collection/delivery");
     const workerId = `${config.hosted ? "hosted" : "local"}-${process.pid}`;
@@ -105,6 +107,12 @@ async function main() {
         shouldStop: () => stopping,
       });
       if (job) console.log(`Film job ${job.id.slice(0, 18)}: ${job.status}`);
+      if (stopping) break;
+      const moment = await runLivingStoryWorkerOnce(workerId, {
+        shouldStop: () => stopping,
+      });
+      if (moment)
+        console.log(`Living story ${moment.id.slice(0, 18)}: ${moment.status}`);
       if (process.argv.includes("--once")) break;
       if (!stopping)
         await new Promise<void>((resolve) => {

@@ -20,6 +20,7 @@ The image runs as the default root user because Railway volumes mount as root. D
 | `KV_REST_API_TOKEN`              | The matching Redis token                                                                  |
 | `BLOB_READ_WRITE_TOKEN`          | The same private Vercel Blob store used by the website                                    |
 | `ELEVENLABS_API_KEY`             | The existing account that owns the Time Tapestry interviewer and has Scribe access        |
+| `GLOO_API_KEY`                   | Required for the new living-story written chapters; reuse the website’s existing Gloo key |
 | `ELEVENLABS_AGENT_ID`            | The same existing agent ID as the website, required to verify saved interview transcripts |
 | `SECURITY_HASH_SECRET`           | Exactly the website's current secret, so shared provider budgets use the same buckets     |
 | `NEXT_PUBLIC_APP_URL`            | The website's canonical public HTTPS origin, with no route, query, or fragment            |
@@ -29,7 +30,7 @@ The image runs as the default root user because Railway volumes mount as root. D
 | `COLLECTION_STORAGE_LIMIT_BYTES` | Match any website override; default 2 GiB per collection                                  |
 | `STORY_FILM_MIN_FREE_BYTES`      | Default `1073741824`, a 1 GiB free-space safety floor                                     |
 
-The worker uses ElevenLabs to read and verify already recorded conversation transcripts and to transcribe original media where needed. It creates no new voice sessions and does not change the agent or voice. Synthetic narration jobs are retired. `GLOO_API_KEY` is optional for written-story editing; without it, complete source-text drafts are saved. Film enqueue limits remain durable per collection. Film preparation does not require Resend, Lob, `ADMIN_SECRET`, `CRON_SECRET`, or OpenAI. To process queued owner emails from Railway, configure the existing `COLLECTION_EMAIL_ENABLED`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL` settings there, with the same public origin and shared store as the website. Leave physical delivery disabled until its separate release checks pass. Do not copy or enable live Lob settings as part of film setup. Successful four-film attachment queues the owner review-ready notification; stopped preparation queues an attention notice. The independent delivery loop sends eligible notices and retries temporary failures inside the saved idempotency window. See [delivery setup](DELIVERY_SETUP.md) for the full enable flags and release requirements. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
+The worker uses ElevenLabs to read and verify already recorded conversation transcripts and to transcribe original media where needed. It creates no new voice sessions and does not change the agent or voice. Synthetic narration jobs are retired. `GLOO_API_KEY` is required for publishing new living-story additions. The original four-chapter preparation still has its historical source-text fallback when Gloo is absent. The new story worker stops for attention instead of publishing an unedited draft. Film enqueue limits remain durable per collection. Film rendering does not require Resend, Lob, `ADMIN_SECRET`, `CRON_SECRET`, or OpenAI. New-story publication notifications do require the existing email settings described below. To process queued owner emails from Railway, configure the existing `COLLECTION_EMAIL_ENABLED`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL` settings there, with the same public origin and shared store as the website. Leave physical delivery disabled until its separate release checks pass. Do not copy or enable live Lob settings as part of film setup. Successful four-film attachment queues the owner review-ready notification; stopped preparation queues an attention notice. The independent delivery loop sends eligible notices and retries temporary failures inside the saved idempotency window. See [delivery setup](DELIVERY_SETUP.md) for the full enable flags and release requirements. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
 
 Set restart policy Always on a plan that supports it. Configure a bounded termination grace period, for example 60 seconds, and avoid overlapping replicas. A long render may exceed the grace period. Persisted leases and original-job retries provide recovery, not a promise that every deployment finishes the current render. Unfinished AI narration jobs cannot be retried under the current policy; their retirement preserves completed artifacts.
 
@@ -71,3 +72,17 @@ This runs the real original-film composition using synthetic audio and video. It
 After deployment, use one consented test collection on the hosted website. Record enough content for all four themes, approve processing, and close the browser. Confirm four playable films appear without a local worker running. Check original preservation, the correct voice, captions, exact-output approval, recipient-only QR access, and private playback. Interrupt a separate synthetic job to verify recovery. Keep evidence free of private links and credentials.
 
 Lob is a separate release gate. Keep physical delivery disabled until webhook signing, scheduler authentication, intended-recipient access, dates, and the test-mode lifecycle have passed. A film worker deployment does not prove postcard delivery is ready.
+
+## Living-story additions
+
+After the original collection is approved, the worker also claims consented new-story
+jobs. They use the same private originals, Scribe and Remotion pipeline, with Gloo for
+the written chapter. The prompt has its own 6 to 12 second opening card, followed by
+the original voice/video and four-second logo close. Private source words, derivatives
+and written responses are cached by their hashes. The source, lease and consent are
+checked again before publishing both outputs and queuing member notices. A failed
+edit never publishes a raw recording as the finished film.
+
+Verify `GLOO_API_KEY`, email settings, fresh worker heartbeat and a consented synthetic
+addition after deployment. Passing the original four-film smoke test alone does not
+verify these new provider connections.

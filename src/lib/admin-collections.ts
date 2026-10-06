@@ -1,14 +1,11 @@
 import { appendFile, mkdir, readdir, stat, realpath } from "node:fs/promises";
 import { assertLocalMediaPath } from "./collection/media";
 import path from "node:path";
-import { createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
 import { kv } from "@vercel/kv";
 import type { NextRequest } from "next/server";
-import {
-  getAdminSecret,
-  getAdminTokenFromRequest,
-  verifyAdminToken,
-} from "./admin-auth";
+import { adminForRequest, requireAdmin } from "./admin-auth";
+import { ACCOUNT_COOKIE } from "./accounts/http";
 import {
   dataRoot,
   getCollection,
@@ -25,6 +22,8 @@ import {
 import { accountEmailAvailable } from "./accounts/mail";
 import { postcardDeliveryReadiness } from "./collection/postcard-proofs";
 import { getSecurityHealth } from "./security/health";
+import { getInterviewPreparationView } from "./collection/interview-preparation";
+import { storyBookSnapshot } from "./collection/story-book";
 import type { Collection, StoredMedia } from "./collection/types";
 
 export const adminReadHeaders = {
@@ -32,26 +31,36 @@ export const adminReadHeaders = {
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
 };
-export function adminAuthorized(req: NextRequest) {
-  return verifyAdminToken(getAdminTokenFromRequest(req));
+export async function adminAuthorized(req: NextRequest) {
+  return Boolean(await adminForRequest(req));
 }
 const cloud = () =>
   Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-/** Session fingerprint, resource identifiers and action only. No names, emails, URLs or raw credentials. */
+/** Verified team actor and resource IDs only. Never log family content, URLs or credentials. */
 export async function auditAdminRead(
   req: NextRequest,
-  action: "list" | "detail" | "export" | "media" | "download",
+  action:
+    | "list"
+    | "detail"
+    | "export"
+    | "media"
+    | "download"
+    | "book"
+    | "legacy_read"
+    | "legacy_write"
+    | "retry_preparation",
   collectionId?: string,
   mediaId?: string,
 ) {
-  if (!adminAuthorized(req)) throw new Error("Admin session required.");
+  const { account } = await requireAdmin(req);
   const entry = {
     timestamp: new Date().toISOString(),
     action,
     collectionId,
     mediaId,
-    session: createHmac("sha256", getAdminSecret())
-      .update(getAdminTokenFromRequest(req)!)
+    actor: { accountId: account.id, email: account.email },
+    session: createHash("sha256")
+      .update(`admin-audit:${req.cookies.get(ACCOUNT_COOKIE)!.value}`)
       .digest("hex")
       .slice(0, 24),
   };
@@ -114,7 +123,11 @@ async function mediaView(item: StoredMedia, c: Collection, films: Set<string>) {
     createdAt: item.createdAt,
     available,
     availability,
-    kind: films.has(item.id) ? ("film" as const) : ("original" as const),
+    kind:
+      films.has(item.id) ||
+      c.livingStory?.moments.some((moment) => moment.videoMediaId === item.id)
+        ? ("film" as const)
+        : ("original" as const),
     references: {
       takeIds: c.takes
         .filter(
@@ -143,6 +156,84 @@ const safeError = (value?: string) =>
     ?.replace(/https?:\/\/\S+/gi, "[private link removed]")
     .replace(/\b(?:sk_|xi_|Bearer\s+)[\w-]+/g, "[credential removed]")
     .slice(0, 1000);
+/** Strip credential-bearing fields even in historical/unknown records before returning JSON. */
+export function redactAdminSecrets<T>(value: T, privateKeys: string[] = []): T {
+  function visit(item: unknown): unknown {
+    if (typeof item === "string") {
+      let text = item
+        .replace(/https?:\/\/\S+/gi, "[private link removed]")
+        .replace(/\b(?:sk_|xi_|Bearer\s+)[\w-]+/g, "[credential removed]");
+      for (const key of privateKeys.filter(Boolean))
+        text = text.split(key).join("[credential removed]");
+      return text;
+    }
+    if (Array.isArray(item)) return item.map(visit);
+    if (item && typeof item === "object")
+      return Object.fromEntries(
+        Object.entries(item)
+          .filter(
+            ([key]) =>
+              !/(?:key|token|secret|url|localpath|requestbody|nonce|signature|lease|leaseid)$/i.test(
+                key,
+              ),
+          )
+          .map(([key, value]) => [key, visit(value)]),
+      );
+    return item;
+  }
+  return visit(value) as T;
+}
+function operationsView(
+  c: Collection,
+  preparation: Awaited<ReturnType<typeof getInterviewPreparationView>>,
+) {
+  let book: { status: "ready" | "draft" | "unavailable"; reason?: string };
+  try {
+    storyBookSnapshot(c, c.recipient.name || "you", {
+      draft: c.status !== "approved",
+    });
+    book = { status: c.status === "approved" ? "ready" : "draft" };
+  } catch {
+    book = {
+      status: "unavailable",
+      reason:
+        "All four written chapters are needed before a book can be prepared.",
+    };
+  }
+  return {
+    submittedAt:
+      preparation?.submittedAt || c.interviewPreparation?.submittedAt || null,
+    preparation: preparation
+      ? { ...preparation, error: safeError(preparation.error) }
+      : null,
+    book,
+    retryAvailable:
+      c.status !== "approved" &&
+      preparation?.canRetry === true &&
+      Boolean(preparation.processingApprovedAt),
+    delivery: postcardDeliveryReadiness(),
+    recovery: [
+      ...(preparation?.status === "needs_attention"
+        ? [
+            preparation.canRetry
+              ? "Check the cause, then retry preparation using the saved originals."
+              : "An operator must inspect the source and worker logs before another attempt. Original recordings are preserved.",
+          ]
+        : []),
+      ...(c.notifications.some((n) => n.dispatch?.reconciliationRequired)
+        ? [
+            "An email provider result is uncertain. Reconcile its existing dispatch before considering a resend.",
+          ]
+        : []),
+      ...(c.deliveries.some((d) => d.dispatch?.reconciliationRequired)
+        ? [
+            "A Lob result is uncertain. Find the existing postcard at the provider before considering a retry.",
+          ]
+        : []),
+      "Mail and email cannot be resent from this page. Use the existing delivery reconciliation process to prevent duplicates.",
+    ],
+  };
+}
 function safeCollection(c: Collection) {
   return {
     id: c.id,
@@ -167,11 +258,14 @@ function safeCollection(c: Collection) {
     approvedAt: c.approvedAt,
     approvedVersion: c.approvedVersion,
     postcardPreparation: c.postcardPreparation,
+    livingStory: c.livingStory,
+    storyIssues: c.storyIssues,
     deliveries: c.deliveries.map(
       ({
         chapterId,
         scheduledFor,
         status,
+        providerId,
         mailedAt,
         mailEvent,
         error,
@@ -180,6 +274,7 @@ function safeCollection(c: Collection) {
         chapterId,
         scheduledFor,
         status,
+        providerId,
         mailedAt,
         mailEvent,
         error: safeError(error),
@@ -196,6 +291,7 @@ function safeCollection(c: Collection) {
         subject,
         dueAt,
         status,
+        providerId,
         sentAt,
         error,
         chapterId,
@@ -207,6 +303,7 @@ function safeCollection(c: Collection) {
         subject,
         dueAt,
         status,
+        providerId,
         sentAt,
         error: safeError(error),
         chapterId,
@@ -254,11 +351,15 @@ export async function adminCollectionList(offset = 0, limit = 50) {
         usage,
         mediaCount: media.filter((item) => item.collectionId === c.id).length,
         filmStatus: job?.status || null,
+        submittedAt: c.interviewPreparation?.submittedAt || null,
+        preparationStatus: c.interviewPreparation?.status || null,
+        livingMomentCount: c.livingStory?.moments.length || 0,
         failureCount:
           c.deliveries.filter((x) => ["failed", "returned"].includes(x.status))
             .length +
           c.notifications.filter((x) => x.status === "failed").length +
-          (job?.status === "failed" ? 1 : 0),
+          (job?.status === "failed" ? 1 : 0) +
+          (c.interviewPreparation?.status === "needs_attention" ? 1 : 0),
       };
     }),
   );
@@ -283,13 +384,18 @@ export async function adminCollectionList(offset = 0, limit = 50) {
 export async function adminCollectionDetail(id: string) {
   const c = await getCollection(id);
   if (!c) return null;
-  const [allMedia, usage, filmJob] = await Promise.all([
+  const [allMedia, usage, filmJob, preparation] = await Promise.all([
     listStoredMedia(),
     getCollectionUsage(id),
     jobView(c),
+    getInterviewPreparationView(c),
   ]);
   const filmIds = new Set([
-    ...c.chapters.flatMap((ch) => (ch.film ? [ch.film.mediaId] : [])),
+    ...c.chapters.flatMap((ch) =>
+      [ch.film?.mediaId, ch.videoMediaId].filter((id): id is string =>
+        Boolean(id),
+      ),
+    ),
     ...(filmJob?.chapters.flatMap((ch) =>
       ch.artifact ? [ch.artifact.mediaId] : [],
     ) || []),
@@ -299,5 +405,14 @@ export async function adminCollectionDetail(id: string) {
       .filter((item) => item.collectionId === id)
       .map((item) => mediaView(item, c, filmIds)),
   );
-  return { collection: safeCollection(c), media, usage, filmJob };
+  return redactAdminSecrets(
+    {
+      collection: safeCollection(c),
+      media,
+      usage,
+      filmJob,
+      operations: operationsView(c, preparation),
+    },
+    [c.ownerKey, c.recipientKey, c.requesterKey],
+  );
 }

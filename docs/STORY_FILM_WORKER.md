@@ -84,3 +84,13 @@ Each film is limited to one hour including its title and closer. A source file i
 Unit tests use fictional examples and no providers. `scripts/verify-original-films.ts --real-asr` creates a clearly synthetic fixture using macOS speech synthesis, calls real Scribe on that fixture, and renders four original-audio films. It writes its private evidence report under `.data/original-automatic-qa/verified.json`. `--retry` reuses that fixture and cached work. The test requires the explicit flag for the real transcription call, and never reads a family collection. It verifies audio/video streams, original preservation, output hashes, four-film attachment and the remaining owner review gate.
 
 Synthetic speech in a test fixture is not an approved production voice or evidence of real-interview editorial quality. Run the current Docker smoke test, then separately verify actual Railway deployment, shared storage, real microphone recordings and four finished original-voice films. See the [October 5 QA checklist](QA_2026-10-05_RECORDING_ONLY.md); final combined test counts belong in that change set's verification record. This guide does not claim the current changes are deployed or live mail is enabled.
+
+## Added family stories, October 6
+
+The living-story queue runs serially after original film work. It requires the original
+collection to be approved and the storyteller to submit a saved recording with explicit
+processing and sharing consent. Gloo editing is required for these additions. They
+publish a completed original-voice film and faithful written chapter together. The
+new question opener is silent and allows 6 to 12 seconds for reading. Family notices
+are queued only after publication and recheck current membership before sending.
+The original four chapters and postal schedule are unchanged.

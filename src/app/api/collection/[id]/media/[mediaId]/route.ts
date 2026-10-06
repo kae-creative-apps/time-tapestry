@@ -39,6 +39,20 @@ export async function GET(
       "Referrer-Policy": "no-referrer",
       "Accept-Ranges": "bytes",
     };
+    if (req.nextUrl.searchParams.get("download") === "1") {
+      const extension =
+        m.mimeType === "video/mp4"
+          ? "mp4"
+          : m.mimeType.startsWith("video/")
+            ? "webm"
+            : m.mimeType.includes("wav")
+              ? "wav"
+              : m.mimeType.includes("mpeg")
+                ? "mp3"
+                : "webm";
+      headers["Content-Disposition"] =
+        `attachment; filename="time-tapestry-recording.${extension}"`;
+    }
     if (m.url) {
       assertPrivateBlobUrl(m.url);
       const upstream = await fetch(m.url, {

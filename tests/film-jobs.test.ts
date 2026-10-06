@@ -41,6 +41,72 @@ before(async () => {
 });
 const original = { processingApproved: true as const };
 
+test("cached deterministic alignment failures cannot be retried or consume another attempt", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
+  const claimed = await jobs.claimNextFilmJob(
+    "timing-test",
+    Date.now(),
+    queued.id,
+  );
+  const message =
+    "A selected source word has no verified positive duration. Its original is preserved for review; no automatic cut or caption was made.";
+  const failed = await jobs.failFilmJob(
+    queued.id,
+    claimed!.lease!.token,
+    message,
+    false,
+    true,
+  );
+  assert.equal(
+    failed.status,
+    "failed",
+    "even an accidental retryable flag cannot repeat deterministic source failure",
+  );
+  assert.equal(jobs.filmJobView(failed).retryAllowed, false);
+  assert.match(jobs.filmJobView(failed).retryBlockedReason!, /editor check/);
+  await assert.rejects(
+    jobs.retryStoryFilms(c, failed.id, true),
+    /editor check/,
+  );
+  assert.equal((await jobs.getFilmJob(failed.id))!.attempts, 1);
+  assert.equal((await jobs.getFilmJob(failed.id))!.status, "failed");
+  for (const error of [
+    "The same answer occurs more than once in its recordings. Automatic editing could not choose a unique passage.",
+    "The complete answer boundaries could not be verified. No partial-thought cut was made.",
+    "A short answer needs a verified neighboring answer before its source can be selected automatically.",
+  ])
+    assert.equal(jobs.filmJobView({ ...failed, error }).retryAllowed, false);
+});
+
+test("recoverable film failures retain retry while an exhausted job exposes an explicit hold", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
+  const failed = await store.mutateRecord<StoryFilmJob>(queued.id, (job) => ({
+    ...job!,
+    status: "failed",
+    attempts: 1,
+    error: "Transcription service temporarily unavailable.",
+  }));
+  assert.equal(jobs.filmJobView(failed).retryAllowed, true);
+  assert.equal(
+    (await jobs.retryStoryFilms(c, queued.id, true)).status,
+    "queued",
+  );
+  const exhausted = await store.mutateRecord<StoryFilmJob>(
+    queued.id,
+    (job) => ({ ...job!, status: "failed", attempts: 3 }),
+  );
+  assert.equal(jobs.filmJobView(exhausted).attempts, 3);
+  assert.equal(jobs.filmJobView(exhausted).retryAllowed, false);
+  assert.match(
+    jobs.filmJobView(exhausted).retryBlockedReason!,
+    /three attempts/,
+  );
+});
+
 async function legacyNarrationFixture(ready = false, attached = false) {
   const c = syntheticFilmCollection();
   const sourceSha256 = collectionFilmSourceHash(c);

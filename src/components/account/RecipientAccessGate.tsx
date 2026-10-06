@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { AppIcon } from "@/components/icons";
 import CollectionHome from "@/components/collection/CollectionHome";
+import LivingStoriesPage from "@/components/collection/LivingStoriesPage";
 import AddressPage from "@/components/collection/AddressPage";
 import { HumanVerification } from "@/components/security/HumanVerification";
 import { collectionRequest } from "@/lib/collection/client-request";
@@ -25,7 +26,7 @@ export function RecipientAccessGate({
 }: {
   id: string;
   chapterId?: string;
-  view?: "address";
+  view?: "address" | "stories";
   accessKey: string;
 }) {
   const emailId = useId();
@@ -46,7 +47,9 @@ export function RecipientAccessGate({
   const [retry, setRetry] = useState(0);
   const validLocator =
     /^[a-zA-Z0-9_-]{8,80}$/.test(id) &&
-    (view === undefined || (view === "address" && chapterId === undefined)) &&
+    (view === undefined ||
+      ((view === "address" || view === "stories") &&
+        chapterId === undefined)) &&
     (chapterId === undefined || /^q[1-4]$/.test(chapterId));
 
   useEffect(() => {
@@ -77,6 +80,14 @@ export function RecipientAccessGate({
               )
             )
               throw new Error();
+            if (view === "stories" && result.collection.role === "requester") {
+              const next = await collectionRequest<Session>(
+                "/api/account/session",
+                { signal: controller.signal, credentials: "same-origin" },
+              );
+              if (!disposed) setSession(next);
+              return;
+            }
             if (!disposed)
               setAuthorized({
                 scope,
@@ -107,7 +118,7 @@ export function RecipientAccessGate({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [id, chapterId, accessKey, scope, retry, validLocator]);
+  }, [id, chapterId, view, accessKey, scope, retry, validLocator]);
 
   const switchEmail = useCallback(async () => {
     if (working) return;
@@ -151,7 +162,7 @@ export function RecipientAccessGate({
             recipientLocator: {
               collectionId: id,
               ...(chapterId ? { chapterId } : {}),
-              ...(view ? { view } : {}),
+              ...(view === "address" || view === "stories" ? { view } : {}),
             },
           }),
         },
@@ -171,7 +182,9 @@ export function RecipientAccessGate({
   }
 
   if (authorized?.scope === scope)
-    return view === "address" ? (
+    return view === "stories" ? (
+      <LivingStoriesPage id={id} accessKey={authorized.accessKey} />
+    ) : view === "address" ? (
       <AddressPage id={id} accessKey={authorized.accessKey} />
     ) : (
       <CollectionHome

@@ -37,6 +37,8 @@ test("verification requests keep tokens out of URLs and accept only keyless coll
     true,
   );
   assert.equal(await finishAccountVerification("private-token"), destination);
+  destination = "/collection/recipient-collection/stories";
+  assert.equal(await finishAccountVerification("private-token"), destination);
   for (destination of [
     "https://outside.test",
     "//outside.test",
@@ -92,4 +94,19 @@ test("unavailable verification returns a readable retry error, without treating 
     finishAccountVerification("private-token"),
     /could not reach/,
   );
+});
+
+test("verified server admin return targets are accepted without opening arbitrary routes", async (t) => {
+  let destination = "/admin/collections/collection_123";
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ nextUrl: destination }),
+  );
+  assert.equal(await finishAccountVerification("private-token"), destination);
+  for (destination of [
+    "/admin/login",
+    "/admin/collections/collection_123?key=secret",
+    "https://outside.test/admin",
+    "/admin/../account",
+  ])
+    assert.equal(await finishAccountVerification("private-token"), "/account");
 });

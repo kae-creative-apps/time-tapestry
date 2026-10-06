@@ -1,0 +1,100 @@
+{
+  "createdAt": "2026-10-06T16:07:24.860Z",
+  "designVersion": "quiet-flowing-keepsake-v6",
+  "source": "Current postcardArtwork/renderPostcardDesign functions, without product edits",
+  "fictionalNames": {
+    "storyteller": "Evelyn",
+    "recipient": "Anna"
+  },
+  "previewOnly": true,
+  "productionReady": false,
+  "postalRegion": "Reserved for printing-service addressing; intentionally empty",
+  "uniqueFronts": 1,
+  "uniqueBacks": 4,
+  "cards": [
+    {
+      "number": 1,
+      "chapterId": "q1",
+      "day": 0,
+      "publicMessage": "May you always find kindness, and keep making room to offer it.",
+      "qrTarget": "https://example.invalid/collection/fictional-postcard-review-20261006/chapter/q1",
+      "files": {
+        "front": "postcard-1-front.html",
+        "back": "postcard-1-back.html"
+      },
+      "hashes": {
+        "front": "611e454cfdcbc3666e34f873f8b41971a1d416d2ed37ed74e605e7f188fe3dfb",
+        "back": "db5c5cc410ef9598a1c00a984a9787fea3c0909c263c24ec3fad59f5641b2d68"
+      },
+      "theme": "Kindness received"
+    },
+    {
+      "number": 2,
+      "chapterId": "q2",
+      "day": 14,
+      "publicMessage": "May you find hope for the next step, and courage to take it.",
+      "qrTarget": "https://example.invalid/collection/fictional-postcard-review-20261006/chapter/q2",
+      "files": {
+        "front": "postcard-2-front.html",
+        "back": "postcard-2-back.html"
+      },
+      "hashes": {
+        "front": "611e454cfdcbc3666e34f873f8b41971a1d416d2ed37ed74e605e7f188fe3dfb",
+        "back": "561ca7dbb14e84cb0d0f2d0896421f6ce68c7c2d6a9f30f02843baaad2297d97"
+      },
+      "theme": "A life of faith"
+    },
+    {
+      "number": 3,
+      "chapterId": "q3",
+      "day": 28,
+      "publicMessage": "The good you sow can keep growing in the lives of others.",
+      "qrTarget": "https://example.invalid/collection/fictional-postcard-review-20261006/chapter/q3",
+      "files": {
+        "front": "postcard-3-front.html",
+        "back": "postcard-3-back.html"
+      },
+      "hashes": {
+        "front": "611e454cfdcbc3666e34f873f8b41971a1d416d2ed37ed74e605e7f188fe3dfb",
+        "back": "ac8b63abf16493f0fbd1c43f40562d6bb71925bf94843d33bcd128dffc2ddeaf"
+      },
+      "theme": "What you sowed"
+    },
+    {
+      "number": 4,
+      "chapterId": "q4",
+      "day": 42,
+      "publicMessage": "May the stories behind you give you courage for the story ahead.",
+      "qrTarget": "https://example.invalid/collection/fictional-postcard-review-20261006/chapter/q4",
+      "files": {
+        "front": "postcard-4-front.html",
+        "back": "postcard-4-back.html"
+      },
+      "hashes": {
+        "front": "611e454cfdcbc3666e34f873f8b41971a1d416d2ed37ed74e605e7f188fe3dfb",
+        "back": "5a66bc09c6d2d4ad3cdd0345c9c460ddc5aed4cbfe3b2fa00e17332f1950b5f3"
+      },
+      "theme": "What I hope you carry"
+    }
+  ],
+  "reviewPdf": "time-tapestry-four-postcards-front-and-back_v1.pdf",
+  "rasterExport": {
+    "dpi": 300,
+    "width": 2775,
+    "height": 1875,
+    "renderer": "WeasyPrint70; current standalone HTML with page size only; pdftoppm rasterization"
+  },
+  "verified": {
+    "fourFrontHtmlIdentical": true,
+    "fourBackHtmlDistinct": true,
+    "eachCardHasUniqueNonLiveChapterQr": true,
+    "noProviderCalls": true,
+    "noMailSent": true
+  },
+  "pairedPreviews": [
+    "postcard-1-pair.png",
+    "postcard-2-pair.png",
+    "postcard-3-pair.png",
+    "postcard-4-pair.png"
+  ]
+}

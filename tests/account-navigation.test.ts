@@ -109,6 +109,7 @@ test("recipient collection and chapter locators stay keyless and preserve a veri
     "/collection/collection-test-123/chapter/q1",
     "/collection/collection-test-123/chapter/q4",
     "/collection/collection-test-123/address",
+    "/collection/collection-test-123/stories",
   ]) {
     assert.equal(privateCollectionPath(locator, origin), locator);
     assert.equal(

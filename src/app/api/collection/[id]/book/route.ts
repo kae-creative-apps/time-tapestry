@@ -49,7 +49,11 @@ export async function GET(
         { status: 403, headers },
       );
     const bytes = await renderStoryBook(
-      storyBookSnapshot(c, recipient.name.trim() || "you", { draft }),
+      storyBookSnapshot(c, recipient.name.trim() || "you", {
+        draft,
+        originalOnly: req.nextUrl.searchParams.get("edition") === "original",
+        through: req.nextUrl.searchParams.get("through") || undefined,
+      }),
     );
     return new NextResponse(Buffer.from(bytes), {
       headers: {

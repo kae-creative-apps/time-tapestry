@@ -15,6 +15,9 @@ export type PortalFilmJob = {
   preparation?: string;
   status: FilmStatus;
   error?: string;
+  attempts?: number;
+  retryAllowed?: boolean;
+  retryBlockedReason?: string;
   chapters: {
     chapterId: string;
     title: string;

@@ -8,6 +8,8 @@ export type SourceWord = {
   endMs: number;
   mediaId: string;
   speakerId?: string;
+  /** Provider-detected language. Unknown language cannot authorize lexical cuts. */
+  languageCode?: string;
 };
 const contractions: Record<string, string[]> = {
   "i'm": ["i", "am"],

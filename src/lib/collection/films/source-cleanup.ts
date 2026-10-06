@@ -5,7 +5,7 @@ import {
   type SourceWord,
 } from "./word-matching";
 
-export const SOURCE_CLEANUP_VERSION = "conservative-source-cleanup-v1";
+export const SOURCE_CLEANUP_VERSION = "conservative-source-cleanup-v2";
 export type SourceSilence = { inMs: number; outMs: number };
 export type SourceRemoval = SourceSilence & {
   mediaId: string;
@@ -23,7 +23,16 @@ const token = (text: string) =>
   text.toLocaleLowerCase().replace(/^[\s,.;:!?]+|[\s,.;:!?]+$/g, "");
 // Deliberately excludes meaningful responses (hmm/uh-huh), discourse words,
 // repeated words and every phrase whose removal needs an editorial judgment.
-const filler = (text: string) => /^(?:u+m+|u+h+|e+r+m+)$/u.test(token(text));
+const filler = (word: SourceWord) => {
+  // UM can be a university and German/Portuguese "um" is a meaningful word.
+  // Unknown language and uppercase acronyms remain untouched.
+  const bare = word.text.replace(/^[\s,.;:!?]+|[\s,.;:!?]+$/g, "");
+  return (
+    /^(?:en|eng)(?:-|$)/i.test(word.languageCode || "") &&
+    !/^[A-Z]{2,}$/.test(bare) &&
+    /^(?:u+m+|u+h+|e+r+m+)$/u.test(token(word.text))
+  );
+};
 
 function quotedWords(words: SourceWord[]) {
   let doubleQuote = false,
@@ -84,10 +93,10 @@ export function cleanSourcePassage(
   const quoted = quotedWords(words);
   const removals: SourceRemoval[] = [];
   const removedWordIndices = new Set<number>();
-  const meaningfulCount = words.filter((word) => !filler(word.text)).length;
+  const meaningfulCount = words.filter((word) => !filler(word)).length;
   for (const [index, word] of words.entries()) {
     if (
-      !filler(word.text) ||
+      !filler(word) ||
       quoted[index] ||
       meaningfulCount < 4 ||
       word.endMs - word.startMs > 1200
@@ -108,8 +117,7 @@ export function cleanSourcePassage(
     const previous = words[index - 1],
       next = words[index + 1];
     // Never erase a whole response or an unresolved trailing hesitation.
-    if (!next || (previous && filler(previous.text)) || filler(next.text))
-      continue;
+    if (!next || (previous && filler(previous)) || filler(next)) continue;
     const inMs = frameBefore(word.startMs - 25);
     const outMs = frameAfter(word.endMs + 25);
     if (
