@@ -3,6 +3,7 @@ import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/collection/store";
 import { roleFor } from "@/lib/collection/access";
+import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
 import {
   interviewerVoiceConfigured,
   streamTextToSpeech,
@@ -26,15 +27,18 @@ export async function POST(
         "Provide a question of 1 to 1,200 characters.",
         400,
       );
+    const spokenText = stripConversationPerformanceCues(b.text);
+    if (!spokenText.trim())
+      throw new SecurityError("There is no question to read.", 400);
     if (!interviewerVoiceConfigured())
       return NextResponse.json(
         {
           error:
-            "The interviewer voice is not configured. You can read the question on screen and try again later.",
+            "The sound is not configured. You can read the question on screen and try again later.",
         },
         { status: 503 },
       );
-    const stream = await streamTextToSpeech(b.text, () =>
+    const stream = await streamTextToSpeech(spokenText, () =>
       guard.reserveProviderBudget(),
     );
     return new NextResponse(stream, {
@@ -49,7 +53,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "The interviewer voice is unavailable. Please try again. Your question is still on screen.",
+          "The sound is unavailable. Please try again. Your question is still on screen.",
       },
       { status: 503 },
     );

@@ -18,7 +18,13 @@ import type {
   InterviewChapterId,
 } from "@/lib/collection/types";
 import { CHAPTERS } from "@/lib/interview-state";
+import {
+  detectInterviewThemeFromQuestion,
+  interviewChapterTitle,
+  nextUnansweredChapterId,
+} from "@/lib/collection/interview-progress";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
 import {
   startConnectionCue,
   type ConnectionCue,
@@ -31,8 +37,8 @@ import {
 } from "@/lib/collection/interview-journal";
 import { useInterviewArchive } from "./useInterviewArchive";
 import { InterviewPresence } from "./InterviewPresence";
+import { InterviewProgress } from "./InterviewProgress";
 import { InterviewDeviceSetup } from "./InterviewDeviceSetup";
-import { LiveTranscriptReview } from "./LiveTranscriptReview";
 import {
   createInterviewPlayback,
   restoreInterviewAudio,
@@ -50,21 +56,15 @@ const primary =
 const secondary =
   "min-h-12 rounded-full border border-warmgray-200 bg-white px-5 py-3 text-base font-medium text-ink-700 transition-colors hover:bg-paper-200 disabled:opacity-50";
 type Phase =
-  | "ready"
-  | "connecting"
-  | "talking"
-  | "paused"
-  | "interrupted"
-  | "finishing"
-  | "review";
+  "ready" | "connecting" | "talking" | "paused" | "interrupted" | "finishing";
 type ConnectionStage =
   "saving" | "preparing" | "devices" | "voice" | "confirming";
 const connectionStageLabels: Record<ConnectionStage, string> = {
   saving: "Saving your earlier answers",
-  preparing: "Preparing your private interview",
+  preparing: "Preparing your private conversation",
   devices: "Opening your microphone",
-  voice: "Connecting your interviewer",
-  confirming: "Your interviewer is connected",
+  voice: "Connecting audio",
+  confirming: "Audio connected",
 };
 const friendly = (e: unknown) =>
   e instanceof Error ? e.message : "That did not finish. Please try again.";
@@ -97,79 +97,6 @@ function CameraPreview({ stream }: { stream: MediaStream | null }) {
       className="aspect-video w-full rounded-xl border border-white/20 bg-ink-800 object-cover shadow-soft"
       aria-label="Your camera preview"
     />
-  );
-}
-
-function OriginalPlayback({
-  id,
-  kind,
-  getBlob,
-}: {
-  id: string;
-  kind: "voice" | "video";
-  getBlob: (id: string) => Promise<Blob>;
-}) {
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const loadingRef = useRef(false);
-  const generation = useRef(0);
-  useEffect(() => {
-    generation.current += 1;
-    loadingRef.current = false;
-    setLoading(false);
-    setUrl("");
-    setError("");
-    return () => {
-      generation.current += 1;
-    };
-  }, [id]);
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-  async function openOriginal() {
-    if (loadingRef.current) return;
-    const version = generation.current;
-    loadingRef.current = true;
-    setLoading(true);
-    setError("");
-    try {
-      const blob = await getBlob(id);
-      if (version === generation.current) setUrl(URL.createObjectURL(blob));
-    } catch (cause) {
-      if (version === generation.current) setError(friendly(cause));
-    } finally {
-      if (version === generation.current) {
-        loadingRef.current = false;
-        setLoading(false);
-      }
-    }
-  }
-  return (
-    <div className="mt-3 w-full">
-      {!url ? (
-        <button
-          className="min-h-12 text-base text-oxblood underline"
-          disabled={loading}
-          onClick={() => void openOriginal()}
-        >
-          {loading ? "Opening your recording…" : "Play original recording"}
-        </button>
-      ) : kind === "video" ? (
-        <video
-          className="max-h-96 w-full bg-ink-800"
-          src={url}
-          controls
-          playsInline
-        />
-      ) : (
-        <audio className="w-full" src={url} controls />
-      )}
-      {error && <p role="alert">{error}</p>}
-    </div>
   );
 }
 
@@ -211,6 +138,8 @@ export default function LiveInterview({
   const [pending, setPending] = useState<InterviewCommand[]>([]);
   const [savingWords, setSavingWords] = useState(false);
   const [working, setWorking] = useState(false);
+  const [activeChapterId, setActiveChapterId] =
+    useState<InterviewChapterId>("q1");
   const theme = useRef<InterviewChapterId>("q1");
   const client = useRef<Conversation | null>(null);
   const connectionCue = useRef<ConnectionCue | null>(null);
@@ -229,7 +158,6 @@ export default function LiveInterview({
   const [journalReady, setJournalReady] = useState(false);
   const [journalError, setJournalError] = useState("");
   const [journalChecking, setJournalChecking] = useState(true);
-  const [recordingsApproved, setRecordingsApproved] = useState(false);
   const submitting = useRef(false);
   const lastMessageAt = useRef(0);
 
@@ -394,7 +322,7 @@ export default function LiveInterview({
       client.current = null;
       setPhase("paused");
       setError(
-        "Recording paused, so the interviewer paused too. Check your saved recording before continuing.",
+        "Recording and conversation paused. Check your saved recording before continuing.",
       );
       if (sessionRef.current)
         void enqueue({
@@ -507,13 +435,15 @@ export default function LiveInterview({
       });
       s = data.collection.interviews.find((x: InterviewSession) => x.id === id);
     }
-    if (!s) throw new Error("The interview could not start. Please try again.");
+    if (!s)
+      throw new Error("The conversation could not start. Please try again.");
     sessionRef.current = s;
     setSessionId(s.id);
     sequence.current = Math.max(-1, ...s.turns.map((t) => t.sequence)) + 1;
     theme.current =
       [...s.turns].reverse().find((t) => t.role === "user" && t.chapterId)
         ?.chapterId ?? "q1";
+    setActiveChapterId(theme.current);
     return s;
   }
 
@@ -521,14 +451,23 @@ export default function LiveInterview({
     const text = message.message.trim();
     if (!text || !sessionRef.current) return;
     lastMessageAt.current = Date.now();
-    setRecordingsApproved(false);
     if (message.role === "user") {
       const controlIndex = controlEchoes.current.indexOf(text);
       if (controlIndex >= 0) {
         controlEchoes.current.splice(controlIndex, 1);
         return;
       }
-    } else setQuestion(text);
+    } else {
+      const spokenWords = stripConversationPerformanceCues(text);
+      if (spokenWords) {
+        const detectedChapterId = detectInterviewThemeFromQuestion(spokenWords);
+        if (detectedChapterId) {
+          theme.current = detectedChapterId;
+          setActiveChapterId(detectedChapterId);
+        }
+        setQuestion(spokenWords);
+      }
+    }
     const eventKey = `${connectionEpoch.current}:${message.role}:${message.response_id ?? message.event_id}`;
     const previous = messages.current.get(eventKey);
     if (previous?.text === text) return;
@@ -569,8 +508,8 @@ export default function LiveInterview({
       if (!mounted.current) return;
       setAvailabilityNotice(
         result.collection?.capabilities.liveInterview
-          ? "Voice interviews are available. Choose Start my interview when you are ready."
-          : "Voice interviews are still unavailable on this page. You can record one answer at a time.",
+          ? "Voice conversations are available. Choose Start conversation when you are ready."
+          : "Voice conversations are still unavailable on this page. Your saved recordings are kept.",
       );
     } catch (cause) {
       if (mounted.current) setAvailabilityNotice(friendly(cause));
@@ -629,6 +568,7 @@ export default function LiveInterview({
       });
       if (!isCurrent()) return;
       theme.current = config.currentThemeId ?? theme.current;
+      setActiveChapterId(theme.current);
       await cue?.finished;
       if (!isCurrent()) return;
       setConnectionStage("devices");
@@ -702,6 +642,7 @@ export default function LiveInterview({
             if (!CHAPTERS.some((ch) => ch.id === themeId))
               throw new Error("Unknown interview theme.");
             theme.current = themeId as InterviewChapterId;
+            setActiveChapterId(theme.current);
             return "Theme updated. Ask one natural question without naming the section.";
           },
         },
@@ -716,7 +657,7 @@ export default function LiveInterview({
           if (isCurrent() && !intentionalStop.current) {
             setConnectionFailed(true);
             setError(
-              "The interviewer connection had a problem. Pause to save this part, then reconnect, try another connection, or record one answer at a time.",
+              "The voice connection had a problem. Pause to save this part, then reconnect, try another connection, or record one answer at a time.",
             );
           }
         },
@@ -733,7 +674,7 @@ export default function LiveInterview({
               if (isCurrent()) setError(friendly(e));
             });
             setError(
-              "The interviewer disconnected. This part of your recording is being saved. Reconnect, try another connection, or record one answer at a time to continue.",
+              "The voice connection was lost. This part of your recording is being saved. Reconnect or try another connection to continue.",
             );
             void enqueue({
               action: "set_status",
@@ -751,7 +692,7 @@ export default function LiveInterview({
         await connected.endSession();
         if (isCurrent())
           throw new Error(
-            failureMessage || "The interviewer disconnected while connecting.",
+            failureMessage || "The voice connection was lost while connecting.",
           );
         return;
       }
@@ -804,7 +745,7 @@ export default function LiveInterview({
         setError(
           deviceError
             ? interviewDeviceError(e)
-            : "We could not connect to your interviewer. Check your internet connection, then try again or choose another connection. You can also record one answer at a time. " +
+            : "We could not start the voice connection. Check your internet connection, then try again or choose another connection. " +
                 friendly(e),
         );
       }
@@ -864,6 +805,8 @@ export default function LiveInterview({
   }
 
   async function finish() {
+    if (submitting.current || working) return;
+    submitting.current = true;
     setWorking(true);
     setPhase("finishing");
     intentionalStop.current = true;
@@ -882,8 +825,8 @@ export default function LiveInterview({
       // Always finish both teardown paths even when SDK controls fail.
     }
     try {
-      // Keep the transport briefly alive for final transcript events. This is
-      // not proof of transcript completeness; original playback and review stay required.
+      // Keep the transport briefly alive for final transcript events. The
+      // preparation worker recovers the authenticated transcript separately.
       const closeInterviewer = async () => {
         if (!current) return;
         try {
@@ -903,7 +846,7 @@ export default function LiveInterview({
         }
       };
       // Neither a recording error nor an SDK cleanup error may skip the other
-      // teardown. They settle before completion is persisted or review opens.
+      // teardown. They settle before preparation can be accepted.
       const results = await Promise.allSettled([
         archiveRef.current.stop(),
         closeInterviewer(),
@@ -912,119 +855,50 @@ export default function LiveInterview({
       if (failed?.status === "rejected") throw failed.reason;
       await localWrites.current;
       await flush();
-      const finishedSession = sessionRef.current;
-      if (finishedSession) {
-        await request("/interview", {
-          action: "set_status",
-          sessionId: finishedSession.id,
-          status: finishedSession.segments.length ? "completed" : "interrupted",
-        });
-        if (!finishedSession.segments.length)
-          throw new Error(
-            "No recording has been backed up for this interview yet. Your saved words are kept. Record your answer or finish backing up your original before continuing.",
-          );
-      }
-      setPhase("review");
-      setRecordingsApproved(false);
-    } catch (e) {
-      setError(friendly(e));
-      setPhase("paused");
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function openAnswerRecorder(chapterId?: InterviewChapterId) {
-    if (working || connectionInFlight.current) return;
-    setWorking(true);
-    setError("");
-    intentionalStop.current = true;
-    interviewerPlayback.current?.dispose();
-    interviewerPlayback.current = null;
-    setPlaybackBlocked(false);
-    try {
-      const results = await Promise.allSettled([
-        archiveRef.current.stop(),
-        client.current?.endSession() ?? Promise.resolve(),
-      ]);
-      client.current = null;
-      const failed = results.find((result) => result.status === "rejected");
-      if (failed?.status === "rejected") throw failed.reason;
-      await localWrites.current;
-      await flush();
-      if (archiveRef.current.pendingCount || unsavedMemory.current.length)
-        throw new Error("Back up your remaining recordings and words first.");
-      for (const session of collectionRef.current?.interviews ?? []) {
-        if (session.status === "active" || session.status === "paused")
-          await request("/interview", {
-            action: "set_status",
-            sessionId: session.id,
-            status: "interrupted",
-          });
-      }
-      if (chapterId) {
-        await request("", {
-          action: "progress",
-          currentQuestion: CHAPTERS.findIndex(
-            (chapter) => chapter.id === chapterId,
-          ),
-        });
-      }
-      router.push(
-        `/record/${encodeURIComponent(collectionId)}${query}&classic=1`,
-      );
-    } catch (cause) {
-      setPhase("paused");
-      setError(
-        `Your recordings are kept. Finish saving them before changing interview mode. ${friendly(cause)}`,
-      );
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function prepareStories() {
-    if (submitting.current || !recordingsApproved) return;
-    submitting.current = true;
-    setWorking(true);
-    setError("");
-    try {
-      await localWrites.current;
-      await flush();
-      if (archiveRef.current.pendingCount || memoryWarning)
-        throw new Error(
-          "Back up your remaining recordings and words before preparing your stories.",
-        );
-      if (!recordingsApproved)
-        throw new Error(
-          "Listen to your recordings and approve them before submitting.",
-        );
-      const sessions = collectionRef.current?.interviews ?? [];
-      if (!sessions.some((s) => s.segments.some((segment) => segment.mediaId)))
-        throw new Error(
-          "Record and back up your answers before preparing your collection.",
-        );
-      for (const s of sessions) {
+      const backupStartedAt = Date.now();
+      while (archiveRef.current.saving || archiveRef.current.pendingCount > 0) {
         if (
-          s.status !== "completed" &&
-          (s.segments.length || s.status !== "interrupted")
+          archiveRef.current.error ||
+          archiveRef.current.recordings.some((record) => record.error) ||
+          Date.now() - backupStartedAt > 90_000
         )
+          throw new Error(
+            "Your interview has not been submitted yet. Finish backing up your recording below, then choose Finish interview again.",
+          );
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (
+        unsavedMemory.current.length ||
+        (await readInterviewJournal(collectionId)).length ||
+        archiveRef.current.pendingCount ||
+        archiveRef.current.recordings.some((record) => record.error)
+      )
+        throw new Error(
+          "Your interview has not been submitted yet. Back up your remaining recordings and words before finishing.",
+        );
+      for (const savedSession of collectionRef.current?.interviews ?? []) {
+        if (savedSession.status !== "completed")
           await request("/interview", {
             action: "set_status",
-            sessionId: s.id,
-            status: s.segments.length ? "completed" : "interrupted",
+            sessionId: savedSession.id,
+            status: savedSession.segments.length ? "completed" : "interrupted",
           });
       }
-      await request("", {
-        action: "generate",
-        prepareFilms: true,
+      const result = await request("", {
+        action: "submit_interview",
         processingApproved: true,
-        regenerate: Boolean(collectionRef.current?.chapters.length),
       });
-      router.push(`/collection/${collectionId}/review${query}`);
+      if (!result.preparation?.id)
+        throw new Error(
+          "We could not confirm preparation yet. Your recording is kept. Check your preparation status before trying again.",
+        );
+      router.push(
+        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
+      );
     } catch (e) {
       submitting.current = false;
       setError(friendly(e));
+      setPhase("paused");
     } finally {
       setWorking(false);
     }
@@ -1070,11 +944,17 @@ export default function LiveInterview({
 
   const active = phase === "talking" || phase === "interrupted";
   const allSessions = collection?.interviews ?? [];
-  const hasSavedRecordings =
-    allSessions.some((session) => session.segments.length > 0) ||
-    Object.values(collection?.selectedTakeIds ?? {}).some((id) =>
-      collection?.takes.some((take) => take.id === id && take.kind !== "text"),
-    );
+  const hasExistingRecordings =
+    allSessions.some((session) =>
+      session.segments.some((segment) => Boolean(segment.mediaId)),
+    ) ||
+    collection?.takes.some(
+      (take) =>
+        collection.selectedTakeIds[take.questionId] === take.id &&
+        take.kind !== "text" &&
+        Boolean(take.mediaId),
+    ) ||
+    archive.recordings.some((record) => record.durationMs > 0);
   const savedTurns = allSessions.flatMap((s) =>
     s.turns.map((turn) => ({ turn, session: s })),
   );
@@ -1097,24 +977,25 @@ export default function LiveInterview({
   const userItems = items.filter(
     (x) => x.turn.role === "user" && !superseded.has(x.turn.id),
   );
-  const missingRecordedThemes = CHAPTERS.filter(
+  const answeredChapterIds = CHAPTERS.filter(
     (chapter) =>
-      !collection?.takes.some(
+      userItems.some(
+        ({ turn, session }) =>
+          turn.chapterId === chapter.id &&
+          turn.text.trim() &&
+          !session.excludedTurnIds.includes(turn.id),
+      ) ||
+      collection?.takes.some(
         (take) =>
           (take.questionId === chapter.id ||
             take.questionId.startsWith(`${chapter.id}-f`)) &&
           collection.selectedTakeIds[take.questionId] === take.id &&
-          take.kind !== "text" &&
-          take.mediaId &&
           take.text.trim(),
-      ) &&
-      !userItems.some(
-        ({ turn, session }) =>
-          turn.chapterId === chapter.id &&
-          turn.text.trim() &&
-          !session.excludedTurnIds.includes(turn.id) &&
-          session.segments.some((segment) => segment.mediaId),
       ),
+  ).map((chapter) => chapter.id);
+  const nextChapterId = nextUnansweredChapterId(
+    activeChapterId,
+    answeredChapterIds,
   );
   const visibleStatus =
     phase === "connecting"
@@ -1122,23 +1003,23 @@ export default function LiveInterview({
       : phase === "paused"
         ? "Paused"
         : phase === "interrupted"
-          ? "Interviewer disconnected"
-          : phase === "review"
-            ? "Ready to review"
+          ? "Connection lost"
+          : phase === "finishing"
+            ? "Saving your interview"
             : active
               ? microphoneMuted
                 ? "Your microphone is muted"
                 : mode === "speaking"
-                  ? "Your interviewer is speaking"
-                  : "Listening to you"
+                  ? "Speaking"
+                  : "Listening"
               : collection && !collection.capabilities.liveInterview
-                ? "Voice interview unavailable"
-                : "Your AI interviewer";
+                ? "Voice conversation unavailable"
+                : "Ready when you are";
 
   if (!collection)
     return (
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="font-serif text-3xl">Opening your interview</h1>
+        <h1 className="font-serif text-3xl">Opening your conversation</h1>
         <p role={error ? "alert" : "status"} className="mt-4">
           {error || "One moment while we find your stories."}
         </p>
@@ -1147,9 +1028,9 @@ export default function LiveInterview({
   if (collection.role !== "owner")
     return (
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="font-serif text-3xl">This is a private interview.</h1>
+        <h1 className="font-serif text-3xl">This is a private conversation.</h1>
         <p className="mt-4">
-          Use the interview link sent to the person sharing their story.
+          Use the private link sent to the person sharing their story.
         </p>
       </main>
     );
@@ -1174,16 +1055,11 @@ export default function LiveInterview({
       </header>
       <div className="mb-6 mt-7 max-w-3xl sm:mt-8">
         <h1 className="font-serif text-3xl leading-tight sm:text-[2.125rem]">
-          {phase === "review"
-            ? "Your recordings, before you submit."
-            : "Take your time. Your story matters."}
+          Take your time. Your story matters.
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
-          {phase === "review"
-            ? "Listen back, record any answer again if needed, then approve and submit your recordings."
-            : "One conversation about your life, your walk with Jesus, and what you hope " +
-              collection.recipient.name +
-              " carries forward."}
+          One conversation about your life, your walk with Jesus, and what you
+          hope {collection.recipient.name} carries forward.
         </p>
       </div>
       {!journalReady && (
@@ -1243,541 +1119,413 @@ export default function LiveInterview({
           )}
         </div>
       )}
-      {phase !== "review" && (
-        <section
-          className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white shadow-soft"
-          aria-label="Your interview"
-        >
-          <div className="brand-gradient-chocolate relative isolate overflow-hidden p-6 text-white sm:p-8">
-            <BrandPattern
-              variant="ribbon"
-              className="pointer-events-none absolute -bottom-16 -right-20 -z-10 h-80 w-80 text-white opacity-[0.07]"
-            />
-            <div className="relative flex flex-wrap items-center justify-between gap-3">
-              <p
-                className="min-h-7 text-base font-medium leading-7 text-white"
-                role="status"
-              >
-                {visibleStatus}
-              </p>
-              <p className="min-h-7 text-sm leading-7 text-paper">
-                {archive.status === "recording"
-                  ? archive.recordings.some(
-                      (r) => r.state === "recording" && r.localSaved,
-                    )
-                    ? "Recording · saving on this device"
-                    : "Recording · first save in progress"
-                  : archive.saving
-                    ? "Backing up your recording"
-                    : savingWords
-                      ? "Backing up your words"
-                      : pending.length
-                        ? `${pending.length} updates waiting for backup`
-                        : sessionId
-                          ? "Your saved answers are backed up"
-                          : ""}
-              </p>
+      <section
+        className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white shadow-soft"
+        aria-label="Your interview"
+      >
+        <InterviewProgress
+          activeChapterId={activeChapterId}
+          answeredChapterIds={answeredChapterIds}
+          faithFraming={collection.faithFraming}
+          paused={phase === "paused" || phase === "interrupted"}
+        />
+        <div className="brand-gradient-chocolate relative isolate overflow-hidden p-6 text-white sm:p-8">
+          <BrandPattern
+            variant="ribbon"
+            className="pointer-events-none absolute -bottom-16 -right-20 -z-10 h-80 w-80 text-white opacity-[0.07]"
+          />
+          <div className="relative flex flex-wrap items-center justify-between gap-3">
+            <p
+              className="min-h-7 text-base font-medium leading-7 text-white"
+              role="status"
+            >
+              {visibleStatus}
+            </p>
+            <p className="min-h-7 text-sm leading-7 text-paper">
+              {archive.status === "recording"
+                ? archive.recordings.some(
+                    (r) => r.state === "recording" && r.localSaved,
+                  )
+                  ? "Recording · saving on this device"
+                  : "Recording · first save in progress"
+                : archive.saving
+                  ? "Backing up your recording"
+                  : savingWords
+                    ? "Backing up your words"
+                    : pending.length
+                      ? `${pending.length} updates waiting for backup`
+                      : sessionId
+                        ? "Your saved answers are backed up"
+                        : ""}
+            </p>
+          </div>
+          <div
+            className={`relative mt-7 grid items-start gap-6 ${kind === "video" ? "lg:grid-cols-[144px_minmax(0,1fr)_220px]" : "sm:grid-cols-[144px_minmax(0,1fr)]"}`}
+          >
+            <div className="flex h-36 items-center justify-center">
+              <InterviewPresence
+                state={
+                  phase === "connecting"
+                    ? "connecting"
+                    : phase === "talking"
+                      ? mode
+                      : collection.capabilities.liveInterview
+                        ? "paused"
+                        : "unavailable"
+                }
+              />
             </div>
             <div
-              className={`relative mt-7 grid items-start gap-6 ${kind === "video" ? "lg:grid-cols-[144px_minmax(0,1fr)_220px]" : "sm:grid-cols-[144px_minmax(0,1fr)]"}`}
+              className="min-w-0"
+              role="region"
+              aria-label="Current question"
             >
-              <div className="flex h-36 items-center justify-center">
-                <InterviewPresence
-                  state={
-                    phase === "connecting"
-                      ? "connecting"
-                      : phase === "talking"
-                        ? mode
-                        : collection.capabilities.liveInterview
-                          ? "paused"
-                          : "unavailable"
-                  }
-                />
-              </div>
-              <div
-                className="min-w-0"
-                role="region"
-                aria-label="Current interview question"
-              >
-                <h2 className="max-w-2xl break-words font-serif text-2xl leading-relaxed text-white sm:text-3xl">
-                  {phase === "connecting"
-                    ? `${connectionStageLabels[connectionStage]}.`
+              <h2 className="max-w-2xl break-words font-serif text-2xl leading-relaxed text-white sm:text-3xl">
+                {phase === "connecting"
+                  ? `${connectionStageLabels[connectionStage]}.`
+                  : phase === "finishing"
+                    ? "Saving your interview"
                     : question}
-                </h2>
-                <p className="mt-5 max-w-xl text-base leading-7 text-white/[0.85]">
-                  {phase === "connecting"
-                    ? connectionStage === "devices"
-                      ? kind === "video"
-                        ? "Choose Allow if your browser asks to use your microphone and camera. Check the camera or microphone icon beside the address bar if you do not see the request."
-                        : "Choose Allow if your browser asks to use your microphone. Check the microphone icon beside the address bar if you do not see the request."
-                      : connectionStage === "saving"
-                        ? "We are checking that your earlier answers are saved before you continue."
-                        : connectionStage === "confirming"
-                          ? "You can begin when she says hello. We are saving this connection to your private interview."
-                          : connectionTakingLong
-                            ? connectionStage === "preparing"
-                              ? "Your private interview is still being prepared. You can begin when she says hello."
-                              : "This is taking longer than usual. We are still waiting for the voice connection. You can begin when she says hello."
-                            : "You can begin when she says hello."
+              </h2>
+              <p className="mt-5 max-w-xl text-base leading-7 text-white/[0.85]">
+                {phase === "connecting"
+                  ? connectionStage === "devices"
+                    ? kind === "video"
+                      ? "Choose Allow if your browser asks to use your microphone and camera. Check the camera or microphone icon beside the address bar if you do not see the request."
+                      : "Choose Allow if your browser asks to use your microphone. Check the microphone icon beside the address bar if you do not see the request."
+                    : connectionStage === "saving"
+                      ? "We are checking that your earlier answers are saved before you continue."
+                      : connectionStage === "confirming"
+                        ? "You can begin when you hear the first question. We are saving this connection to your private conversation."
+                        : connectionTakingLong
+                          ? connectionStage === "preparing"
+                            ? "Your private conversation is still being prepared. You can begin when you hear the first question."
+                            : "This is taking longer than usual. We are still waiting for the voice connection. You can begin when you hear the first question."
+                          : "You can begin when you hear the first question."
+                  : phase === "finishing"
+                    ? "Keep this page open while your recording backs up. Your stories and videos begin preparing after the save is confirmed."
                     : !collection.capabilities.liveInterview
-                      ? "The voice interviewer is not connected on this page. There is no interview loading in the background."
+                      ? "Voice conversation is unavailable on this page. Check availability below when you are ready to try again."
                       : phase === "ready"
-                        ? "Your AI interviewer will ask one question at a time. You can pause whenever you need to, and review everything before sharing."
+                        ? "We will take this one question at a time. You can pause whenever you need to. You review your stories and videos before anything is shared."
                         : phase === "paused"
-                          ? "The interviewer and recording are paused. Continue when you are ready."
+                          ? "The conversation and recording are paused. Continue when you are ready."
                           : "There is no perfect answer. Start with a moment you remember."}
+              </p>
+              {activeChapterId === "q2" && phase !== "connecting" && (
+                <p className="mt-5 max-w-xl text-base leading-7 text-paper">
+                  Faith is optional. You can talk about a decision that mattered
+                  to you instead. That recorded answer can be your second story.
+                  You can also leave this part for later.
                 </p>
-                {theme.current === "q2" && phase !== "connecting" && (
-                  <p className="mt-5 max-w-xl text-base leading-7 text-paper">
-                    Faith is optional. You can ask your interviewer to talk
-                    about a decision that mattered to you instead. That recorded
-                    answer can be your second story. You can also leave this
-                    part for later.
+              )}
+              {activeChapterId === "q3" && phase !== "connecting" && (
+                <aside className="mt-6 max-w-2xl rounded-xl border border-white/15 bg-white/[0.08] p-4 text-base leading-7 text-paper">
+                  <p>
+                    Stories of your time and financial giving help your family
+                    understand your values and character. Share what feels
+                    right; amounts are optional.
                   </p>
-                )}
-                {theme.current === "q3" && phase !== "connecting" && (
-                  <aside className="mt-6 max-w-2xl rounded-xl border border-white/15 bg-white/[0.08] p-4 text-base leading-7 text-paper">
-                    <p>
-                      Stories of your time and financial giving help your family
-                      understand your values and character. Share what feels
-                      right; amounts are optional.
+                  {collection.faithFraming !== "beliefs" && (
+                    <p className="mt-3">
+                      Jesus spoke of treasure in heaven (
+                      <a
+                        href="https://www.biblegateway.com/passage/?search=Matthew%206%3A19-21&version=NIV"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-white underline decoration-white/50 underline-offset-4"
+                      >
+                        Matthew 6:19-21
+                      </a>
+                      ). Paul described generosity as sowing and encouraged
+                      willing, cheerful giving (
+                      <a
+                        href="https://www.biblegateway.com/passage/?search=2%20Corinthians%209%3A6-7&version=NIV"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-white underline decoration-white/50 underline-offset-4"
+                      >
+                        2 Corinthians 9:6-7
+                      </a>
+                      ).
                     </p>
-                    {collection.faithFraming !== "beliefs" && (
-                      <p className="mt-3">
-                        Jesus spoke of treasure in heaven (
-                        <a
-                          href="https://www.biblegateway.com/passage/?search=Matthew%206%3A19-21&version=NIV"
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="text-white underline decoration-white/50 underline-offset-4"
-                        >
-                          Matthew 6:19-21
-                        </a>
-                        ). Paul described generosity as sowing and encouraged
-                        willing, cheerful giving (
-                        <a
-                          href="https://www.biblegateway.com/passage/?search=2%20Corinthians%209%3A6-7&version=NIV"
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="text-white underline decoration-white/50 underline-offset-4"
-                        >
-                          2 Corinthians 9:6-7
-                        </a>
-                        ).
-                      </p>
-                    )}
-                  </aside>
-                )}
-              </div>
-              {kind === "video" && (
-                <div className="mx-auto w-full max-w-[220px]">
-                  {archive.stream?.getVideoTracks().length ? (
-                    <CameraPreview stream={archive.stream} />
-                  ) : (
-                    <div className="flex aspect-video items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-center text-sm text-paper">
-                      Your camera preview will appear here.
-                    </div>
                   )}
-                </div>
+                </aside>
               )}
             </div>
-          </div>
-          <div className="p-6 sm:p-8">
-            {(phase === "ready" || (phase === "paused" && !archive.stream)) && (
-              <div className="space-y-5">
-                {!collection.capabilities.liveInterview && (
-                  <div className="rounded-xl bg-sage-100 p-4 text-base leading-7">
-                    <p>You can check again or record one answer at a time.</p>
-                    <button
-                      type="button"
-                      className={`${secondary} mt-3`}
-                      disabled={checkingAvailability || working}
-                      onClick={() => void checkAvailability()}
-                    >
-                      {checkingAvailability
-                        ? "Checking availability…"
-                        : "Check voice availability"}
-                    </button>
+            {kind === "video" && (
+              <div className="mx-auto w-full max-w-[220px]">
+                {archive.stream?.getVideoTracks().length ? (
+                  <CameraPreview stream={archive.stream} />
+                ) : (
+                  <div className="flex aspect-video items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-center text-sm text-paper">
+                    Your camera preview will appear here.
                   </div>
                 )}
-                {availabilityNotice && (
-                  <p role="status" className="text-base leading-7 text-ink-700">
-                    {availabilityNotice}
-                  </p>
-                )}
-                {collection.capabilities.liveInterview && (
-                  <fieldset className="grid gap-3 sm:grid-cols-2">
-                    <legend className="mb-4 text-base font-medium">
-                      How would you like to record?
-                    </legend>
-                    {(["video", "voice"] as const).map((value) => (
-                      <label
-                        key={value}
-                        className={`flex min-h-[4.5rem] cursor-pointer items-center gap-3 rounded-xl border p-4 text-base transition-colors ${kind === value ? (value === "video" ? "border-sage-300 bg-sage-100" : "border-clay-300 bg-clay-50") : "border-warmgray-200 bg-white hover:bg-paper-100"}`}
-                      >
-                        <input
-                          className="h-5 w-5 shrink-0 p-0 accent-espresso"
-                          type="radio"
-                          name="record-kind"
-                          value={value}
-                          checked={kind === value}
-                          onChange={() => setKind(value)}
-                        />
-                        {value === "video" ? "Video with sound" : "Audio only"}
-                      </label>
-                    ))}
-                  </fieldset>
-                )}
-                {collection.capabilities.liveInterview && !working && (
-                  <InterviewDeviceSetup
-                    kind={kind}
-                    devices={devices}
-                    onChange={setDevices}
-                  />
-                )}
-                {collection.capabilities.liveInterview && (
-                  <p className="max-w-2xl text-base leading-7 text-ink-500">
-                    Starting the voice interview uses your microphone and
-                    records your answers. AI processes the conversation to
-                    prepare your stories. You decide what is shared.
-                  </p>
-                )}
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  {collection.capabilities.liveInterview && (
-                    <button
-                      className={primary}
-                      disabled={
-                        working ||
-                        !journalReady ||
-                        !collection.capabilities.liveInterview
-                      }
-                      onClick={() => void connect()}
-                      onPointerEnter={warmConversation}
-                      onFocus={warmConversation}
-                    >
-                      Start my interview
-                    </button>
-                  )}
-                  <button
-                    className={secondary}
-                    disabled={working || !journalReady}
-                    onClick={() => void openAnswerRecorder()}
-                  >
-                    Record one answer at a time
-                  </button>
-                  {userItems.length > 0 && (
-                    <button
-                      className={secondary}
-                      disabled={working}
-                      onClick={() => {
-                        setRecordingsApproved(false);
-                        setPhase("review");
-                      }}
-                    >
-                      Review saved answers
-                    </button>
-                  )}
-                </div>
               </div>
             )}
-            {(active || phase === "paused") && sessionRef.current && (
-              <div
-                className="flex flex-wrap items-center gap-3 rounded-2xl border border-warmgray-200 bg-paper-100 p-3"
-                aria-label="Interview controls"
-              >
-                {phase === "paused" || phase === "interrupted" ? (
-                  <button
-                    className={`${primary} inline-flex items-center justify-center gap-2`}
-                    disabled={working}
-                    onClick={() => void connect()}
-                    onPointerEnter={warmConversation}
-                    onFocus={warmConversation}
-                  >
-                    <AppIcon name="play" size={20} />
-                    {phase === "interrupted"
-                      ? "Reconnect interviewer"
-                      : "Continue interview"}
-                  </button>
-                ) : (
-                  <button
-                    className={`${secondary} inline-flex items-center justify-center gap-2`}
-                    disabled={working}
-                    onClick={() => void pause()}
-                  >
-                    <AppIcon name="pause" size={20} /> Pause
-                  </button>
-                )}
-                {active && (
-                  <button
-                    className={secondary}
-                    disabled={working || !client.current}
-                    onClick={() => {
-                      const text =
-                        "[Interview control: I have finished this answer. Please continue with one relevant question.]";
-                      controlEchoes.current.push(text);
-                      client.current?.sendUserMessage(text);
-                    }}
-                  >
-                    I’m finished with this answer
-                  </button>
-                )}
-                <button
-                  className={`${secondary} inline-flex items-center justify-center gap-2`}
-                  disabled={working}
-                  onClick={() => void finish()}
-                >
-                  <AppIcon name="check" size={20} /> Finish and review
-                </button>
-                {phase === "talking" && (
+          </div>
+        </div>
+        <div className="p-6 sm:p-8">
+          {(phase === "ready" || (phase === "paused" && !archive.stream)) && (
+            <div className="space-y-5">
+              {!collection.capabilities.liveInterview && (
+                <div className="rounded-xl bg-sage-100 p-4 text-base leading-7">
+                  <p>You can check again when you are ready to continue.</p>
                   <button
                     type="button"
-                    className={`${secondary} inline-flex items-center justify-center gap-2`}
-                    aria-pressed={microphoneMuted}
-                    disabled={working}
-                    onClick={() => {
-                      try {
-                        setMicrophoneMute(!microphoneMuted);
-                      } catch (e) {
-                        setError(friendly(e));
-                      }
-                    }}
+                    className={`${secondary} mt-3`}
+                    disabled={checkingAvailability || working}
+                    onClick={() => void checkAvailability()}
                   >
-                    <AppIcon name="conversation" size={20} />
-                    {microphoneMuted ? "Unmute microphone" : "Mute microphone"}
-                  </button>
-                )}
-              </div>
-            )}
-            {connectionFailed &&
-              (phase === "paused" || phase === "interrupted") && (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className={secondary}
-                    disabled={working || !journalReady}
-                    onClick={() => void connect("websocket")}
-                  >
-                    Try another connection
-                  </button>
-                  <button
-                    type="button"
-                    className={secondary}
-                    disabled={working || !journalReady}
-                    onClick={() => void openAnswerRecorder()}
-                  >
-                    Record one answer at a time
+                    {checkingAvailability
+                      ? "Checking availability…"
+                      : "Check voice availability"}
                   </button>
                 </div>
               )}
-            {collection.capabilities.liveInterview &&
-              !working &&
-              (phase === "paused" || phase === "interrupted") &&
-              sessionRef.current && (
+              {availabilityNotice && (
+                <p role="status" className="text-base leading-7 text-ink-700">
+                  {availabilityNotice}
+                </p>
+              )}
+              {collection.capabilities.liveInterview && (
+                <fieldset className="grid gap-3 sm:grid-cols-2">
+                  <legend className="mb-4 text-base font-medium">
+                    How would you like to record?
+                  </legend>
+                  {(["video", "voice"] as const).map((value) => (
+                    <label
+                      key={value}
+                      className={`flex min-h-[4.5rem] cursor-pointer items-center gap-3 rounded-xl border p-4 text-base transition-colors ${kind === value ? (value === "video" ? "border-sage-300 bg-sage-100" : "border-clay-300 bg-clay-50") : "border-warmgray-200 bg-white hover:bg-paper-100"}`}
+                    >
+                      <input
+                        className="h-5 w-5 shrink-0 p-0 accent-espresso"
+                        type="radio"
+                        name="record-kind"
+                        value={value}
+                        checked={kind === value}
+                        onChange={() => setKind(value)}
+                      />
+                      {value === "video" ? "Video with sound" : "Audio only"}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+              {collection.capabilities.liveInterview && !working && (
                 <InterviewDeviceSetup
                   kind={kind}
                   devices={devices}
                   onChange={setDevices}
                 />
               )}
-            {phase === "talking" && (
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              {collection.capabilities.liveInterview && (
+                <p className="max-w-2xl text-base leading-7 text-ink-500">
+                  Starting the conversation uses your microphone and records
+                  your answers. Choosing Finish interview starts preparing your
+                  four stories, four videos, and postcard drafts. AI helps
+                  prepare the written stories. You review everything before
+                  sharing. Nothing is mailed until you approve.
+                </p>
+              )}
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                {collection.capabilities.liveInterview && (
+                  <button
+                    className={primary}
+                    disabled={
+                      working ||
+                      !journalReady ||
+                      !collection.capabilities.liveInterview
+                    }
+                    onClick={() => void connect()}
+                    onPointerEnter={warmConversation}
+                    onFocus={warmConversation}
+                  >
+                    Start conversation
+                  </button>
+                )}
+                {hasExistingRecordings && !sessionRef.current && (
+                  <button
+                    type="button"
+                    className={secondary}
+                    disabled={working || !journalReady}
+                    onClick={() => void finish()}
+                  >
+                    Finish interview
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {(active || phase === "paused") && sessionRef.current && (
+            <div
+              className="flex flex-wrap items-center gap-3 rounded-2xl border border-warmgray-200 bg-paper-100 p-3"
+              aria-label="Conversation controls"
+            >
+              {phase === "paused" || phase === "interrupted" ? (
+                <button
+                  className={`${primary} inline-flex items-center justify-center gap-2`}
+                  disabled={working}
+                  onClick={() => void connect()}
+                  onPointerEnter={warmConversation}
+                  onFocus={warmConversation}
+                >
+                  <AppIcon name="play" size={20} />
+                  {phase === "interrupted"
+                    ? "Reconnect"
+                    : "Continue conversation"}
+                </button>
+              ) : (
+                <button
+                  className={`${secondary} inline-flex items-center justify-center gap-2`}
+                  disabled={working}
+                  onClick={() => void pause()}
+                >
+                  <AppIcon name="pause" size={20} /> Pause
+                </button>
+              )}
+              {active && (
                 <button
                   type="button"
                   className={secondary}
                   disabled={working || !client.current}
                   onClick={() => {
+                    const text =
+                      "[Interview control: I have finished this answer. Please continue with one relevant question.]";
+                    controlEchoes.current.push(text);
+                    client.current?.sendUserMessage(text);
+                  }}
+                >
+                  I’m finished with this answer
+                </button>
+              )}
+              {phase === "talking" && nextChapterId && (
+                <button
+                  type="button"
+                  className={secondary}
+                  disabled={working || mode === "speaking" || !client.current}
+                  onClick={() => {
+                    const conversation = client.current;
+                    if (!conversation || working || mode === "speaking") return;
+                    const title = interviewChapterTitle(
+                      nextChapterId,
+                      collection.faithFraming,
+                    );
+                    const text = `[Interview control: I’d like to move on to the story area called “${title}”. Please skip any more follow-up questions in this area and ask one question in that next area.]`;
+                    controlEchoes.current.push(text);
+                    conversation.sendUserMessage(text);
+                  }}
+                >
+                  Next story area
+                </button>
+              )}
+              <button
+                type="button"
+                className={`${secondary} inline-flex items-center justify-center gap-2`}
+                disabled={working}
+                onClick={() => void finish()}
+              >
+                <AppIcon name="check" size={20} /> Finish interview
+              </button>
+              {phase === "talking" && (
+                <button
+                  type="button"
+                  className={`${secondary} inline-flex items-center justify-center gap-2`}
+                  aria-pressed={microphoneMuted}
+                  disabled={working}
+                  onClick={() => {
                     try {
-                      client.current?.setVolume({ volume: 1 });
-                      void interviewerPlayback.current?.play();
-                    } catch (cause) {
-                      setError(friendly(cause));
+                      setMicrophoneMute(!microphoneMuted);
+                    } catch (e) {
+                      setError(friendly(e));
                     }
                   }}
                 >
-                  {playbackBlocked
-                    ? "Turn interviewer sound on"
-                    : "Restore interviewer sound"}
+                  <AppIcon name="conversation" size={20} />
+                  {microphoneMuted ? "Unmute microphone" : "Mute microphone"}
                 </button>
-                {playbackBlocked && (
-                  <p
-                    role="status"
-                    className="max-w-xl text-base leading-7 text-ink-700"
-                  >
-                    Your browser paused the interviewer’s sound. Choose Turn
-                    interviewer sound on to continue hearing her.
-                  </p>
-                )}
+              )}
+            </div>
+          )}
+          {connectionFailed &&
+            (phase === "paused" || phase === "interrupted") && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className={secondary}
+                  disabled={working || !journalReady}
+                  onClick={() => void connect("websocket")}
+                >
+                  Try another connection
+                </button>
               </div>
             )}
-            {phase === "talking" && (
-              <p className="mt-4 text-sm leading-6 text-ink-500">
-                {microphoneMuted
-                  ? "Your microphone is muted for both the interviewer and your recording. "
-                  : ""}
-                Pause to change your microphone or camera.
-              </p>
-            )}
-            {collection.capabilities.liveInterview &&
-              (phase === "ready" ||
-                phase === "paused" ||
-                phase === "interrupted") && (
-                <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 text-base text-ink-500">
-                  <input
-                    type="checkbox"
-                    checked={connectionSound}
-                    onChange={(event) =>
-                      setConnectionSound(event.target.checked)
-                    }
-                    className="h-5 w-5 shrink-0 p-0 accent-espresso"
-                  />
-                  Play a soft sound while connecting
-                </label>
-              )}
-          </div>
-        </section>
-      )}
-      {phase === "review" && (
-        <section aria-label="Review your recordings">
-          <h2 className="font-serif text-3xl">Listen before you submit</h2>
-          <p className="mt-3 text-base leading-7 text-ink-700">
-            Play your saved recordings below. If you want to change an answer,
-            record that part again. Your earlier recordings stay saved.
-          </p>
-          <div className="mt-6 space-y-6">
-            {allSessions
-              .flatMap((session) => session.segments)
-              .map((segment, index) => (
-                <article
-                  key={segment.id}
-                  className="rounded-xl border border-warmgray-300 p-4"
-                >
-                  <h3 className="mb-3 text-lg font-medium">
-                    Recording {index + 1}, backed up
-                  </h3>
-                  {segment.kind === "video" ? (
-                    <video
-                      src={`${base}/media/${encodeURIComponent(segment.mediaId)}${query}`}
-                      controls
-                      playsInline
-                      preload="metadata"
-                      className="aspect-video w-full rounded-lg bg-ink-800"
-                      aria-label={`Play saved recording ${index + 1}`}
-                    />
-                  ) : (
-                    <audio
-                      src={`${base}/media/${encodeURIComponent(segment.mediaId)}${query}`}
-                      controls
-                      preload="metadata"
-                      className="w-full"
-                      aria-label={`Play saved recording ${index + 1}`}
-                    />
-                  )}
-                </article>
-              ))}
-          </div>
-          <details className="mt-6">
-            <summary className="min-h-12 cursor-pointer py-3 text-base font-medium">
-              Saved answers and retakes
-            </summary>
-            {userItems.map(({ turn, session }) => (
-              <LiveTranscriptReview
-                key={turn.id}
-                turn={turn}
-                included={!session.excludedTurnIds?.includes(turn.id)}
-                busy={working || savingWords}
-                onRerecord={() => void openAnswerRecorder(turn.chapterId)}
+          {collection.capabilities.liveInterview &&
+            !working &&
+            (phase === "paused" || phase === "interrupted") &&
+            sessionRef.current && (
+              <InterviewDeviceSetup
+                kind={kind}
+                devices={devices}
+                onChange={setDevices}
               />
-            ))}
-          </details>
-          <label className="mt-6 flex items-start gap-3 rounded-md bg-paper-100 p-4">
-            <input
-              className="mt-1 h-5 w-5"
-              type="checkbox"
-              checked={recordingsApproved}
-              onChange={(e) => setRecordingsApproved(e.target.checked)}
-            />
-            <span>
-              I listened to my recordings and approve using them to create my
-              stories and films.
-            </span>
-          </label>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <button
-              className={primary}
-              disabled={
-                working ||
-                archive.saving ||
-                archive.pendingCount > 0 ||
-                pending.length > 0 ||
-                memoryWarning ||
-                !recordingsApproved ||
-                !userItems.length ||
-                !hasSavedRecordings ||
-                missingRecordedThemes.length > 0
-              }
-              onClick={() => void prepareStories()}
-            >
-              {working
-                ? "Submitting recordings…"
-                : "Approve and submit recordings"}
-            </button>
-            {missingRecordedThemes.length > 0 && (
-              <button
-                className={secondary}
-                disabled={working}
-                onClick={() => void openAnswerRecorder()}
-              >
-                Record a missing part
-              </button>
             )}
-            <button
-              className={secondary}
-              disabled={working}
-              onClick={() => {
-                sessionRef.current = null;
-                setSessionId("");
-                setPhase("ready");
-              }}
-            >
-              Add another memory
-            </button>
-          </div>
-          {missingRecordedThemes.length > 0 && (
-            <p
-              role="status"
-              className="mt-4 rounded-xl bg-paper-100 p-4 text-base leading-7"
-            >
-              Each of the four stories needs a recorded answer and its
-              transcript. Add an answer for{" "}
-              {missingRecordedThemes
-                .map((chapter) => `part ${chapter.id.slice(1)}`)
-                .join(", ")}{" "}
-              before preparing your collection. For part 2, you can talk about a
-              decision that mattered to you without discussing faith. Your saved
-              recordings are kept while you return to any part left for later.
+          {phase === "talking" && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className={secondary}
+                disabled={working || !client.current}
+                onClick={() => {
+                  try {
+                    client.current?.setVolume({ volume: 1 });
+                    void interviewerPlayback.current?.play();
+                  } catch (cause) {
+                    setError(friendly(cause));
+                  }
+                }}
+              >
+                {playbackBlocked ? "Turn sound on" : "Restore sound"}
+              </button>
+              {playbackBlocked && (
+                <p
+                  role="status"
+                  className="max-w-xl text-base leading-7 text-ink-700"
+                >
+                  Your browser paused the sound. Choose Turn sound on to hear
+                  the next question.
+                </p>
+              )}
+            </div>
+          )}
+          {phase === "talking" && (
+            <p className="mt-4 text-sm leading-6 text-ink-500">
+              {microphoneMuted
+                ? "Your microphone is muted for both the conversation and your recording. "
+                : ""}
+              Pause to change your microphone or camera.
             </p>
           )}
-          <p className="mt-4 text-base leading-7 text-ink-500">
-            {hasSavedRecordings
-              ? "Submitting starts your four stories and films using your original voice. Your recordings are kept."
-              : "Record your answers before submitting. Your family’s films will use your original voice."}{" "}
-            You choose when to share the finished collection.
-          </p>
-          {(archive.pendingCount > 0 || pending.length > 0) && (
-            <p className="mt-3 text-sm">
-              Finish backing up your recordings and words before preparing your
-              stories.
-            </p>
-          )}
-        </section>
-      )}
+          {collection.capabilities.liveInterview &&
+            (phase === "ready" ||
+              phase === "paused" ||
+              phase === "interrupted") && (
+              <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 text-base text-ink-500">
+                <input
+                  type="checkbox"
+                  checked={connectionSound}
+                  onChange={(event) => setConnectionSound(event.target.checked)}
+                  className="h-5 w-5 shrink-0 p-0 accent-espresso"
+                />
+                Play a soft sound while connecting
+              </label>
+            )}
+        </div>
+      </section>
       {archive.recordings.length > 0 && (
-        <details
-          className="mt-8 rounded-xl border border-warmgray-200 bg-white p-5"
-          open={phase === "review" || undefined}
-        >
+        <details className="mt-8 rounded-xl border border-warmgray-200 bg-white p-5">
           <summary className="cursor-pointer text-base font-medium">
-            Your original recordings ({archive.recordings.length})
+            Recording backup ({archive.recordings.length})
           </summary>
           <p className="mt-2 text-sm leading-6">
             Long conversations save in smaller recordings. Keep this browser
@@ -1834,55 +1582,10 @@ export default function LiveInterview({
                       </button>
                     )}
                 </div>
-                {record.state !== "recording" && (
-                  <OriginalPlayback
-                    id={record.localTakeId}
-                    kind={record.kind}
-                    getBlob={archive.getBlob}
-                  />
-                )}
               </div>
             ))}
           </div>
         </details>
-      )}
-      {userItems.length > 0 && phase !== "review" && (
-        <details className="mt-8 border-b border-warmgray-300 pb-5">
-          <summary className="cursor-pointer py-3 text-base text-oxblood">
-            Read your saved answers ({userItems.length})
-          </summary>
-          <div className="space-y-5 py-3">
-            {userItems.map(({ turn }) => (
-              <p key={turn.id} className="whitespace-pre-wrap leading-7">
-                {turn.text}
-              </p>
-            ))}
-          </div>
-        </details>
-      )}
-      {!active && phase !== "connecting" && phase !== "finishing" && (
-        <p className="mt-6 text-base">
-          <button
-            type="button"
-            className="text-oxblood underline underline-offset-4"
-            disabled={working}
-            onClick={() => void openAnswerRecorder()}
-          >
-            Record one answer at a time
-          </button>
-          {collection.chapters.length > 0 && (
-            <>
-              {" "}
-              ·{" "}
-              <Link
-                className="text-oxblood underline underline-offset-4"
-                href={`/collection/${collectionId}/review${query}`}
-              >
-                Open your story drafts
-              </Link>
-            </>
-          )}
-        </p>
       )}
     </main>
   );

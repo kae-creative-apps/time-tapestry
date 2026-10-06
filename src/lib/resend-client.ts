@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { BRAND_COLORS } from "./brand-art";
+import { INTERVIEW_PACING_COPY } from "./collection/interview-progress";
 
 const apiKey = process.env.RESEND_API_KEY;
 export const fromEmail =
@@ -91,9 +92,10 @@ export function invitationEmail(
     subject,
     `<h1>Dear ${grandparentName},</h1>
     <p>${grandchildName} has asked you to share your story ... the story of your life, your values, and the generosity that shaped you.</p>
-    <p>When you're ready, simply click the link below. I'll be here to ask you a few questions, one at a time. Speak naturally. Take as long as you'd like.</p>
+    <p>${INTERVIEW_PACING_COPY}</p>
+    <p>You can choose video with sound or audio only. You review your stories before anything is shared.</p>
     <p style="text-align: center;">
-      <a href="${interviewUrl}" class="button">Begin your story</a>
+      <a href="${interviewUrl}" class="button">Start your conversation</a>
     </p>
     <p>If the button doesn't work, copy and paste this link into your browser:</p>
     <p style="word-break: break-all; font-size: 14px;">${interviewUrl}</p>

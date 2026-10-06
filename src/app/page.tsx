@@ -168,7 +168,7 @@ export default function Home() {
                 You don’t have to know where to start.
               </h2>
               <p className="mt-6 text-lg leading-relaxed text-ink-500">
-                Our Christian AI interview invites stories of kindness, following
+                A conversation invites stories of kindness, following
                 Jesus, and living generously, one question at a time. Record video
                 with sound or audio only. You can pause or skip any question,
                 including questions about faith.

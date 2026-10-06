@@ -42,6 +42,10 @@ import {
   hasRecordedAnswerSource,
   isStoredOwnerRecording,
 } from "@/lib/collection/recording-validation";
+import {
+  enqueueInterviewPreparation,
+  InterviewPreparationError,
+} from "@/lib/collection/interview-preparation";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -104,6 +108,29 @@ export async function POST(
     assertOrigin(req);
     await guardRequest(req, { action: "collection_write", resourceId: id });
     const b = (await readJsonBody(req, 512 * 1024)) as any;
+    if (b.action === "submit_interview") {
+      requireOwner(initial, role);
+      if (b.processingApproved !== true)
+        throw new InterviewPreparationError(
+          "Confirm processing of your original recordings before submitting.",
+        );
+      await guardRequest(req, { action: "generate", resourceId: id });
+      const result = await enqueueInterviewPreparation(id, {
+        processingApproved: true,
+        retry: b.retry === true,
+        authorize: async (current) => {
+          const currentAccess = await collectionAccessForRequest(req, current);
+          requireOwner(current, currentAccess?.role ?? null);
+        },
+      });
+      return NextResponse.json(
+        {
+          collection: publicView(result.collection, role, access?.recipientId),
+          preparation: result.preparation,
+        },
+        { status: 202, headers: noStore },
+      );
+    }
     if (
       ["edit_chapter", "blessing", "correct_turn", "attach_video"].includes(
         b.action,
@@ -727,7 +754,10 @@ export async function POST(
             ? e.message
             : "Unable to save. Your local recording remains available.",
       },
-      { status: 400, headers: noStore },
+      {
+        status: e instanceof InterviewPreparationError ? e.status : 400,
+        headers: noStore,
+      },
     );
   }
 }

@@ -290,9 +290,10 @@ test("protected delivery automation separates email from printing and sends only
       "Saved provider acceptance prevents duplicate emails",
     );
 
-    const reviewing = draft();
-    queueFilmsReady(reviewing, "fixture-job");
-    queueFilmsReady(reviewing, "fixture-job");
+    const reviewing = await attachSyntheticOriginalFilms(await syntheticRecordedFilmCollection());
+    const readyJobId = reviewing.chapters[0].film!.jobId;
+    queueFilmsReady(reviewing, readyJobId);
+    queueFilmsReady(reviewing, readyJobId);
     assert.equal(reviewing.notifications.length, 1);
     await writeRecord(reviewing.id, reviewing);
     await processDeliveryJobs();

@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { HumanVerification } from "@/components/security/HumanVerification";
 import { AppIcon } from "@/components/icons";
 import { BrandPattern } from "@/components/BrandPattern";
+import { InterviewProgress } from "@/components/collection/InterviewProgress";
 import {
   FormError,
   OrganizationShell,
@@ -266,6 +267,14 @@ export function GiftClaim({
                   Start with your details and the person you’d like to share
                   your stories with.
                 </p>
+                <div className="mt-6 overflow-hidden rounded-2xl border border-warmgray-200">
+                  <InterviewProgress variant="intro" />
+                  <p className="px-5 py-4 text-base leading-7 text-ink-500 sm:px-8">
+                    We’ll take this one question at a time. You can choose video
+                    with sound or audio only, and review your stories before
+                    anything is shared.
+                  </p>
+                </div>
                 <form
                   onSubmit={submit}
                   aria-busy={busy}

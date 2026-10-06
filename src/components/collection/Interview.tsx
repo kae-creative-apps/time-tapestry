@@ -10,6 +10,7 @@ import {
   getChapterQuestion,
 } from "@/lib/interview-state";
 import type { AnswerTake, CollectionView } from "@/lib/collection/types";
+import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 import { getTakeBlob, listLocalTakes } from "@/lib/collection/local-takes";
 import SavedRecorder from "./SavedRecorder";
 
@@ -241,7 +242,6 @@ export default function Interview({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recordingsApproved, setRecordingsApproved] = useState(false);
   const submitting = useRef(false);
   const recorderArea = useRef<HTMLDivElement>(null);
   const [recorderBusy, setRecorderBusy] = useState(false);
@@ -296,10 +296,6 @@ export default function Interview({
           ),
       ),
   ).length;
-  const selectedRecordingIds = JSON.stringify(
-    collection?.selectedTakeIds ?? {},
-  );
-  useEffect(() => setRecordingsApproved(false), [selectedRecordingIds]);
   const progress = Math.min(
     100,
     Math.max(0, (completed / CHAPTERS.length) * 100),
@@ -371,9 +367,11 @@ export default function Interview({
     setSpeaking(false);
   }
 
-  async function act(
-    body: Record<string, unknown>,
-  ): Promise<{ collection: CollectionView; question?: string | null }> {
+  async function act(body: Record<string, unknown>): Promise<{
+    collection: CollectionView;
+    question?: string | null;
+    preparation?: InterviewPreparationView;
+  }> {
     const response = await fetch(`${endpoint}${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -429,7 +427,7 @@ export default function Interview({
       });
       if (!response.ok)
         throw new Error(
-          "The interviewer voice is unavailable right now. Please try again. You can still read the question above.",
+          "The sound is unavailable right now. Please try again. You can still read the question above.",
         );
       const blob = await response.blob();
       if (controller.signal.aborted || requestId !== speechRequest.current)
@@ -445,7 +443,7 @@ export default function Interview({
         stopSpeaking();
         setVoiceUnavailable(true);
         setError(
-          "The interviewer audio could not play. Please try again. The question is still on screen.",
+          "The question audio could not play. Please try again. The question is still on screen.",
         );
       };
       await player.play();
@@ -509,14 +507,14 @@ export default function Interview({
     }
   }
 
-  async function generate() {
-    if (submitting.current || !recordingsApproved) return;
+  async function finish() {
+    if (submitting.current || allBusy) return;
     submitting.current = true;
     setBusy(true);
     setError("");
     stopSpeaking();
     try {
-      const local = await listLocalTakes(collectionId).catch(() => []);
+      const local = await listLocalTakes(collectionId);
       const candidates = local.filter(
         (take) =>
           take.state !== "backed_up" &&
@@ -547,16 +545,16 @@ export default function Interview({
           `You have ${pending.length} recording${pending.length === 1 ? "" : "s"} saved only on this device (${places}). Open those answers and back them up before preparing your story.`,
         );
       }
-      await act({
-        action: "generate",
-        regenerate: Boolean(
-          collection?.chapters.length && collection.draftOutdated,
-        ),
-        prepareFilms: true,
+      const result = await act({
+        action: "submit_interview",
         processingApproved: true,
       });
+      if (!result.preparation?.id)
+        throw new Error(
+          "We could not confirm preparation yet. Your recording is kept. Check your preparation status before trying again.",
+        );
       router.push(
-        `/collection/${encodeURIComponent(collectionId)}/review${query}`,
+        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
       );
     } catch (error) {
       submitting.current = false;
@@ -776,8 +774,8 @@ export default function Interview({
         </button>
         {!collection.capabilities.tts && (
           <p className="mt-2 text-sm text-ink-600">
-            The interviewer voice is unavailable. You can read the question here
-            and try listening again later.
+            The sound is unavailable. You can read the question here and try
+            listening again later.
           </p>
         )}
         <p className="mt-3 text-base leading-7 text-ink-400">
@@ -845,8 +843,8 @@ export default function Interview({
               </h2>
               <p className="mt-2 text-sm leading-6 text-ink-400">
                 Listen to your recording. Keep it if you are happy with it, or
-                record it again. Earlier takes stay saved. Approve and submit
-                your chosen recordings after all four parts.
+                record it again. Earlier takes stay saved. Finish interview
+                starts preparing your stories and videos for review.
               </p>
             </div>
             {questionTakes.map((take, index) => (
@@ -877,7 +875,6 @@ export default function Interview({
                     .finally(() => setBusy(false));
                 }}
                 onRerecord={() => {
-                  setRecordingsApproved(false);
                   recorderArea.current?.scrollIntoView({
                     behavior: "smooth",
                     block: "center",
@@ -904,21 +901,6 @@ export default function Interview({
             />
           </div>
         )}
-        {chapterIndex === CHAPTERS.length - 1 && (
-          <label className="mt-8 flex items-start gap-3 rounded-xl bg-paper-100 p-4 text-base leading-7">
-            <input
-              type="checkbox"
-              className="mt-1 h-5 w-5"
-              checked={recordingsApproved}
-              disabled={allBusy || completed < 4}
-              onChange={(event) => setRecordingsApproved(event.target.checked)}
-            />
-            <span>
-              I listened to my chosen recordings and approve using them to
-              create my stories and films.
-            </span>
-          </label>
-        )}
         <div className="mt-8 flex flex-wrap gap-3 border-t border-warmgray-300 pt-6">
           {chapterIndex < CHAPTERS.length - 1 ? (
             <button
@@ -935,22 +917,18 @@ export default function Interview({
             <button
               type="button"
               className={primary}
-              disabled={allBusy || completed < 4 || !recordingsApproved}
-              onClick={() => void generate()}
+              disabled={allBusy}
+              onClick={() => void finish()}
             >
-              {busy
-                ? "Submitting recordings…"
-                : "Approve and submit recordings"}
+              {busy ? "Submitting recordings…" : "Finish interview"}
             </button>
           )}
         </div>
-        {chapterIndex === CHAPTERS.length - 1 && completed < 4 && (
-          <p className="mt-3 text-sm text-ink-400">
-            Each of the four stories needs a recorded answer and its transcript
-            before we can prepare the collection. You can return to any part you
-            left for later. For part 2, you can choose the general decision
-            question without discussing faith. Check any recording still waiting
-            for transcription, or record the answer again.
+        {chapterIndex === CHAPTERS.length - 1 && (
+          <p className="mt-3 text-base leading-7 text-ink-500">
+            Choosing Finish interview starts preparing your four stories, four
+            videos, and postcard drafts. You review them before sharing. Nothing
+            is mailed until you approve.
           </p>
         )}
         <p className="mt-6 text-sm leading-6 text-ink-400">

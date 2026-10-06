@@ -12,7 +12,7 @@ const states = [
   {
     state: "connecting",
     title: "Connecting",
-    description: "A little movement while the interviewer opens.",
+    description: "A little movement as the conversation begins.",
   },
   {
     state: "listening",
@@ -22,7 +22,7 @@ const states = [
   {
     state: "speaking",
     title: "Speaking",
-    description: "Gentle movement while the interviewer speaks.",
+    description: "Gentle movement while a question is spoken.",
   },
 ] as const;
 

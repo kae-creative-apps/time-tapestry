@@ -92,6 +92,137 @@ test("read-aloud and films share the verified interviewer voice and settings, ig
   assert.deepEqual(events, ["verify", "reserve", "speak"]);
 });
 
+test("speech removes performance cues while preserving bracketed memories and the configured voice", async (t) => {
+  const events: string[] = [];
+  t.mock.method(voice.elevenlabs!.conversationalAi.agents, "get", async () => {
+    events.push("verify");
+    return { conversationConfig: { tts } };
+  });
+  t.mock.method(
+    voice.elevenlabs!.textToSpeech,
+    "stream",
+    async (voiceId: string, options: Record<string, unknown>) => {
+      events.push("speak");
+      assert.equal(voiceId, tts.voiceId);
+      assert.equal(options.modelId, "eleven_multilingual_v2");
+      assert.deepEqual(options.voiceSettings, expectedSettings);
+      assert.equal(
+        options.text,
+        "You mentioned [June 1956] (not 1957). What made that day feel different?",
+      );
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    },
+  );
+  await voice.streamTextToSpeech(
+    "[smile] You mentioned [June 1956] (not 1957). *gently* What made that day feel different?",
+    async () => {
+      events.push("reserve");
+    },
+  );
+  assert.deepEqual(events, ["verify", "reserve", "speak"]);
+});
+
+test("performance cues without spoken words stop before voice lookup, budget reservation or speech", async (t) => {
+  let lookups = 0,
+    reservations = 0,
+    speech = 0;
+  t.mock.method(voice.elevenlabs!.conversationalAi.agents, "get", async () => {
+    lookups++;
+    return { conversationConfig: { tts } };
+  });
+  t.mock.method(voice.elevenlabs!.textToSpeech, "stream", async () => {
+    speech++;
+  });
+  await assert.rejects(
+    voice.streamTextToSpeech("[happy] (sighs) *gently*", async () => {
+      reservations++;
+    }),
+    /no question to read/i,
+  );
+  assert.equal(lookups, 0);
+  assert.equal(reservations, 0);
+  assert.equal(speech, 0);
+});
+
+test("read-aloud endpoint rejects cue-only input without spending and passes cleaned words to the same voice", async (t) => {
+  const priorTestBypass = process.env.SECURITY_TEST_BYPASS;
+  delete process.env.SECURITY_TEST_BYPASS;
+  t.after(() => {
+    if (priorTestBypass === undefined) delete process.env.SECURITY_TEST_BYPASS;
+    else process.env.SECURITY_TEST_BYPASS = priorTestBypass;
+  });
+  const { prepareCollection } = await import("../src/lib/collection/create");
+  const store = await import("../src/lib/collection/store");
+  const { opaqueIdentifier } = await import("../src/lib/security/rate-limit");
+  const { POST } = await import("../src/app/api/collection/[id]/speak/route");
+  const budgetKey = `guard-${opaqueIdentifier("all-provider-actions:daily")}`;
+  const spentBefore = await store.readRecord<{ count: number }>(budgetKey);
+  const c = prepareCollection({
+    initiationPath: "share",
+    storyteller: { name: "Synthetic storyteller", email: "owner@example.test" },
+    recipient: { name: "Synthetic recipient", email: "recipient@example.test" },
+  });
+  await store.putCollection(c);
+  const savedBefore = await store.getCollection(c.id);
+  let lookups = 0,
+    speech = 0;
+  t.mock.method(voice.elevenlabs!.conversationalAi.agents, "get", async () => {
+    lookups++;
+    return { conversationConfig: { tts } };
+  });
+  t.mock.method(
+    voice.elevenlabs!.textToSpeech,
+    "stream",
+    async (voiceId: string, options: Record<string, unknown>) => {
+      speech++;
+      assert.equal(voiceId, tts.voiceId);
+      assert.equal(options.modelId, "eleven_multilingual_v2");
+      assert.deepEqual(options.voiceSettings, expectedSettings);
+      assert.equal(options.text, "Was that [June 1956] (not 1957)?");
+      assert.equal(
+        (await store.readRecord<{ count: number }>(budgetKey))!.count,
+        (spentBefore?.count ?? 0) + 1,
+      );
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    },
+  );
+  const read = (text: string) =>
+    POST(
+      new NextRequest(
+        `http://localhost/api/collection/${c.id}/speak?key=${c.ownerKey}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+      ),
+      { params: Promise.resolve({ id: c.id }) },
+    );
+  const noWords = await read("[happy] (sighs) *gently*");
+  assert.equal(noWords.status, 400);
+  assert.match((await noWords.json()).error, /no question to read/i);
+  assert.equal(lookups, 0);
+  assert.equal(speech, 0);
+  assert.deepEqual(await store.readRecord(budgetKey), spentBefore);
+  assert.deepEqual(await store.getCollection(c.id), savedBefore);
+
+  const spoken = await read("[smile] Was that [June 1956] (not 1957)?");
+  assert.equal(spoken.status, 200);
+  assert.equal(spoken.headers.get("content-type"), "audio/mpeg");
+  assert.match(spoken.headers.get("cache-control") || "", /no-store/);
+  assert.equal(lookups, 1);
+  assert.equal(speech, 1);
+  assert.deepEqual(await store.getCollection(c.id), savedBefore);
+});
+
 test("agent verification failure never spends a speech allowance or selects a fallback voice", async (t) => {
   let speech = 0,
     reservations = 0;

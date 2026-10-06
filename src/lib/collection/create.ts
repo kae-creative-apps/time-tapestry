@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { appOrigin, linksFor, publicView } from "./access";
+import { INTERVIEW_PACING_COPY } from "./interview-progress";
 import type { Collection, Contact, PostalAddress } from "./types";
 
 const clean = (v: unknown, max = 200) =>
@@ -93,7 +94,7 @@ export function prepareCollection(value: unknown): Collection {
       kind: "invitation",
       to: storyteller.email,
       subject: `${requester.name} would like to hear your story`,
-      text: `${requester.name} has invited you to share stories from your life. ${c.invitationNote}\nYou can speak, type or record video. You review everything before it is shared.`,
+      text: `${requester.name} has invited you to share stories from your life. ${c.invitationNote}\n\n${INTERVIEW_PACING_COPY}\n\nYou can choose video with sound or audio only. You review your stories before anything is shared.`,
       url: appOrigin() + linksFor(c).interview,
       dueAt: now,
       status: "pending",

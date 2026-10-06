@@ -2,6 +2,7 @@ import type { PostcardProofSnapshot } from "./postcard-proofs";
 import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
 import type { PrivateGenerosityNotes } from "./generosity-notes";
+import type { InterviewPreparationView } from "./interview-preparation-types";
 export type Contact = { name: string; email: string; phone?: string };
 export type AdditionalRecipient = {
   id: string;
@@ -61,6 +62,13 @@ export type InterviewTurn = {
   endMs?: number;
   timing: "estimated" | "unaligned";
   supersedesTurnId?: string;
+  /** Provider recovery attribution. Arrival times never stand in for word boundaries. */
+  providerTranscript?: {
+    conversationId: string;
+    rowIndex: number;
+    sourceEventId?: number;
+    originalSequence?: number;
+  };
 };
 export type InterviewSegment = {
   id: string;
@@ -158,6 +166,8 @@ export type Notification = {
 };
 export type PostcardCadence = "biweekly" | "quarterly";
 export type Collection = {
+  /** Owner-only durable preparation status. Private job inputs live separately. */
+  interviewPreparation?: InterviewPreparationView;
   /** Digital access only. The primary recipient still owns all physical postcards. */
   additionalRecipients?: AdditionalRecipient[];
   /** Fixed when the collection is created. Missing on legacy quarterly collections. */

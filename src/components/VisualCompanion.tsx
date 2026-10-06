@@ -11,7 +11,7 @@ export function VisualCompanion({ text }: { text: string }) {
       <p className="text-sm leading-relaxed text-paper">
         Voice playback is unavailable in this earlier interview.{" "}
         <Link href="/share" className="underline underline-offset-4">
-          Start a private collection with the current interviewer.
+          Begin sharing your story.
         </Link>
       </p>
     </div>
