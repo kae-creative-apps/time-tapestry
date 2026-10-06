@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { CHAPTERS } from "../src/lib/interview-state";
+import { interviewAnswers } from "../src/lib/collection/interview";
+import { hasRecordedAnswerSource } from "../src/lib/collection/recording-validation";
 import { syntheticFilmCollection } from "./film-fixture";
 import type {
   Collection,
@@ -206,6 +208,76 @@ test("explicit full-interview restoration preserves all raw recordings and priva
   for (const take of c.takes) assert.ok(await store.getMedia(take.mediaId!));
 });
 
+test("original verification reads each unique segment once and uses only verified sources for every answer", async () => {
+  const c = await fixture();
+  const session = c.interviews![0];
+  const original = (await store.getMedia(session.segments[0].mediaId))!;
+  for (let i = 1; i < 4; i++) {
+    const id = `original_${randomUUID()}`;
+    await store.putMedia({ ...original, id });
+    session.segments.push({
+      ...session.segments[0],
+      id: `segment_${randomUUID()}`,
+      mediaId: id,
+      startMs: i * 60_000,
+    });
+  }
+  session.segments.push({
+    ...session.segments[0],
+    id: `segment_${randomUUID()}`,
+    startMs: 240_000,
+  });
+  session.turns = Array.from({ length: 24 }, (_, index) => ({
+    ...session.turns[index % 4],
+    id: `turn_${randomUUID()}`,
+    sequence: index,
+  }));
+  session.excludedTurnIds = [];
+  const reads: string[] = [];
+  const verified = await restoration.verifiedInterviewMedia(
+    c,
+    session,
+    async (id) => {
+      reads.push(id);
+      return store.getMedia(id);
+    },
+  );
+  assert.equal(reads.length, 4);
+  assert.equal(new Set(reads).size, 4);
+  assert.equal(verified.size, 4);
+  for (const chapter of CHAPTERS)
+    for (const answer of interviewAnswers(c, chapter.id))
+      assert.equal(
+        await hasRecordedAnswerSource(
+          answer,
+          c,
+          async (id) => verified.get(id) ?? null,
+        ),
+        true,
+      );
+  assert.equal(reads.length, 4);
+  const answer = interviewAnswers(c, "q1")[0];
+  answer.liveSource!.sourceRanges.push({
+    segmentId: "unverified_segment",
+    mediaId: "unverified_original",
+  });
+  assert.equal(
+    await hasRecordedAnswerSource(
+      answer,
+      c,
+      async (id) => verified.get(id) ?? null,
+    ),
+    false,
+  );
+  await assert.rejects(
+    restoration.verifiedInterviewMedia(c, session, async () => ({
+      ...original,
+      id: "wrong_record_binding",
+    })),
+    /could not be verified/,
+  );
+});
+
 test("restoration rejects stale choices, approved collections and nonowner authorization without changing sources", async () => {
   const c = await fixture();
   await assert.rejects(
@@ -380,7 +452,10 @@ test("route requires owner consent and the current source version", async () => 
       ),
       { params: Promise.resolve({ id: c.id }) },
     );
-    assert.ok(response.status >= 400);
+    assert.equal(
+      response.status,
+      variant === "version" ? 409 : variant === "recipient" ? 404 : 400,
+    );
     assert.deepEqual(await store.getCollection(c.id), c);
   }
 });

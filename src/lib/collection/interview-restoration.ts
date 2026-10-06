@@ -1,13 +1,20 @@
 import { createHash } from "node:crypto";
 import { CHAPTERS } from "../interview-state";
+import { SecurityError } from "../security/policy";
 import { interviewAnswers } from "./interview";
 import {
   hasRecordedAnswerSource,
   isStoredOwnerRecording,
 } from "./recording-validation";
-import { InterviewPreparationError } from "./interview-preparation";
 import { getMedia, mutateCollection, mutateRecord } from "./store";
-import type { Collection, StoredMedia } from "./types";
+import type { Collection, InterviewSession, StoredMedia } from "./types";
+
+/** Keep this source-choice action independent from rendering/provider imports. */
+export class InterviewRestorationError extends SecurityError {
+  constructor(message: string, status = 400) {
+    super(message, status);
+  }
+}
 
 const sha = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -52,6 +59,44 @@ function sourceChoices(c: Collection) {
   };
 }
 
+/** Each immutable original is read once, even when many turns use its ranges. */
+export async function verifiedInterviewMedia(
+  collection: Collection,
+  session: InterviewSession,
+  findMedia: (id: string) => Promise<StoredMedia | null> = getMedia,
+) {
+  const media = new Map<string, StoredMedia>();
+  for (const segment of session.segments) {
+    if (
+      !Number.isFinite(segment.startMs) ||
+      segment.startMs < 0 ||
+      !Number.isFinite(segment.durationMs) ||
+      segment.durationMs <= 0
+    )
+      throw new InterviewRestorationError(
+        "The saved original recording needs a source check.",
+      );
+    for (const id of [segment.mediaId, segment.audioMediaId].filter(
+      Boolean,
+    ) as string[]) {
+      const stored = media.get(id) ?? (await findMedia(id));
+      if (
+        stored?.id !== id ||
+        !isStoredOwnerRecording(
+          stored,
+          collection,
+          id === segment.mediaId ? segment.kind : "voice",
+        )
+      )
+        throw new InterviewRestorationError(
+          "The saved original recording could not be verified. Your existing choices are unchanged.",
+        );
+      media.set(id, stored);
+    }
+  }
+  return media;
+}
+
 /**
  * Explicit owner choice, not a legacy migration. Raw recordings, turns and takes
  * remain intact; only the chosen completed interview's inclusion choices change.
@@ -74,7 +119,7 @@ export async function restoreCompletedInterview(
     !options.expectedUpdatedAt.trim() ||
     typeof options.authorize !== "function"
   )
-    throw new InterviewPreparationError(
+    throw new InterviewRestorationError(
       "Confirm that you want to use your full saved interview before continuing.",
     );
 
@@ -82,12 +127,12 @@ export async function restoreCompletedInterview(
   const collection = await mutateCollection(collectionId, async (current) => {
     await options.authorize(current);
     if (current.status === "approved")
-      throw new InterviewPreparationError(
+      throw new InterviewRestorationError(
         "Approved stories cannot be replaced.",
         409,
       );
     if (current.updatedAt !== options.expectedUpdatedAt)
-      throw new InterviewPreparationError(
+      throw new InterviewRestorationError(
         "Your saved answers changed. Refresh the page and choose again.",
         409,
       );
@@ -99,7 +144,7 @@ export async function restoreCompletedInterview(
       session.provider !== "elevenlabs" ||
       session.status !== "completed"
     )
-      throw new InterviewPreparationError(
+      throw new InterviewRestorationError(
         "Choose a completed saved conversation.",
       );
     if (
@@ -107,42 +152,15 @@ export async function restoreCompletedInterview(
         (turn) => turn.role === "user" && turn.supersedesTurnId,
       )
     )
-      throw new InterviewPreparationError(
+      throw new InterviewRestorationError(
         "This interview has corrected answers that need a source review. Your recordings are preserved.",
         409,
       );
     if (!session.segments.length)
-      throw new InterviewPreparationError(
+      throw new InterviewRestorationError(
         "The original conversation recording must finish saving first.",
       );
-    const media = new Map<string, StoredMedia>();
-    for (const segment of session.segments) {
-      if (
-        !Number.isFinite(segment.startMs) ||
-        segment.startMs < 0 ||
-        !Number.isFinite(segment.durationMs) ||
-        segment.durationMs <= 0
-      )
-        throw new InterviewPreparationError(
-          "The saved original recording needs a source check.",
-        );
-      for (const id of [segment.mediaId, segment.audioMediaId].filter(
-        Boolean,
-      ) as string[]) {
-        const stored = await getMedia(id);
-        if (
-          !isStoredOwnerRecording(
-            stored,
-            current,
-            id === segment.mediaId ? segment.kind : "voice",
-          )
-        )
-          throw new InterviewPreparationError(
-            "The saved original recording could not be verified. Your existing choices are unchanged.",
-          );
-        media.set(id, stored);
-      }
-    }
+    const media = await verifiedInterviewMedia(current, session);
 
     const next = structuredClone(current);
     const restored = next.interviews!.find((item) => item.id === session.id)!;
@@ -150,12 +168,18 @@ export async function restoreCompletedInterview(
     for (const chapter of CHAPTERS) {
       const answers = interviewAnswers({ interviews: [restored] }, chapter.id);
       if (!answers.length || answers.some((answer) => !answer.text.trim()))
-        throw new InterviewPreparationError(
+        throw new InterviewRestorationError(
           "Your full interview needs saved words in all four story areas before it can be restored.",
         );
       for (const answer of answers)
-        if (!(await hasRecordedAnswerSource(answer, next, getMedia)))
-          throw new InterviewPreparationError(
+        if (
+          !(await hasRecordedAnswerSource(
+            answer,
+            next,
+            async (id) => media.get(id) ?? null,
+          ))
+        )
+          throw new InterviewRestorationError(
             "Each story area needs its saved original recording before restoration.",
           );
     }
@@ -172,7 +196,7 @@ export async function restoreCompletedInterview(
         (item) => item.id === takeId && item.questionId === questionId,
       );
       if (!take || take.replacesChapterId !== chapter.id)
-        throw new InterviewPreparationError(
+        throw new InterviewRestorationError(
           "A separately selected recording needs a source choice before restoring the full interview. Your recordings are preserved.",
           409,
         );
@@ -220,7 +244,7 @@ export async function restoreCompletedInterview(
         existing.beforeSha256 !== beforeSha256 ||
         existing.afterSha256 !== afterSha256
       )
-        throw new InterviewPreparationError(
+        throw new InterviewRestorationError(
           "The saved source backup needs a check.",
           409,
         );
