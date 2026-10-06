@@ -12,6 +12,7 @@ import {
 import type { AnswerTake, CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 import { getTakeBlob, listLocalTakes } from "@/lib/collection/local-takes";
+import { collectionRequest } from "@/lib/collection/client-request";
 import SavedRecorder from "./SavedRecorder";
 import {
   interviewResumeState,
@@ -291,10 +292,7 @@ export default function Interview({
   );
 
   const load = useCallback(async () => {
-    const response = await fetch(`${endpoint}${query}`, { cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.error || "Your interview could not be opened.");
+    const data = await collectionRequest(`${endpoint}${query}`);
     setCollection(data.collection);
     if (!initialLoaded.current) {
       initialLoaded.current = true;
@@ -407,16 +405,11 @@ export default function Interview({
     question?: string | null;
     preparation?: InterviewPreparationView;
   }> {
-    const response = await fetch(`${endpoint}${query}`, {
+    const data = await collectionRequest(`${endpoint}${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(
-        data.error || "This change could not be saved. Please try again.",
-      );
     if (data.collection) setCollection(data.collection);
     return data;
   }
@@ -515,7 +508,7 @@ export default function Interview({
     setTranscribingTakeId(take.id);
     setError("");
     try {
-      const response = await fetch(`${endpoint}/transcribe${query}`, {
+      await collectionRequest(`${endpoint}/transcribe${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -523,12 +516,6 @@ export default function Interview({
           takeId: take.id,
         }),
       });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(
-          result.error ||
-            "The automatic transcript could not finish. Your recording is saved.",
-        );
       await load();
     } catch (cause) {
       setError(

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ReactNode } from 'react';
 
 interface StaggerProps {
@@ -11,12 +11,13 @@ interface StaggerProps {
 }
 
 export function Stagger({ children, className = '', stagger = 0.1, delay = 0 }: StaggerProps) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      initial="hidden"
+      initial={reduceMotion ? false : "hidden"}
       animate="visible"
       variants={{
-        visible: { transition: { staggerChildren: stagger, delayChildren: delay } },
+        visible: { transition: { staggerChildren: reduceMotion ? 0 : stagger, delayChildren: reduceMotion ? 0 : delay } },
         hidden: {}
       }}
       className={className}
@@ -33,11 +34,12 @@ export function StaggerItem({
   children: ReactNode;
   className?: string;
 }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
       variants={{
-        hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+        hidden: { opacity: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : 20 },
+        visible: { opacity: 1, y: 0, transition: { duration: reduceMotion ? 0 : 0.5, ease: 'easeOut' } }
       }}
       className={className}
     >

@@ -5,6 +5,10 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
+import {
+  syntheticFilmCollection,
+  syntheticOriginalFilmArtifact,
+} from "./film-fixture";
 
 const hash = (v: string) => createHash("sha256").update(v).digest("hex");
 test("verified email accounts require single-use, browser-bound proof and keep private library roles isolated", async () => {
@@ -298,6 +302,38 @@ test("verified email accounts require single-use, browser-bound proof and keep p
     assert.equal(
       await service.accountCollectionPath(recipient.account, mine.id),
       `/collection/${mine.id}`,
+    );
+    const approved = syntheticFilmCollection();
+    approved.recipient.email = recipient.account.email;
+    approved.status = "approved";
+    approved.chapters.forEach((chapter, index) => {
+      chapter.videoMediaId = `finished-film-${index}`;
+      chapter.film = syntheticOriginalFilmArtifact(
+        approved,
+        chapter.id,
+        chapter.videoMediaId,
+      );
+    });
+    // Only one film is eligible for actual recipient playback.
+    approved.chapters[1].film = undefined;
+    approved.chapters[2].film!.mediaId = "unmatched-film";
+    approved.chapters[3].film = {
+      ...approved.chapters[3].film!,
+      narrationKind: "ai_interviewer",
+      scriptSha256: "d".repeat(64),
+      audioSha256: "e".repeat(64),
+      voiceId: "retired-synthetic-voice",
+      modelId: "retired-synthetic-model",
+    };
+    await store.putCollection(approved);
+    const recipientGift = (
+      await service.accountLibrary(recipient.account)
+    ).items.find((item) => item.id === approved.id)!;
+    assert.equal(recipientGift.storyCount, 4);
+    assert.equal(
+      recipientGift.recordingCount,
+      1,
+      "library film count matches original-voice playback permissions",
     );
     const requesterToken = await start("requester@example.test");
     const requester = await service.confirmAccountLogin(requesterToken, nonce);

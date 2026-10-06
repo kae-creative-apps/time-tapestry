@@ -85,7 +85,11 @@ export function StoryReviewPanel({
       className="min-w-0 rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-8"
       aria-label={`Listen to ${chapter.title}`}
     >
-      <h2 className="mb-4 text-xl font-semibold sm:text-2xl">
+      <h2
+        id={`review-chapter-${chapter.id}`}
+        tabIndex={-1}
+        className="mb-4 scroll-mt-5 text-xl font-semibold sm:text-2xl"
+      >
         {chapter.title}
       </h2>
       <div>

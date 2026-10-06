@@ -22,6 +22,7 @@ export default function AddressPage({
   const mailingStarted = Boolean(
     c?.deliveries.some((delivery) => delivery.providerId),
   );
+  const digitalRecipient = c?.role === "recipient" && !c.isPrimaryRecipient;
   return (
     <main className="brand-page-shell mx-auto max-w-4xl px-5 py-6 sm:px-8 sm:py-8">
       <Logo className="[&_svg]:h-11" />
@@ -32,11 +33,14 @@ export default function AddressPage({
         />
         <div className="relative max-w-xl rounded-2xl bg-paper p-5 sm:p-6">
           <h1 className="mb-4 font-serif text-3xl text-espresso sm:text-4xl">
-            A place for your postcards.
+            {digitalRecipient
+              ? "Your shared stories."
+              : "A place for your postcards."}
           </h1>
           <p className="text-lg leading-relaxed text-espresso">
-            {c?.storyteller.name || "Someone you know"} is making a gift for
-            you. Confirm where you would like the postcards sent.
+            {digitalRecipient
+              ? `You can read ${c.storyteller.name}’s stories and send a private reply.`
+              : `${c?.storyteller.name || "Someone you know"} is making a gift for you. Confirm where you would like the postcards sent.`}
           </p>
         </div>
       </header>
@@ -60,7 +64,20 @@ export default function AddressPage({
               Try opening again
             </button>
           ))}
-        {c?.addressConfirmed ? (
+        {digitalRecipient ? (
+          <div>
+            <p className="text-lg leading-8">
+              The mailing address belongs to the person receiving the postcards.
+              Your invitation gives you access to the stories and replies.
+            </p>
+            <a
+              href={`/collection/${encodeURIComponent(id)}`}
+              className={`${portalSecondary} mt-6`}
+            >
+              Open my stories
+            </a>
+          </div>
+        ) : c?.addressConfirmed ? (
           <div className="rounded-lg border border-sage-200 bg-sage-50 p-6">
             <h2 className="font-serif text-xl">Your address is saved.</h2>
             <p className="mt-3">
@@ -94,6 +111,16 @@ export default function AddressPage({
             />
           )
         )}
+        {c?.role === "recipient" &&
+          c.isPrimaryRecipient &&
+          c.addressConfirmed && (
+            <a
+              href={`/collection/${encodeURIComponent(id)}`}
+              className={`${portalSecondary} mt-6`}
+            >
+              Open my stories
+            </a>
+          )}
       </div>
     </main>
   );

@@ -13,12 +13,41 @@ import {
   archiveSegment,
   archiveTimelineOffset,
   isArchiveTake,
+  isEmptyArchiveAttempt,
   type ArchiveLocalTake,
 } from "../src/lib/collection/archive-utils";
 
 Object.defineProperty(globalThis, "indexedDB", {
   configurable: true,
   value: new IDBFactory(),
+});
+
+test("a confirmed empty recorder-start failure is distinct from missing or unsaved content", () => {
+  const empty = take("failed-start", { state: "local", durationSeconds: 0 });
+  assert.equal(isEmptyArchiveAttempt(empty, false), true);
+  assert.equal(
+    isEmptyArchiveAttempt(empty, undefined),
+    false,
+    "unreadable storage is not proof of no recording",
+  );
+  assert.equal(
+    isEmptyArchiveAttempt(empty, true),
+    false,
+    "bytes must never be silently ignored",
+  );
+  assert.equal(
+    isEmptyArchiveAttempt({ ...empty, durationSeconds: 1 }, false),
+    false,
+    "elapsed recording with missing bytes needs attention",
+  );
+  assert.equal(
+    isEmptyArchiveAttempt({ ...empty, mediaId: "uploaded" }, false),
+    false,
+  );
+  assert.equal(
+    isEmptyArchiveAttempt({ ...empty, state: "recording" }, false),
+    false,
+  );
 });
 
 function take(

@@ -32,6 +32,19 @@ export function archiveDurationMs(take: ArchiveLocalTake): number {
   );
 }
 
+/** Only a checked zero-byte, zero-duration attempt is safe to disregard. */
+export function isEmptyArchiveAttempt(
+  take: ArchiveLocalTake,
+  hasSavedBytes: boolean | undefined,
+): boolean {
+  return (
+    take.state !== "recording" &&
+    !take.mediaId &&
+    archiveDurationMs(take) === 0 &&
+    hasSavedBytes === false
+  );
+}
+
 export function archiveTimelineOffset(
   sessionStartedAt: string,
   now: number,

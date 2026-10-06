@@ -51,9 +51,19 @@ export function CollectionSharing({
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteNotice, setInviteNotice] = useState("");
+  const [confirmRevokeId, setConfirmRevokeId] = useState("");
+  const inviteField = useRef<HTMLTextAreaElement>(null);
   const [recipients, setRecipients] = useState(c.additionalRecipients ?? []);
   const inviteInFlight = useRef(false);
   const postcardsSection = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (inviteError && !inviteBusy && !confirmRevokeId)
+      inviteField.current?.focus();
+  }, [inviteError, inviteBusy, confirmRevokeId]);
+  useEffect(() => {
+    if (confirmRevokeId)
+      document.getElementById(`keep-reader-${confirmRevokeId}`)?.focus();
+  }, [confirmRevokeId]);
   useEffect(
     () => setRecipients(c.additionalRecipients ?? []),
     [c.additionalRecipients],
@@ -96,7 +106,9 @@ export function CollectionSharing({
         );
       }
       setInviteNotice(
-        "Invitations are saved. New invitations will be sent by email; existing invitations are kept without duplicate emails.",
+        c.capabilities.email
+          ? "Invitations are saved and waiting to send. Existing invitations are kept without duplicate emails."
+          : "Invitations are saved. Email sending is not connected yet, so no invitation emails have been sent.",
       );
     } catch (cause) {
       setInviteError(
@@ -120,6 +132,7 @@ export function CollectionSharing({
         body: JSON.stringify({ action: "revoke", recipientId }),
       });
       setRecipients(data.collection.additionalRecipients ?? []);
+      setConfirmRevokeId("");
       setInviteNotice(
         "Their access has been removed. Your primary postcard recipient is unchanged.",
       );
@@ -252,7 +265,12 @@ export function CollectionSharing({
             <label className="mt-5 block text-base font-medium">
               Email addresses
               <textarea
+                ref={inviteField}
                 rows={4}
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={inviteText}
                 disabled={busy || inviteBusy}
                 onChange={(event) => {
@@ -260,7 +278,8 @@ export function CollectionSharing({
                   setInviteError("");
                 }}
                 className="mt-2 w-full rounded-xl border border-warmgray-300 bg-white p-4 text-base leading-7"
-                aria-describedby="invite-format"
+                aria-invalid={inviteError ? true : undefined}
+                aria-describedby={`invite-format${inviteError ? " invite-error" : ""}`}
                 placeholder="sam@example.com
 Alex <alex@example.com>"
               />
@@ -286,7 +305,11 @@ Alex <alex@example.com>"
               </p>
             )}
             {inviteError && (
-              <p role="alert" className="mt-4 text-base leading-7 text-oxblood">
+              <p
+                id="invite-error"
+                role="alert"
+                className="mt-4 text-base leading-7 text-oxblood"
+              >
                 {inviteError}
               </p>
             )}
@@ -318,16 +341,50 @@ Alex <alex@example.com>"
                             : "Invitation saved"}
                         </p>
                       </div>
-                      {!person.revokedAt && (
+                      {!person.revokedAt && confirmRevokeId !== person.id && (
                         <button
                           type="button"
                           className={portalSecondary}
                           disabled={busy || inviteBusy}
                           aria-label={`Remove access for ${person.name || person.email}`}
-                          onClick={() => void revoke(person.id)}
+                          onClick={() => setConfirmRevokeId(person.id)}
                         >
                           Remove access
                         </button>
+                      )}
+                      {!person.revokedAt && confirmRevokeId === person.id && (
+                        <div
+                          className="w-full rounded-xl border border-clay-200 bg-white p-4"
+                          role="group"
+                          aria-label={`Confirm removing access for ${person.name || person.email}`}
+                        >
+                          <p className="text-base leading-7">
+                            Remove access for {person.name || person.email}?
+                            They will no longer be able to open this gift. You
+                            can invite them again later.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            <button
+                              id={`keep-reader-${person.id}`}
+                              type="button"
+                              className={portalSecondary}
+                              disabled={busy || inviteBusy}
+                              onClick={() => setConfirmRevokeId("")}
+                            >
+                              Keep access
+                            </button>
+                            <button
+                              type="button"
+                              className={portalPrimary}
+                              disabled={busy || inviteBusy}
+                              onClick={() => void revoke(person.id)}
+                            >
+                              {inviteBusy
+                                ? "Removing access…"
+                                : "Yes, remove access"}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </li>
                   ))}

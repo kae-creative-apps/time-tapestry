@@ -35,6 +35,21 @@ export function PortalShell({
   const pathname = usePathname();
   return (
     <main className="mx-auto min-h-screen max-w-[1320px] px-5 pb-10 pt-6 sm:px-8 lg:px-10">
+      <a
+        href="#story-content"
+        className="skip-to-story"
+        onClick={(event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          const content = document.getElementById("story-content");
+          if (content) {
+            // Keep the review position in the URL for Back and reload.
+            event.preventDefault();
+            content.focus();
+          }
+        }}
+      >
+        Skip to your stories
+      </a>
       <header className="mb-8 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
         <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
         <nav
@@ -93,7 +108,9 @@ export function PortalShell({
           </Link>
         </nav>
       </header>
-      {children}
+      <div id="story-content" tabIndex={-1} className="min-w-0">
+        {children}
+      </div>
     </main>
   );
 }

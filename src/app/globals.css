@@ -15,7 +15,8 @@
 }
 
 html {
-  font-size: 16px;
+  /* Respect a larger default text size chosen in the browser. */
+  font-size: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -81,6 +82,25 @@ select:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+summary:focus-visible {
+  outline: 2px solid var(--color-oxblood);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.skip-to-story {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  padding: .75rem 1rem;
+  border-radius: .5rem;
+  background: #fff;
+  color: var(--color-ink);
+  transform: translateY(-200%);
+}
+.skip-to-story:focus { transform: translateY(0); }
 
 button,
 a {

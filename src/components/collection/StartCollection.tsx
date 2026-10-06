@@ -47,6 +47,7 @@ export default function StartCollection({
   const [draftSaved, setDraftSaved] = useState(false);
   const [restored, setRestored] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const errorMessage = useRef<HTMLParagraphElement>(null);
   const previousStep = useRef(0);
   const submission = useRef<StartDraft["submission"]>(undefined);
   const receiver = mode === "share" ? other : recipientIsMe ? me : recipient;
@@ -125,6 +126,9 @@ export default function StartCollection({
       heading.current?.scrollIntoView({ block: "start", behavior: "auto" });
     }
   }, [step]);
+  useEffect(() => {
+    if (error) errorMessage.current?.focus();
+  }, [error]);
   function fields(value: Contact, set: (v: Contact) => void) {
     return (
       <div className="space-y-5">
@@ -133,6 +137,8 @@ export default function StartCollection({
           <input
             required
             maxLength={200}
+            pattern={".*\\S.*"}
+            title="Enter the person's name. A name cannot contain only spaces."
             autoComplete="name"
             className={input}
             value={value.name}
@@ -146,6 +152,8 @@ export default function StartCollection({
             type="email"
             maxLength={254}
             autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
             className={input}
             value={value.email}
             onChange={(e) => set({ ...value, email: e.target.value })}
@@ -238,11 +246,11 @@ export default function StartCollection({
           <p className="mb-8 text-lg leading-relaxed text-ink-500">
             {
               [
-                "This free pilot helps you turn one conversation into four written stories and a personal story page. No payment details are needed.",
+                "This free pilot turns your recorded conversation into four films, four written chapters and a personal story page. No payment details are needed.",
                 mode === "share"
                   ? "Choose someone you want to share your stories, faith and encouragement with."
-                  : "Create a personal invitation for them to speak, type or record their story. They approve everything before sharing.",
-                "We are testing a four-postcard schedule: one to introduce all four stories, then three planned for months 3, 6 and 9.",
+                  : "Invite them to record their story with video and sound, or audio only. They approve the finished gift before sharing.",
+                "The four postcards are planned every two weeks, over six weeks. Mailing needs a confirmed address and separate approval of the printed cards.",
                 "Original recordings stay saved. Stories are only shared and postcards scheduled after the storyteller approves them.",
               ][step]
             }
@@ -259,6 +267,7 @@ export default function StartCollection({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              setError("");
               if (step < 3) setStep(step + 1);
               else void submit();
             }}
@@ -399,10 +408,11 @@ export default function StartCollection({
                   </div>
                 </dl>
                 <p className="text-sm leading-relaxed text-ink-500">
-                  Anyone with the private gift link can open it, so share it
-                  only with people you trust. Physical postcard delivery is
-                  still being tested. When mailing is enabled, a follow-up email
-                  is scheduled two weeks after confirmed mailing.
+                  Recipients verify their invited email address to open the
+                  gift. Keep the storyteller's private recording link secure.
+                  Nothing is shared until the storyteller approves. Physical
+                  postcards also need a confirmed address, print approval and
+                  connected mailing.
                 </p>
                 <label className="flex items-start gap-3">
                   <input type="checkbox" required className="mt-1" />
@@ -422,7 +432,12 @@ export default function StartCollection({
               />
             )}
             {error && (
-              <p role="alert" className="rounded-md bg-red-50 p-4 text-red-800">
+              <p
+                ref={errorMessage}
+                tabIndex={-1}
+                role="alert"
+                className="rounded-md bg-red-50 p-4 text-red-800"
+              >
                 {error}
               </p>
             )}
@@ -431,7 +446,10 @@ export default function StartCollection({
                 <button
                   className={secondary}
                   type="button"
-                  onClick={() => setStep(step - 1)}
+                  onClick={() => {
+                    setError("");
+                    setStep(step - 1);
+                  }}
                   disabled={busy}
                 >
                   Back
