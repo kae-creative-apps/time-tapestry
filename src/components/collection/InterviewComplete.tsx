@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { CHAPTERS } from "@/lib/interview-state";
 import type { CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 
@@ -147,6 +148,82 @@ export default function InterviewComplete({
     }
   }
 
+  async function restoreFullInterview() {
+    if (busy || !latestFullInterview || !collection || !canUseFullInterview)
+      return;
+    const sessionId = latestFullInterview.id;
+    const expectedUpdatedAt = collection.updatedAt;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await collectionRequest<{
+        collection: CollectionView;
+        preparation: InterviewPreparationView;
+      }>(endpoint + query, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "restore_interview",
+          sessionId,
+          expectedUpdatedAt,
+          processingApproved: true,
+        }),
+      });
+      if (!result.preparation?.id)
+        throw new Error(
+          "We could not confirm preparation. Please check again.",
+        );
+      setCollection(result.collection);
+      setPreparation(result.preparation);
+      setRevision((value) => value + 1);
+    } catch (cause) {
+      const message =
+        cause instanceof Error
+          ? cause.message
+          : "Your full interview could not be selected. Your recordings are kept.";
+      // A stale-source rejection needs a fresh version before another choice.
+      try {
+        const [view, progress] = await Promise.all([
+          collectionRequest<{ collection: CollectionView }>(endpoint + query),
+          collectionRequest<{ preparation: InterviewPreparationView | null }>(
+            endpoint + "/preparation" + query,
+          ),
+        ]);
+        if (view.collection.role === "owner") {
+          setCollection(view.collection);
+          setPreparation(progress.preparation);
+        }
+      } catch {
+        // The failed request never authorizes changing the saved source.
+      }
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const latestFullInterview = [...(collection?.interviews ?? [])]
+    .filter(
+      (session) =>
+        session.provider === "elevenlabs" &&
+        session.status === "completed" &&
+        session.segments.some((segment) => Boolean(segment.mediaId)) &&
+        !session.turns.some(
+          (turn) => turn.role === "user" && turn.supersedesTurnId,
+        ) &&
+        CHAPTERS.every((chapter) =>
+          session.turns.some(
+            (turn) =>
+              turn.role === "user" &&
+              turn.chapterId === chapter.id &&
+              turn.text.trim(),
+          ),
+        ),
+    )
+    .sort((first, second) => first.startedAt.localeCompare(second.startedAt))
+    .at(-1);
+  const canUseFullInterview = Boolean(latestFullInterview);
+
   const ready = preparation?.ready === true;
   const needsAttention = preparation?.status === "needs_attention";
   const accepted = Boolean(preparation);
@@ -220,14 +297,38 @@ export default function InterviewComplete({
           {needsAttention && (
             <div className="mb-6 rounded-xl bg-paper-100 p-5 text-base leading-7">
               <p>{preparation.error || "Please check preparation again."}</p>
-              {Boolean(preparation.missingAreas?.length) && (
-                <p className="mt-3">
-                  Continue the conversation to share a little more for{" "}
-                  {preparation.missingAreas
-                    ?.map((area) => area.title)
-                    .join(", ")}
-                  .
-                </p>
+              {canUseFullInterview ? (
+                <div className="mt-4 border-t border-warmgray-200 pt-4">
+                  <p>
+                    Your full interview is saved. You can prepare it instead of
+                    the later recordings.
+                  </p>
+                  <p className="mt-3">
+                    Use every answer from your saved interview, including
+                    answers previously left out. Your later recordings will stay
+                    saved. You review the stories and videos before sharing.
+                  </p>
+                  <button
+                    type="button"
+                    className={`${primary} mt-4`}
+                    disabled={busy || checking}
+                    onClick={() => void restoreFullInterview()}
+                  >
+                    {busy
+                      ? "Selecting your full interview…"
+                      : "Use my full interview"}
+                  </button>
+                </div>
+              ) : (
+                Boolean(preparation.missingAreas?.length) && (
+                  <p className="mt-3">
+                    Continue the conversation to share a little more for{" "}
+                    {preparation.missingAreas
+                      ?.map((area) => area.title)
+                      .join(", ")}
+                    .
+                  </p>
+                )
               )}
             </div>
           )}
@@ -254,7 +355,9 @@ export default function InterviewComplete({
                 Review your stories and videos
                 <AppIcon name="arrowRight" size={20} />
               </Link>
-            ) : needsAttention && !preparation.missingAreas?.length ? (
+            ) : needsAttention &&
+              !canUseFullInterview &&
+              !preparation.missingAreas?.length ? (
               <button
                 type="button"
                 className={primary}

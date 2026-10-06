@@ -46,6 +46,7 @@ import {
   enqueueInterviewPreparation,
   InterviewPreparationError,
 } from "@/lib/collection/interview-preparation";
+import { restoreCompletedInterview } from "@/lib/collection/interview-restoration";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -108,6 +109,43 @@ export async function POST(
     assertOrigin(req);
     await guardRequest(req, { action: "collection_write", resourceId: id });
     const b = (await readJsonBody(req, 512 * 1024)) as any;
+    if (b.action === "restore_interview") {
+      requireOwner(initial, role);
+      if (b.processingApproved !== true)
+        throw new InterviewPreparationError(
+          "Confirm that you want to use your full saved interview before continuing.",
+        );
+      await guardRequest(req, { action: "generate", resourceId: id });
+      const restored = await restoreCompletedInterview(id, {
+        sessionId: b.sessionId,
+        expectedUpdatedAt: b.expectedUpdatedAt,
+        processingApproved: true,
+        authorize: async (current) => {
+          const currentAccess = await collectionAccessForRequest(req, current);
+          requireOwner(current, currentAccess?.role ?? null);
+        },
+      });
+      const result = await enqueueInterviewPreparation(id, {
+        processingApproved: true,
+        retry: true,
+        authorize: async (current) => {
+          const currentAccess = await collectionAccessForRequest(req, current);
+          requireOwner(current, currentAccess?.role ?? null);
+          if (current.updatedAt !== restored.collection.updatedAt)
+            throw new InterviewPreparationError(
+              "Your saved answers changed. Refresh the page and submit your latest choices.",
+              409,
+            );
+        },
+      });
+      return NextResponse.json(
+        {
+          collection: publicView(result.collection, role, access?.recipientId),
+          preparation: result.preparation,
+        },
+        { status: 202, headers: noStore },
+      );
+    }
     if (b.action === "submit_interview") {
       requireOwner(initial, role);
       if (b.processingApproved !== true)
