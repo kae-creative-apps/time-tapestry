@@ -399,7 +399,8 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-orb-v3";
+export const AUTOMATIC_TEMPLATE_VERSION =
+  "original-scribe-source-cleanup-orb-v4";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",

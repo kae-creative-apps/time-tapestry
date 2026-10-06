@@ -5,7 +5,11 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { ChapterVideoPlan } from "../src/lib/video-plan";
+import {
+  chapterDurationFrames,
+  VIDEO_FPS,
+  type ChapterVideoPlan,
+} from "../src/lib/video-plan";
 import type { Collection } from "../src/lib/collection/types";
 
 const exec = promisify(execFile);
@@ -22,12 +26,14 @@ async function main() {
     const [
       { ensureBrowser, openBrowser },
       { renderOriginalFilm },
+      { prepareCutAudio },
       render,
       { enqueueStoryFilms },
       { RECORDING_ONLY_FILMS_MESSAGE },
     ] = await Promise.all([
       import("@remotion/renderer"),
       import("../src/lib/collection/films/original-render"),
+      import("../src/lib/collection/films/cut-audio"),
       import("../src/lib/collection/films/render"),
       import("../src/lib/collection/films/jobstore"),
       import("../src/lib/collection/films/policy"),
@@ -152,6 +158,12 @@ async function main() {
           durationMs: 1000,
           archiveRef: "synthetic-fixture-only",
           originalPreserved: true,
+          audioDerivative: {
+            relativePath: "synthetic-tone.wav",
+            sha256: toneHash,
+            method: "ffmpeg-cleanup",
+            durationMs: 1000,
+          },
         },
       ],
       clips: [
@@ -160,13 +172,15 @@ async function main() {
           sourceAnswerId: "synthetic-answer",
           sourceAssetId: "synthetic-source",
           kind: "video",
-          inMs: 0,
-          outMs: 1000,
+          inMs: 101,
+          outMs: 898,
+          audioFadeInMs: 15,
+          audioFadeOutMs: 15,
           captions: [
             {
               text: "Synthetic audio and video. No family story data.",
-              startMs: 0,
-              endMs: 1000,
+              startMs: 200,
+              endMs: 800,
               timestampMs: null,
               confidence: null,
             },
@@ -185,6 +199,21 @@ async function main() {
         durationMs: 4000,
       },
     };
+    const cut = await prepareCutAudio(
+      tone,
+      toneHash,
+      plan.clips[0],
+      path.join(scratch, "cuts"),
+    );
+    plan.clips[0].audioDerivative = cut.metadata;
+    assert.equal(cut.metadata.startFrame, 3);
+    assert.equal(cut.metadata.endFrame, 27);
+    assert.equal(cut.metadata.sampleCount, 38400);
+    const cutBytes = await readFile(cut.file);
+    assert.equal(cutBytes.readInt16LE(44), 0);
+    assert.equal(cutBytes.readInt16LE(cutBytes.length - 2), 0);
+    preservedFiles.set(cut.file, cut.metadata.sha256);
+    const expectedDuration = chapterDurationFrames(plan) / VIDEO_FPS;
     const output = path.join(scratch, "synthetic-chapter.mp4");
     console.log("Rendering the real ChapterFilm composition at concurrency 2.");
     const result = await renderOriginalFilm(
@@ -192,6 +221,8 @@ async function main() {
         plan,
         assets: new Map([
           ["synthetic-source", { file: source, mime: "video/mp4" }],
+          ["synthetic-source:audio", { file: tone, mime: "audio/wav" }],
+          [cut.metadata.assetId, { file: cut.file, mime: "audio/wav" }],
           ["brand-closer", { file: closer, mime: "video/mp4" }],
           ["brand-font", { file: font, mime: "font/woff2" }],
         ]),
@@ -250,7 +281,44 @@ async function main() {
       assert.equal(video.width, 1920);
       assert.equal(video.height, 1080);
       assert.equal(audio?.codec_name, "aac");
-      assert(Math.abs(Number(metadata.format.duration) - 8) <= 0.2);
+      const decoded = await exec(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-i",
+          outputFile,
+          "-ss",
+          "3",
+          "-t",
+          "0.8",
+          "-map",
+          "0:a:0",
+          "-ac",
+          "1",
+          "-ar",
+          "48000",
+          "-f",
+          "s16le",
+          "pipe:1",
+        ],
+        { encoding: "buffer", maxBuffer: 200000 },
+      );
+      assert.equal(decoded.stdout.length, cut.metadata.sampleCount * 2);
+      let energy = 0;
+      for (
+        let sample = 2400;
+        sample < cut.metadata.sampleCount - 2400;
+        sample++
+      )
+        energy += decoded.stdout.readInt16LE(sample * 2) ** 2;
+      assert(
+        energy / (cut.metadata.sampleCount - 4800) > 10000,
+        "The retained original audio must remain audible.",
+      );
+      assert(
+        Math.abs(Number(metadata.format.duration) - expectedDuration) <= 0.2,
+      );
       assert((await stat(outputFile)).size > 0);
       for (const [file, hash] of preservedFiles)
         assert.equal(
@@ -259,7 +327,7 @@ async function main() {
           `${label} changed a preserved fixture or brand asset.`,
         );
       assert.equal(receipt.outputSha256, await fileHash(outputFile));
-      assert(Math.abs(receipt.durationSeconds - 8) <= 0.2);
+      assert(Math.abs(receipt.durationSeconds - expectedDuration) <= 0.2);
       assert.equal(receipt.releaseEligible, false);
       assert.deepEqual(receipt.sourceAssets, [
         {
@@ -276,7 +344,7 @@ async function main() {
       assert.equal(savedReceipt.releaseEligible, false);
       assert.deepEqual(savedReceipt.sourceAssets, receipt.sourceAssets);
       console.log(
-        `PASS: ${label}: 1920x1080 H.264/AAC, eight seconds, preserved fixture and brand hashes, matching output receipt, and review still required.`,
+        `PASS: ${label}: 1920x1080 H.264/AAC, ${expectedDuration} seconds with frame-aligned source cuts and sample-smoothed audio, preserved fixture and brand hashes, matching output receipt, and review still required.`,
       );
     }
     await verifyOutput(output, result, "original video", sourceHash);
@@ -285,12 +353,14 @@ async function main() {
       ...plan,
       id: "container-smoke-original-audio",
       chapterNumber: 2,
-      sources: plan.sources.map((item) => ({
-        ...item,
-        kind: "audio",
-        relativePath: "synthetic-tone.wav",
-        sha256: toneHash,
-      })),
+      sources: plan.sources.map(
+        ({ audioDerivative: _workingAudio, ...item }) => ({
+          ...item,
+          kind: "audio",
+          relativePath: "synthetic-tone.wav",
+          sha256: toneHash,
+        }),
+      ),
       clips: plan.clips.map((clip) => ({ ...clip, kind: "audio" })),
     };
     const audioOutput = path.join(scratch, "synthetic-original-audio.mp4");
@@ -302,6 +372,7 @@ async function main() {
         plan: originalAudioPlan,
         assets: new Map([
           ["synthetic-source", { file: tone, mime: "audio/wav" }],
+          [cut.metadata.assetId, { file: cut.file, mime: "audio/wav" }],
           ["brand-closer", { file: closer, mime: "video/mp4" }],
           ["brand-font", { file: font, mime: "font/woff2" }],
         ]),

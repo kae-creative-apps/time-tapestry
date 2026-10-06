@@ -119,6 +119,184 @@ test("separate accepted turns never include an excluded answer or intervening pa
   assert.ok(clips[1].inMs >= f.wordGroups[2][0].startMs - 140);
 });
 
+test("live source matching removes only a safely bounded filler from actual retained ranges and captions", async () => {
+  const f = fixture();
+  f.wordGroups[0][3].text = "um,";
+  f.c.interviews![0].turns[0].text = f.wordGroups[0]
+    .map((word) => word.text)
+    .join(" ");
+  for (const word of f.words) {
+    word.startMs = word.startMs * 2 + 200;
+    word.endMs = word.startMs + 200;
+  }
+  f.durations.set(f.words[0].mediaId, f.words.at(-1)!.endMs + 500);
+  const original = structuredClone(f.c);
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
+  );
+  const edit = result.chapters[0].sourceEdit!;
+  assert.equal(edit.clips.length, 3);
+  assert.equal(edit.cleanup!.removed.length, 1);
+  assert.equal(edit.cleanup!.removed[0].reason, "filler");
+  assert.equal(edit.cleanup!.removed[0].text, "um,");
+  assert.ok(
+    !edit.clips
+      .flatMap((clip) => clip.captions ?? [])
+      .some((caption) => /\bum\b/.test(caption.text)),
+  );
+  for (const word of [...f.wordGroups[0], ...f.wordGroups[2]].filter(
+    (word) => word.text !== "um,",
+  )) {
+    assert.equal(
+      edit.clips.filter(
+        (clip) => clip.inMs <= word.startMs && clip.outMs >= word.endMs,
+      ).length,
+      1,
+      word.text,
+    );
+  }
+  assert.deepEqual(f.c, original);
+});
+
+function classicFixture(
+  sentence = "I remember the um blue notebook beside our window.",
+) {
+  const c = syntheticFilmCollection();
+  const wordsByMedia = new Map<string, SourceWord[]>();
+  const durations = new Map<string, number>();
+  c.takes.forEach((take, index) => {
+    take.kind = "voice";
+    take.mediaId = `source_${index}_synthetic`;
+    take.text =
+      index === 0
+        ? sentence
+        : "We remember these moments together with our family.";
+    const words = take.text
+      .split(" ")
+      .map((text, i) => ({
+        mediaId: take.mediaId!,
+        text,
+        startMs: 200 + i * 600,
+        endMs: 400 + i * 600,
+        speakerId: "storyteller",
+      }));
+    wordsByMedia.set(take.mediaId, words);
+    durations.set(take.mediaId, words.at(-1)!.endMs + 500);
+  });
+  const job = {
+    mode: "original",
+    preparation: "automatic",
+    automaticPresentation: "audio",
+    chapters: c.chapters.map((chapter, index) => ({
+      chapterId: chapter.id,
+      chapterNumber: index + 1,
+      title: chapter.title,
+      content: chapter.content,
+      sourceTakeIds: chapter.sourceTakeIds,
+      sourceSha256: "source",
+      status: "queued",
+      progress: 0,
+    })),
+    originalSources: c.takes.map((take) => ({
+      mediaId: take.mediaId,
+      chapterIds: [take.questionId],
+      sourceTakeIds: [take.id],
+    })),
+  } as StoryFilmJob;
+  return { c, job, wordsByMedia, durations };
+}
+
+test("classic answers get the same source cleanup while waveform-only changes produce different edit hashes", async () => {
+  const f = classicFixture();
+  const original = structuredClone(f.c);
+  const first = await assembleSourceEdits(
+    f.c,
+    f.job,
+    f.wordsByMedia,
+    f.durations,
+    [],
+  );
+  assert.equal(first.chapters[0].sourceEdit!.clips.length, 2);
+  assert.equal(
+    first.chapters[0].sourceEdit!.cleanup!.removed[0].reason,
+    "filler",
+  );
+  assert.equal(first.chapters[1].sourceEdit!.clips.length, 1);
+  const source = f.c.takes[1].mediaId!;
+  const words = f.wordsByMedia.get(source)!;
+  words.slice(4).forEach((word) => {
+    word.startMs += 3000;
+    word.endMs += 3000;
+  });
+  f.durations.set(source, f.durations.get(source)! + 3000);
+  const noEvidence = await assembleSourceEdits(
+    f.c,
+    f.job,
+    f.wordsByMedia,
+    f.durations,
+    [],
+  );
+  const withEvidence = await assembleSourceEdits(
+    f.c,
+    f.job,
+    f.wordsByMedia,
+    f.durations,
+    [],
+    async () => {},
+    new Map([
+      [source, [{ inMs: words[3].endMs + 100, outMs: words[4].startMs - 100 }]],
+    ]),
+  );
+  assert.equal(noEvidence.chapters[1].sourceEdit!.clips.length, 1);
+  assert.equal(withEvidence.chapters[1].sourceEdit!.clips.length, 2);
+  assert.notEqual(
+    withEvidence.chapters[1].sourceSha256,
+    noEvidence.chapters[1].sourceSha256,
+  );
+  const repeated = await assembleSourceEdits(
+    f.c,
+    f.job,
+    f.wordsByMedia,
+    f.durations,
+    [],
+    async () => {},
+    new Map([
+      [source, [{ inMs: words[3].endMs + 100, outMs: words[4].startMs - 100 }]],
+    ]),
+  );
+  assert.equal(
+    repeated.chapters[1].sourceSha256,
+    withEvidence.chapters[1].sourceSha256,
+  );
+  assert.deepEqual(f.c, original);
+});
+
+test("cleanup beyond 500 clips preserves the original passage and clears removed-range provenance", async () => {
+  const f = classicFixture(
+    Array.from({ length: 500 }, () => "I remember um the blue notebook").join(
+      " ",
+    ),
+  );
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    f.wordsByMedia,
+    f.durations,
+    [],
+  );
+  const edit = result.chapters[0].sourceEdit!;
+  assert.equal(edit.clips.length, 1);
+  assert.equal(edit.clips[0].inMs, 0);
+  assert.equal(edit.clips[0].outMs, f.durations.get(f.c.takes[0].mediaId!));
+  assert.equal(edit.cleanup!.skippedReason, "clip_limit");
+  assert.deepEqual(edit.cleanup!.removed, []);
+  assert.match(edit.clips[0].captions![0].text, /\bum\b/);
+});
+
 import {
   captionsForWords,
   sessionWordTimeline,

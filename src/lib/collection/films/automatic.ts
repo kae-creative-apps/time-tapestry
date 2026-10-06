@@ -8,6 +8,8 @@ import { cachedSourceTranscript } from "./transcript-cache";
 import { transcribeOriginal } from "./transcription";
 import { type SourceWord } from "./word-matching";
 import type { FilmChapter, StoryFilmJob } from "./types";
+import { detectSourceSilence } from "./source-silence";
+import type { SourceSilence } from "./source-cleanup";
 
 type Transcriber = typeof transcribeOriginal;
 export async function prepareAutomaticSources(
@@ -30,7 +32,8 @@ export async function prepareAutomaticSources(
   if (!c || originalCollectionHash(c) !== job.sourceSha256)
     throw new Error("The source stories changed before automatic preparation.");
   const wordsByMedia = new Map<string, SourceWord[]>(),
-    durations = new Map<string, number>();
+    durations = new Map<string, number>(),
+    silenceByMedia = new Map<string, SourceSilence[]>();
   const sourceHashes: { mediaId: string; sha256: string }[] = [];
   const sources = job.originalSources ?? [];
   for (const [index, source] of sources.entries()) {
@@ -58,6 +61,19 @@ export async function prepareAutomaticSources(
     });
     await assertCurrent();
     wordsByMedia.set(source.mediaId, words);
+    // Analyze the same unlevelled source clock as transcription. Extraction is
+    // cached locally; it neither changes the original nor calls a provider.
+    try {
+      const waveform = await originalAudioCopy(staged, false);
+      silenceByMedia.set(
+        source.mediaId,
+        await detectSourceSilence(waveform.file, staged.durationMs),
+      );
+    } catch {
+      // Silence analysis is optional evidence, never a reason to guess a cut.
+      silenceByMedia.set(source.mediaId, []);
+    }
+    await assertCurrent();
     await progress("transcribing", (index + 1) / sources.length);
   }
   await progress("matching", 0);
@@ -68,6 +84,7 @@ export async function prepareAutomaticSources(
     durations,
     sourceHashes,
     assertCurrent,
+    silenceByMedia,
   );
   await privateJson(path.join(root, "automatic-source-plan.json"), {
     templateVersion: job.templateVersion,
@@ -75,7 +92,7 @@ export async function prepareAutomaticSources(
     edits,
     report,
     algorithm:
-      "Saved user turns matched to actual Scribe word timestamps; no message-arrival cuts",
+      "Saved user turns matched to source words; conservative timestamped filler cuts and waveform-confirmed long-pause shortening; no message-arrival cuts",
     finalOwnerReviewRequired: true,
   });
   await progress("matching", 1);

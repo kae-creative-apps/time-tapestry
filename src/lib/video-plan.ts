@@ -33,6 +33,20 @@ export type VideoClip = {
   kind: "video" | "audio" | "text";
   inMs: number;
   outMs: number;
+  audioFadeInMs?: number;
+  audioFadeOutMs?: number;
+  /** A sample-shaped copy of this exact frame interval, starting at zero. */
+  audioDerivative?: {
+    assetId: string;
+    relativePath: string;
+    sha256: string;
+    sampleRate: 48000;
+    sampleCount: number;
+    startFrame: number;
+    endFrame: number;
+    fadeInSamples: number;
+    fadeOutSamples: number;
+  };
   /** Captions use SOURCE time, not chapter time. Text cards use time from zero. */
   captions: Caption[];
   text?: string;
@@ -65,8 +79,64 @@ export const VIDEO_REVIEW_CHECKLIST = [
   "Confirm the storyteller approves this exact rendered revision before release.",
 ] as const;
 
+export const CUT_AUDIO_SAMPLE_RATE = 48000;
+
+// Snap arithmetic noise at exact planner frame boundaries before rounding.
+const sourceFrame = (ms: number) => {
+  const frame = (ms * VIDEO_FPS) / 1000;
+  return Math.abs(frame - Math.round(frame)) < 1e-7 ? Math.round(frame) : frame;
+};
+
+/** One interval for video, audio and captions. Round outward to retain words. */
+export function clipTiming(clip: Pick<VideoClip, "inMs" | "outMs">) {
+  const startFrame = Math.floor(sourceFrame(clip.inMs));
+  const endFrame = Math.ceil(sourceFrame(clip.outMs));
+  return {
+    startFrame,
+    endFrame,
+    durationFrames: endFrame - startFrame,
+    inMs: (startFrame * 1000) / VIDEO_FPS,
+    outMs: (endFrame * 1000) / VIDEO_FPS,
+  };
+}
+
+export function clipSourceTimeMs(clip: VideoClip, localFrame: number) {
+  return ((clipTiming(clip).startFrame + localFrame) * 1000) / VIDEO_FPS;
+}
+
+export function clipAudioSamples(clip: VideoClip) {
+  const timing = clipTiming(clip);
+  const sampleCount =
+    timing.durationFrames * (CUT_AUDIO_SAMPLE_RATE / VIDEO_FPS);
+  const first = clip.captions[0],
+    last = clip.captions.at(-1);
+  const fade = (requested: number | undefined, handle: number) =>
+    Math.floor(
+      (Math.min(
+        15,
+        Math.max(0, requested ?? 0),
+        Math.max(0, handle),
+        (timing.outMs - timing.inMs) / 2,
+      ) *
+        CUT_AUDIO_SAMPLE_RATE) /
+        1000,
+    );
+  return {
+    sampleRate: CUT_AUDIO_SAMPLE_RATE,
+    sampleCount,
+    fadeInSamples: fade(
+      clip.audioFadeInMs,
+      (first?.startMs ?? timing.outMs) - timing.inMs,
+    ),
+    fadeOutSamples: fade(
+      clip.audioFadeOutMs,
+      timing.outMs - (last?.endMs ?? timing.inMs),
+    ),
+  };
+}
+
 export function clipFrames(clip: VideoClip): number {
-  return Math.ceil(((clip.outMs - clip.inMs) * VIDEO_FPS) / 1000);
+  return clipTiming(clip).durationFrames;
 }
 
 export function chapterDurationFrames(plan: ChapterVideoPlan): number {
@@ -223,6 +293,13 @@ export function validateVideoPlan(
       if (clip.outMs > Number(source.durationMs))
         return fail("clip extends beyond original duration");
     }
+    for (const fade of [clip.audioFadeInMs, clip.audioFadeOutMs]) {
+      if (
+        fade !== undefined &&
+        (!finite(fade) || fade < 0 || fade > 15 || clip.kind === "text")
+      )
+        return fail("audio fades must be at most 15ms on recorded clips");
+    }
     if (!Array.isArray(clip.captions) || clip.captions.length > 20000)
       return fail("captions must be an array");
     let lastEnd = clip.inMs;
@@ -258,6 +335,31 @@ export function validateVideoPlan(
       )
         return fail("invalid caption confidence");
       lastEnd = caption.endMs;
+    }
+  }
+  for (const value of input.clips) {
+    const clip = value as VideoClip;
+    const derivative = clip.audioDerivative;
+    if (derivative !== undefined) {
+      const timing = clipTiming(clip),
+        samples = clipAudioSamples(clip);
+      if (
+        clip.kind === "text" ||
+        !record(derivative) ||
+        !nonempty(derivative.assetId, 120) ||
+        sources.has(derivative.assetId) ||
+        !safeMediaPath(derivative.relativePath) ||
+        !digest(derivative.sha256) ||
+        derivative.sampleRate !== CUT_AUDIO_SAMPLE_RATE ||
+        derivative.sampleCount !== samples.sampleCount ||
+        derivative.startFrame !== timing.startFrame ||
+        derivative.endFrame !== timing.endFrame ||
+        derivative.fadeInSamples !== samples.fadeInSamples ||
+        derivative.fadeOutSamples !== samples.fadeOutSamples
+      )
+        return fail(
+          "clip audio derivative must match its exact source interval and safe fades",
+        );
     }
   }
   if (input.approval !== null) {

@@ -42,7 +42,9 @@ This records the current product decisions and implementation on the working bra
 
 ## Verification record
 
-The final combined local suite passed 379 tests with no failures or skips. TypeScript and the production build passed. The PDF deployment trace includes the approved logo and embedded Quicksand font. Local browser verification with fictional data covered review navigation and playback, normal email-account verification, added-recipient personalization, isolated replies, reply-box reveal after playback, and a downloaded PDF. The 390-pixel layout had no horizontal overflow. No provider email or physical mail was sent in these checks.
+The combined local suite, including conservative recorded-speech cleanup, passed 394 tests with no failures or skips. TypeScript passed. The recording/sharing production build passed; the final cleanup build and container renders are checked by GitHub CI. The PDF deployment trace includes the approved logo and embedded Quicksand font. Local browser verification with fictional data covered review navigation and playback, normal email-account verification, added-recipient personalization, isolated replies, reply-box reveal after playback, and a downloaded PDF. The 390-pixel layout had no horizontal overflow. No provider email or physical mail was sent in these checks.
+
+Speech-cleanup checks include waveform silence detection versus audible sound, preservation of meaningful and quoted words, source-time cut/caption conservation, 40,000 frame-grid intervals, PCM sample preservation, bounded fade endpoints and repeated-cut duration. Local rendering stopped because this isolated checkout has no Remotion Chrome; the worker container installs and verifies its own browser. Human listening remains required to assess natural pacing. See [speech cleanup](AUTOMATIC_SPEECH_CLEANUP.md).
 
 GitHub container checks and deployed Railway startup still require verification for the merge commit. A real microphone session, actual hosted four-film completion, received email and printed book remain separate end-to-end checks. Local fixtures are ignored and are not included in Git.
 

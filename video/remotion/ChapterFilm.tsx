@@ -23,6 +23,8 @@ import {
   VIDEO_CLOSER_SECONDS,
   chapterDurationFrames,
   clipFrames,
+  clipTiming,
+  clipSourceTimeMs,
   validateVideoPlan,
 } from "../../src/lib/video-plan";
 
@@ -45,7 +47,8 @@ function StoryClip({
   mediaUrls: Record<string, string>;
   audioEnvelopes?: Record<string, AudioEnvelope>;
 }) {
-  const sourceMs = clip.inMs + (useCurrentFrame() / VIDEO_FPS) * 1000;
+  const frame = useCurrentFrame();
+  const sourceMs = clipSourceTimeMs(clip, frame);
   const caption = clip.captions.find(
     (item) => sourceMs >= item.startMs && sourceMs < item.endMs,
   );
@@ -53,27 +56,34 @@ function StoryClip({
     (item) => item.assetId === clip.sourceAssetId,
   );
   const src = source ? mediaUrls[source.assetId] : undefined;
-  const audioSrc = source?.audioDerivative
-    ? mediaUrls[`${source.assetId}:audio`]
-    : src;
+  const audioSrc = clip.audioDerivative
+    ? mediaUrls[clip.audioDerivative.assetId]
+    : source?.audioDerivative
+      ? mediaUrls[`${source.assetId}:audio`]
+      : src;
+  const interval = clipTiming(clip);
   const timing = {
-    trimBefore: Math.round((clip.inMs / 1000) * VIDEO_FPS),
-    trimAfter: Math.round((clip.outMs / 1000) * VIDEO_FPS),
+    trimBefore: interval.startFrame,
+    trimAfter: interval.endFrame,
   };
+  const audioTiming = clip.audioDerivative
+    ? { trimBefore: 0, trimAfter: interval.durationFrames }
+    : timing;
   return (
     <AbsoluteFill style={{ background: BRAND_COLORS.espresso }}>
       {clip.kind === "video" && src && (
         <Video
           src={src}
-          muted={!!source?.audioDerivative}
+          muted={!!(source?.audioDerivative || clip.audioDerivative)}
           {...timing}
           objectFit="contain"
           style={{ width: "100%", height: "100%" }}
         />
       )}
-      {(clip.kind === "audio" || source?.audioDerivative) && audioSrc && (
-        <Audio src={audioSrc} {...timing} />
-      )}
+      {(clip.kind === "audio" ||
+        source?.audioDerivative ||
+        clip.audioDerivative) &&
+        audioSrc && <Audio src={audioSrc} {...audioTiming} />}
       {clip.kind === "audio" && (
         <TemplateOrbScene
           chapterNumber={plan.chapterNumber}
@@ -82,8 +92,12 @@ function StoryClip({
           attribution="In their own voice"
           caption={caption?.text}
           level={audioEnvelopeLevel(
-            source ? audioEnvelopes?.[source.assetId] : undefined,
-            sourceMs,
+            clip.audioDerivative
+              ? audioEnvelopes?.[clip.audioDerivative.assetId]
+              : source
+                ? audioEnvelopes?.[source.assetId]
+                : undefined,
+            clip.audioDerivative ? (frame / VIDEO_FPS) * 1000 : sourceMs,
           )}
         />
       )}
