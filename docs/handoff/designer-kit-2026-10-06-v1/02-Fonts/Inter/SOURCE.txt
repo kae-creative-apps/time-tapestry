@@ -1,0 +1,6 @@
+Inter variable font, upright, downloaded October 6, 2026 from the official Google Fonts repository.
+Font: https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf
+License: https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt
+Directory: https://github.com/google/fonts/tree/main/ofl/inter
+
+The font is supplied unchanged under its included SIL Open Font License. Current application body font: Inter. Google Fonts may serve platform-specific web subsets; this designer TTF is not claimed to be byte-identical to those cached web files.
