@@ -3,6 +3,16 @@ type InterviewAudioControls = {
   setMicMuted: (muted: boolean) => void;
 };
 
+/** A delayed SDK startup must close itself after its attempt was cancelled. */
+export function acceptInterviewConnection(
+  conversation: { endSession: () => Promise<void> },
+  current: boolean,
+): boolean {
+  if (current) return true;
+  void conversation.endSession().catch(() => {});
+  return false;
+}
+
 /** A new SDK conversation must restore output separately from microphone mute. */
 export function restoreInterviewAudio(
   conversation: InterviewAudioControls,

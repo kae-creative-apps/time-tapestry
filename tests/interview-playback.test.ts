@@ -1,9 +1,85 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  acceptInterviewConnection,
   createInterviewPlayback,
   restoreInterviewAudio,
 } from "../src/lib/collection/interview-playback";
+
+test("a delayed connection resolving after pause closes without restoring audio or activating the interview", async () => {
+  let generation = 1;
+  let stopped = false;
+  const attempt = generation;
+  let ended = 0;
+  let activated = false;
+  let audioRestored = false;
+  const conversation = {
+    async endSession() {
+      ended += 1;
+    },
+    setVolume() {
+      audioRestored = true;
+    },
+    setMicMuted() {},
+  };
+  let resolve!: (value: typeof conversation) => void;
+  const starting = new Promise<typeof conversation>((done) => {
+    resolve = done;
+  });
+  const continuation = starting.then((connected) => {
+    if (
+      !acceptInterviewConnection(connected, generation === attempt && !stopped)
+    )
+      return;
+    restoreInterviewAudio(connected, false);
+    activated = true;
+  });
+
+  // A mute failure cancels startup before the SDK returns its client.
+  generation += 1;
+  stopped = true;
+  resolve(conversation);
+  await continuation;
+  assert.equal(ended, 1);
+  assert.equal(audioRestored, false);
+  assert.equal(activated, false);
+});
+
+test("a late created client is rejected after a new connection replaces the cancelled attempt", async () => {
+  let ended = 0;
+  const oldClient = {
+    async endSession() {
+      ended += 1;
+      throw new Error("Connection already closed");
+    },
+  };
+  const cancelledAttempt = 1;
+  const connectionAttempt = { current: 3 };
+  // A new connection clears intentionalStop, but never revives the old attempt.
+  const stopped = false;
+  assert.equal(
+    acceptInterviewConnection(
+      oldClient,
+      connectionAttempt.current === cancelledAttempt && !stopped,
+    ),
+    false,
+  );
+  await Promise.resolve();
+  assert.equal(ended, 1);
+});
+
+test("the current connection remains open and an intentional pause closes it even before replacement", () => {
+  let ended = 0;
+  const conversation = {
+    async endSession() {
+      ended += 1;
+    },
+  };
+  assert.equal(acceptInterviewConnection(conversation, true), true);
+  assert.equal(ended, 0);
+  assert.equal(acceptInterviewConnection(conversation, false), false);
+  assert.equal(ended, 1);
+});
 
 function audio(hidden = true) {
   return {

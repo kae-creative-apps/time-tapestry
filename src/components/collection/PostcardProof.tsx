@@ -10,7 +10,13 @@ import {
 } from "@/lib/collection/postcard-public-message";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
 import { PostcardFace } from "./PostcardFace";
-import { mergePostcardDrafts, postcardDraftsEqual } from "./postcard-drafts";
+import {
+  mergePostcardDrafts,
+  postcardDraftsEqual,
+  postcardDraftProblems,
+  postcardProblemSummary,
+  restorePostcardWords,
+} from "./postcard-drafts";
 import { postcardCadenceLabel } from "@/lib/collection/postcard-cadence";
 
 type ProofResponse = {
@@ -69,6 +75,7 @@ export function PostcardProof({
   const messagesRef = useRef(messages);
   const baselineRef = useRef(savedMessages);
   const savingRef = useRef(false);
+  const previewRequest = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   messagesRef.current = messages;
   baselineRef.current = savedMessages;
@@ -85,11 +92,12 @@ export function PostcardProof({
     (delivery) => delivery.providerId || (delivery.dispatch?.attempts || 0) > 0,
   );
   const dirty = !postcardDraftsEqual(messages, savedMessages);
-  const valid = Object.values(messages).every(
-    (value) =>
-      value.trim().length > 0 &&
-      value.trim().length <= PUBLIC_POSTCARD_MESSAGE_LIMIT,
+  const problems = postcardDraftProblems(
+    messages,
+    c.chapters.map((chapter) => chapter.id),
+    PUBLIC_POSTCARD_MESSAGE_LIMIT,
   );
+  const valid = problems.length === 0;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -98,6 +106,7 @@ export function PostcardProof({
   }, []);
   useEffect(() => {
     const controller = new AbortController();
+    previewRequest.current = controller;
     setChecking(true);
     setError("");
     void collectionRequest<ProofResponse>(previewEndpoint, {
@@ -133,7 +142,10 @@ export function PostcardProof({
       .finally(() => {
         if (!controller.signal.aborted) setChecking(false);
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (previewRequest.current === controller) previewRequest.current = null;
+    };
   }, [previewEndpoint, version, reload]);
 
   const saveMessages = useCallback(async () => {
@@ -141,13 +153,18 @@ export function PostcardProof({
     const snapshot = { ...messagesRef.current };
     if (
       postcardDraftsEqual(snapshot, baselineRef.current) ||
-      Object.values(snapshot).some(
-        (value) =>
-          !value.trim() || value.trim().length > PUBLIC_POSTCARD_MESSAGE_LIMIT,
-      )
+      postcardDraftProblems(
+        snapshot,
+        c.chapters.map((chapter) => chapter.id),
+        PUBLIC_POSTCARD_MESSAGE_LIMIT,
+      ).length > 0
     )
       return;
     savingRef.current = true;
+    // A GET started before this save can return old text after the save succeeds.
+    // Cancel it now, before its snapshot can replace the acknowledged words.
+    previewRequest.current?.abort();
+    setChecking(false);
     setSaving(true);
     setSaveError("");
     try {
@@ -181,7 +198,7 @@ export function PostcardProof({
       savingRef.current = false;
       if (mounted.current) setSaving(false);
     }
-  }, [endpoint, mailingStarted, disabled]);
+  }, [endpoint, mailingStarted, disabled, c.chapters]);
   useEffect(() => {
     if (!dirty || !valid || saving || saveError || mailingStarted) return;
     const timer = setTimeout(() => void saveMessages(), 700);
@@ -215,6 +232,16 @@ export function PostcardProof({
   const proof = result?.proof;
   const card = proof?.cards[active];
   const chapter = c.chapters[active];
+  const currentProblem = problems.find((problem) => problem.id === chapter?.id);
+  function chooseCard(index: number, focusWords = false) {
+    setActive(index);
+    if (focusWords)
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`public-postcard-${c.chapters[index].id}`)
+          ?.focus(),
+      );
+  }
   const previewOnly =
     draftOnly ||
     result?.previewOnly ||
@@ -312,7 +339,7 @@ export function PostcardProof({
             type="button"
             aria-current={active === index ? "true" : undefined}
             className={`${active === index ? portalPrimary : portalSecondary} !px-2 text-sm sm:text-base`}
-            onClick={() => setActive(index)}
+            onClick={() => chooseCard(index)}
           >
             Card {index + 1}
           </button>
@@ -344,8 +371,59 @@ export function PostcardProof({
             }}
             onBlur={() => void saveMessages()}
             className="mt-2 w-full rounded-xl border border-warmgray-300 bg-white p-4 text-lg leading-7 text-espresso focus:outline-espresso"
-            aria-describedby="postcard-save-status"
+            aria-invalid={currentProblem ? true : undefined}
+            aria-describedby={`postcard-save-status${currentProblem ? " postcard-message-error" : ""}`}
           />
+          {currentProblem && (
+            <div className="mt-3 rounded-xl bg-clay-50 p-4 text-base leading-7">
+              <p id="postcard-message-error" role="alert">
+                {currentProblem.message}
+              </p>
+              <button
+                type="button"
+                className={`${portalSecondary} mt-3`}
+                disabled={disabled || mailingStarted || approving}
+                onClick={() => {
+                  const next = restorePostcardWords(
+                    messagesRef.current,
+                    baselineRef.current,
+                    chapter.id,
+                  );
+                  messagesRef.current = next;
+                  setMessages(next);
+                  setPublicApproved(false);
+                  setSaveError("");
+                }}
+              >
+                Use my saved words for this card
+              </button>
+            </div>
+          )}
+          {problems
+            .filter((problem) => problem.id !== chapter.id)
+            .map((problem) => {
+              const index = c.chapters.findIndex(
+                (item) => item.id === problem.id,
+              );
+              return (
+                <div
+                  key={problem.id}
+                  className="mt-3 rounded-xl bg-clay-50 p-4 text-base leading-7"
+                >
+                  <p>
+                    Card {index + 1} needs a message before your changes can be
+                    saved.
+                  </p>
+                  <button
+                    type="button"
+                    className={`${portalSecondary} mt-3`}
+                    onClick={() => chooseCard(index, true)}
+                  >
+                    Go to card {index + 1}
+                  </button>
+                </div>
+              );
+            })}
           <div className="mt-2 flex flex-wrap justify-between gap-2 text-sm text-ink-600">
             <p>
               {(messages[chapter.id] || "").length} of{" "}
@@ -357,7 +435,10 @@ export function PostcardProof({
                 : dirty
                   ? valid
                     ? "Changes waiting to save"
-                    : "Add a short message to save this card."
+                    : postcardProblemSummary(
+                        problems,
+                        c.chapters.map((chapter) => chapter.id),
+                      )
                   : "Your words are saved securely."}
             </p>
           </div>

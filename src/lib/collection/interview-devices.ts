@@ -3,6 +3,16 @@ export type InterviewDevices = {
   cameraId?: string;
 };
 
+/** Permission dialogs may finish after the recording page has been closed. */
+export function requireActiveCapture(
+  stream: MediaStream,
+  active: boolean,
+): void {
+  if (active) return;
+  stream.getTracks().forEach((track) => track.stop());
+  throw new Error("Recording was cancelled.");
+}
+
 export function interviewCaptureConstraints(
   kind: "voice" | "video",
   devices: InterviewDevices = {},
@@ -38,10 +48,43 @@ export function muteInterviewMicrophone(
 }
 
 export function requireInterviewAudioTrack(stream: MediaStream | null): void {
-  if (!stream?.getAudioTracks().some((track) => track.readyState === "live"))
+  if (
+    !stream
+      ?.getAudioTracks()
+      .some((track) => track.readyState === "live" && !track.muted)
+  )
     throw new Error(
       "Your microphone did not open, so recording could not start. Choose a working microphone and try again. Both recording options need your voice.",
     );
+}
+
+/** A device can go silent while still live. Never resume it without the user. */
+export function listenForCaptureInterruption(
+  stream: MediaStream,
+  onInterrupted: () => void,
+): () => void {
+  let notified = false;
+  const interrupted = () => {
+    if (notified) return;
+    notified = true;
+    onInterrupted();
+  };
+  const tracks = stream.getTracks();
+  for (const track of tracks) {
+    track.addEventListener("ended", interrupted);
+    track.addEventListener("mute", interrupted);
+  }
+  return () => {
+    for (const track of tracks) {
+      track.removeEventListener("ended", interrupted);
+      track.removeEventListener("mute", interrupted);
+    }
+  };
+}
+
+/** The installed SDK reports asynchronous input mute failures through onError. */
+export function isInterviewMicrophoneFailure(message: string): boolean {
+  return message === "Failed to set input muted state";
 }
 
 export function interviewDeviceError(error: unknown): string {

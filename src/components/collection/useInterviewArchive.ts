@@ -15,6 +15,7 @@ import {
   archiveDurationMs,
   archiveTimelineOffset,
   isArchiveTake,
+  isEmptyArchiveAttempt,
   recoverInterruptedArchive,
   type ArchiveLocalTake,
 } from "@/lib/collection/archive-utils";
@@ -22,6 +23,7 @@ import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock
 import type { InterviewSegment } from "@/lib/collection/types";
 import {
   interviewCaptureConstraints,
+  listenForCaptureInterruption,
   requireInterviewAudioTrack,
   type InterviewDevices,
 } from "@/lib/collection/interview-devices";
@@ -38,6 +40,7 @@ export type ArchiveRecording = {
   state: "recording" | "local" | "backed_up";
   mediaId?: string;
   localSaved: boolean;
+  empty: boolean;
   recovered: boolean;
   error?: string;
 };
@@ -120,6 +123,7 @@ export function useInterviewArchive({
   const [warning, setWarning] = useState("");
   const [recoveryReady, setRecoveryReady] = useState(false);
   const recoveryAttempts = useRef(new Set<string>());
+  const emptyAttempts = useRef(new Set<string>());
   const mounted = useRef(true);
   const deviceLockRelease = useRef<(() => void) | null>(null);
   const transitioning = useRef(false);
@@ -174,6 +178,7 @@ export function useInterviewArchive({
           state: take.state,
           mediaId: take.mediaId,
           localSaved: durable.current.get(take.id) === true,
+          empty: emptyAttempts.current.has(take.id),
           recovered: take.archive.recovered === true,
           error: errors.current.get(take.id),
         }))
@@ -200,7 +205,12 @@ export function useInterviewArchive({
       if (existing) return existing;
       const work = (async () => {
         let take = stored.current.get(id);
-        if (!take || take.state === "backed_up") return;
+        if (
+          !take ||
+          take.state === "backed_up" ||
+          emptyAttempts.current.has(id)
+        )
+          return;
         if (take.state === "recording")
           throw new Error("This recording is still in progress.");
         errors.current.delete(id);
@@ -329,6 +339,8 @@ export function useInterviewArchive({
         archive: { ...item.take.archive, durationMs: elapsed },
       };
       stored.current.set(complete.id, complete);
+      if (isEmptyArchiveAttempt(complete, blob.size > 0))
+        emptyAttempts.current.add(complete.id);
       await putLocalTake(complete).catch(() => undefined);
       let localSaved = false;
       try {
@@ -384,19 +396,17 @@ export function useInterviewArchive({
         if (mounted.current) {
           setStatus("paused");
           setError(
-            "Your camera or microphone disconnected. The part already recorded is being saved. Continue to reconnect your device.",
+            "Your camera or microphone became unavailable. The part already recorded is being saved. Check your devices, then continue when you are ready.",
           );
         }
         void stopSegment(item).catch((cause) => {
           if (mounted.current) setError(friendlyError(cause));
         });
       };
-      const tracks = nextStream.getTracks();
-      tracks.forEach((track) => track.addEventListener("ended", interrupted));
-      removeTrackListeners.current = () =>
-        tracks.forEach((track) =>
-          track.removeEventListener("ended", interrupted),
-        );
+      removeTrackListeners.current = listenForCaptureInterruption(
+        nextStream,
+        interrupted,
+      );
     },
     [clearRollover, stopSegment],
   );
@@ -561,6 +571,7 @@ export function useInterviewArchive({
         archive: { ...take.archive, durationMs: 0 },
       };
       stored.current.set(take.id, failed);
+      emptyAttempts.current.add(take.id);
       errors.current.set(
         take.id,
         "This recording could not start. No audio or video was collected.",
@@ -752,6 +763,8 @@ export function useInterviewArchive({
           installStream(nextStream);
           session.current.devices = { ...nextDevices };
         }
+        // A prior interruption was handled once. Explicit resume rearms it.
+        installStream(media.current);
         media.current.getTracks().forEach((track) => {
           track.enabled = true;
         });
@@ -820,7 +833,10 @@ export function useInterviewArchive({
           if (stored.current.has(take.id)) continue;
           const recovered = recoverInterruptedArchive(take);
           try {
-            durable.current.set(take.id, (await getTakeBlob(take)).size > 0);
+            const hasSavedBytes = (await getTakeBlob(take)).size > 0;
+            durable.current.set(take.id, hasSavedBytes);
+            if (isEmptyArchiveAttempt(recovered, hasSavedBytes))
+              emptyAttempts.current.add(take.id);
           } catch {
             durable.current.set(take.id, false);
           }
@@ -871,6 +887,7 @@ export function useInterviewArchive({
         if (cancelled) return;
         if (
           take.state !== "local" ||
+          emptyAttempts.current.has(take.id) ||
           !durable.current.get(take.id) ||
           recoveryAttempts.current.has(take.id)
         )
@@ -928,6 +945,7 @@ export function useInterviewArchive({
     pendingCount: recordings.filter(
       (take) =>
         take.state !== "backed_up" &&
+        !take.empty &&
         (take.durationMs > 0 || take.state === "recording"),
     ).length,
   };

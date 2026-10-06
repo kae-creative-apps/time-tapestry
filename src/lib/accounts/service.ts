@@ -319,7 +319,12 @@ function libraryItem(
           ),
         ]).size
       : approved && role === "recipient"
-        ? c.chapters.filter((ch) => ch.videoMediaId).length
+        ? c.chapters.filter(
+            (chapter) =>
+              chapter.videoMediaId &&
+              chapter.film?.mediaId === chapter.videoMediaId &&
+              chapter.film.narrationKind === "original_recording",
+          ).length
         : 0,
     postcards: {
       scheduled: deliveries.filter((d) => d.status === "scheduled").length,

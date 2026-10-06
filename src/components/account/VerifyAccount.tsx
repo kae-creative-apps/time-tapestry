@@ -3,25 +3,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppIcon } from "@/components/icons";
 import {
+  readAccountVerification,
+  finishAccountVerification,
+  type AccountVerificationView,
+} from "@/lib/accounts/verification-client";
+import {
   PortalShell,
   PortalError,
   portalPrimary,
   portalSecondary,
 } from "@/components/collection/PortalUI";
 
-type Verification = {
-  emailHint: string;
-  expiresAt: string;
-  canConfirm: boolean;
-  reason?: string;
-};
 export function VerifyAccount() {
   const [token, setToken] = useState("");
-  const [check, setCheck] = useState<Verification | null>(null);
+  const [check, setCheck] = useState<AccountVerificationView | null>(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    setError("");
+    setCheck(null);
     const privateToken =
       new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
     setToken(privateToken);
@@ -29,15 +31,8 @@ export function VerifyAccount() {
       setError("This link is incomplete. Request a new sign-in link below.");
       return;
     }
-    void fetch("/api/account/verification", {
-      cache: "no-store",
-      signal: controller.signal,
-      headers: { "X-Account-Verification": privateToken },
-    })
-      .then(async (response) => {
-        const result = await response.json();
-        if (!response.ok)
-          throw new Error(result.error || "This link is no longer available.");
+    void readAccountVerification(privateToken, controller.signal)
+      .then((result) => {
         if (!controller.signal.aborted) setCheck(result);
       })
       .catch((cause) => {
@@ -49,33 +44,13 @@ export function VerifyAccount() {
           );
       });
     return () => controller.abort();
-  }, []);
+  }, [retry]);
   async function confirm() {
     if (!check?.canConfirm || working) return;
     setWorking(true);
     setError("");
     try {
-      const response = await fetch("/api/account/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(
-          result.error ||
-            "Sign-in could not finish. Please request a new link.",
-        );
-      const nextUrl = result.nextUrl;
-      // The server derives this from stored route parts. Refuse any broader path.
-      window.location.replace(
-        typeof nextUrl === "string" &&
-          /^\/collection\/[a-zA-Z0-9_-]{8,80}(?:\/(?:chapter\/q[1-4]|address))?$/.test(
-            nextUrl,
-          )
-          ? nextUrl
-          : "/account",
-      );
+      window.location.replace(await finishAccountVerification(token));
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Sign-in could not finish.",
@@ -126,11 +101,24 @@ export function VerifyAccount() {
           )
         )}
         <PortalError message={error} />
+        {error && !check && token && (
+          <button
+            type="button"
+            className={`${portalSecondary} mt-5 w-full`}
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            Check this link again
+          </button>
+        )}
         <Link
           href="/account"
           className={`${check?.canConfirm ? "inline-flex min-h-12 items-center text-base underline underline-offset-4" : portalSecondary} mt-5`}
         >
-          {check?.canConfirm ? "Use a different email" : "Return to sign-in"}
+          {error && check?.canConfirm
+            ? "Check My stories or sign in again"
+            : check?.canConfirm
+              ? "Use a different email"
+              : "Return to sign-in"}
         </Link>
       </section>
     </PortalShell>

@@ -12,6 +12,11 @@ import { PostcardProof } from "./PostcardProof";
 import { storyOriginals } from "./story-originals";
 import { collectionRequest } from "@/lib/collection/client-request";
 import {
+  rememberReviewLocation,
+  reviewLocation,
+  type ReviewLocation,
+} from "./review-navigation";
+import {
   ContactSummary,
   PortalError,
   PortalShell,
@@ -41,7 +46,8 @@ export default function Review({
     load,
   } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState("q1");
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<ReviewLocation["step"]>(0);
+  const [navigationRevision, setNavigationRevision] = useState(0);
   const [working, setWorking] = useState(false);
   const [generatingFilms, setGeneratingFilms] = useState(false);
   const [approvedPlayback, setApprovedPlayback] = useState(false);
@@ -52,9 +58,35 @@ export default function Review({
   const [chapterHashes, setChapterHashes] = useState<Record<string, string>>(
     {},
   );
-  const [localError, setLocalError] = useState("");
   const [notice, setNotice] = useState("");
   const flowTop = useRef<HTMLDivElement>(null);
+  const flowHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const restore = () => {
+      const position = reviewLocation(window.location.hash);
+      if (!position) return;
+      setStep(position.step);
+      setActiveChapter(position.chapterId);
+      setNavigationRevision((value) => value + 1);
+    };
+    if (window.location.hash.startsWith("#review/")) restore();
+    window.addEventListener("popstate", restore);
+    window.addEventListener("hashchange", restore);
+    return () => {
+      window.removeEventListener("popstate", restore);
+      window.removeEventListener("hashchange", restore);
+    };
+  }, []);
+  useEffect(() => {
+    if (!navigationRevision || !c) return;
+    const heading =
+      step === 0
+        ? document.getElementById(`review-chapter-${activeChapter}`) ||
+          flowHeading.current
+        : flowHeading.current;
+    heading?.focus({ preventScroll: true });
+    heading?.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [navigationRevision, step, activeChapter, Boolean(c)]);
   const recordPath = `/record/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`;
   const filmSignature = JSON.stringify(
     c?.chapters.map((chapter) => [
@@ -108,15 +140,25 @@ export default function Review({
       )),
   );
 
-  function changeStep(next: number) {
+  function changeStep(next: ReviewLocation["step"]) {
+    rememberReviewLocation(window.location, window.history, {
+      step: next,
+      chapterId: activeChapter,
+    });
     setStep(next);
-    flowTop.current?.scrollIntoView({ block: "start", behavior: "auto" });
-    setLocalError("");
+    setNavigationRevision((value) => value + 1);
+  }
+  function changeChapter(chapterId: string) {
+    rememberReviewLocation(window.location, window.history, {
+      step: 0,
+      chapterId,
+    });
+    setActiveChapter(chapterId);
+    setNavigationRevision((value) => value + 1);
   }
   async function prepare(regenerate = false) {
     if (blocked || generatingFilms || !hasOriginals) return;
     setWorking(true);
-    setLocalError("");
     const result = await act({
       action: "generate",
       prepareFilms: true,
@@ -144,7 +186,6 @@ export default function Review({
     )
       return;
     setWorking(true);
-    setLocalError("");
     const result = await act({
       action: "approve",
       deliveryMode: "digital",
@@ -157,10 +198,9 @@ export default function Review({
     if (result) {
       setNotice("");
       flowTop.current?.scrollIntoView({ block: "start", behavior: "auto" });
-    } else
-      setLocalError(
-        "We could not confirm your approval. Your recordings are saved. Check your connection and try again.",
-      );
+    }
+    // useCollection exposes the specific server reason and focuses its alert.
+    // Do not replace an actionable stale-film or review error with a generic one.
     setWorking(false);
   }
   if (!c)
@@ -235,7 +275,11 @@ export default function Review({
             <p className="brand-eyebrow text-taupe-600">
               {approved ? "Your gift is approved" : "Your recordings are saved"}
             </p>
-            <h1 className="mt-2 font-display text-3xl font-medium sm:text-4xl">
+            <h1
+              ref={flowHeading}
+              tabIndex={-1}
+              className="mt-2 scroll-mt-5 font-display text-3xl font-medium sm:text-4xl"
+            >
               {approved ? `For ${c.recipient.name}, from you.` : steps[step]}
             </h1>
             <p className="mt-2 max-w-3xl text-base leading-7 text-ink-600">
@@ -253,7 +297,7 @@ export default function Review({
                 <button
                   key={label}
                   type="button"
-                  onClick={() => changeStep(index)}
+                  onClick={() => changeStep(index as ReviewLocation["step"])}
                   disabled={blocked}
                   aria-current={step === index ? "step" : undefined}
                   className={`min-h-12 rounded-xl border px-2 py-2 text-sm font-medium sm:text-base ${step === index ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white"}`}
@@ -264,7 +308,7 @@ export default function Review({
               ))}
             </nav>
           )}
-          <PortalError message={localError || error} />
+          <PortalError message={error} />
           {notice && (
             <p
               role="status"
@@ -350,7 +394,7 @@ export default function Review({
                     type="button"
                     key={chapter.id}
                     disabled={blocked}
-                    onClick={() => setActiveChapter(chapter.id)}
+                    onClick={() => changeChapter(chapter.id)}
                     aria-current={
                       activeChapter === chapter.id ? "true" : undefined
                     }
@@ -387,9 +431,7 @@ export default function Review({
                   type="button"
                   className={portalSecondary}
                   disabled={blocked || activeIndex === 0}
-                  onClick={() =>
-                    setActiveChapter(c.chapters[activeIndex - 1].id)
-                  }
+                  onClick={() => changeChapter(c.chapters[activeIndex - 1].id)}
                 >
                   Previous
                 </button>
@@ -400,13 +442,13 @@ export default function Review({
                   disabled={blocked}
                   onClick={() =>
                     activeIndex < c.chapters.length - 1
-                      ? setActiveChapter(c.chapters[activeIndex + 1].id)
+                      ? changeChapter(c.chapters[activeIndex + 1].id)
                       : changeStep(1)
                   }
                 >
                   {activeIndex < c.chapters.length - 1
                     ? "Next chapter"
-                    : "Continue"}
+                    : "Continue to postcards"}
                 </button>
               </nav>
               <a

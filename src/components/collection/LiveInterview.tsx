@@ -28,6 +28,7 @@ import {
   nextUnansweredChapterId,
 } from "@/lib/collection/interview-progress";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { interviewSaveStatus } from "@/lib/collection/interview-save-status";
 import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
 import { classifyInterviewMessage } from "@/lib/collection/interview-message-identity";
 import {
@@ -46,11 +47,13 @@ import { InterviewProgress } from "./InterviewProgress";
 import { InterviewDeviceSetup } from "./InterviewDeviceSetup";
 import {
   createInterviewPlayback,
+  acceptInterviewConnection,
   restoreInterviewAudio,
   type InterviewPlayback,
 } from "@/lib/collection/interview-playback";
 import {
   interviewDeviceError,
+  isInterviewMicrophoneFailure,
   muteInterviewMicrophone,
   requireInterviewAudioTrack,
   type InterviewDevices,
@@ -360,8 +363,13 @@ export default function LiveInterview({
       intentionalStop.current = true;
       interviewerPlayback.current?.dispose();
       interviewerPlayback.current = null;
-      client.current?.setMicMuted(true);
-      void client.current?.endSession().catch(() => {});
+      const interruptedClient = client.current;
+      try {
+        interruptedClient?.setMicMuted(true);
+      } catch {
+        // Closing both capture paths below remains necessary after SDK failure.
+      }
+      void interruptedClient?.endSession().catch(() => {});
       client.current = null;
       setPhase("paused");
       setError(
@@ -684,10 +692,13 @@ export default function LiveInterview({
         userId: collectionId,
         onConversationCreated: (conversation) => {
           attemptClient = conversation;
-          if (!isCurrent()) {
-            void conversation.endSession().catch(() => {});
+          if (
+            !acceptInterviewConnection(
+              conversation,
+              isCurrent() && !intentionalStop.current,
+            )
+          )
             return;
-          }
           restoreInterviewAudio(conversation, microphoneMutedRef.current);
           void playback.play();
         },
@@ -723,6 +734,25 @@ export default function LiveInterview({
           failureMessage = message;
           if (isCurrent() && !intentionalStop.current) {
             setConnectionFailed(true);
+            if (isInterviewMicrophoneFailure(message)) {
+              // onConversationCreated can fire before startSession resolves and
+              // before client.current is assigned. Invalidate that continuation
+              // first, and close the attempt's SDK client as well as capture.
+              const cancelledAttempt = ++connectionAttempt.current;
+              cue?.dispose();
+              void pause(attemptClient).then(() => {
+                if (
+                  mounted.current &&
+                  connectionAttempt.current === cancelledAttempt
+                ) {
+                  connectionInFlight.current = false;
+                  setError(
+                    "We paused the conversation because the microphones could not stay in sync. Your recorded portion is being saved. Check your microphone, then continue.",
+                  );
+                }
+              });
+              return;
+            }
             setError(
               "The voice connection had a problem. Pause to save this part, then reconnect, try another connection, or record one answer at a time.",
             );
@@ -755,7 +785,14 @@ export default function LiveInterview({
       };
       const connected = await Conversation.startSession(options);
       attemptClient = connected;
-      if (!isCurrent() || disconnected) {
+      if (
+        !acceptInterviewConnection(
+          connected,
+          isCurrent() && !intentionalStop.current,
+        )
+      )
+        return;
+      if (disconnected) {
         await connected.endSession();
         if (isCurrent())
           throw new Error(
@@ -773,7 +810,7 @@ export default function LiveInterview({
         status: "active",
         providerConversationId: connected.getId(),
       });
-      if (!isCurrent() || disconnected) return;
+      if (!isCurrent() || intentionalStop.current || disconnected) return;
       setPhase("talking");
     } catch (e) {
       playback.dispose();
@@ -826,13 +863,13 @@ export default function LiveInterview({
     }
   }
 
-  async function pause() {
+  async function pause(attemptClient?: Conversation | null) {
     setWorking(true);
     intentionalStop.current = true;
     interviewerPlayback.current?.dispose();
     interviewerPlayback.current = null;
     setPlaybackBlocked(false);
-    const current = client.current;
+    const current = attemptClient ?? client.current;
     // Silence capture immediately, independently of SDK or save teardown.
     archiveRef.current.stream?.getTracks().forEach((track) => {
       track.enabled = false;
@@ -925,8 +962,9 @@ export default function LiveInterview({
       const backupStartedAt = Date.now();
       while (archiveRef.current.saving || archiveRef.current.pendingCount > 0) {
         if (
-          archiveRef.current.error ||
-          archiveRef.current.recordings.some((record) => record.error) ||
+          archiveRef.current.recordings.some(
+            (record) => record.error && !record.empty,
+          ) ||
           Date.now() - backupStartedAt > 90_000
         )
           throw new Error(
@@ -938,7 +976,9 @@ export default function LiveInterview({
         unsavedMemory.current.length ||
         (await readInterviewJournal(collectionId)).length ||
         archiveRef.current.pendingCount ||
-        archiveRef.current.recordings.some((record) => record.error)
+        archiveRef.current.recordings.some(
+          (record) => record.error && !record.empty,
+        )
       )
         throw new Error(
           "Your interview has not been submitted yet. Back up your remaining recordings and words before finishing.",
@@ -1104,6 +1144,23 @@ export default function LiveInterview({
         <p role={error ? "alert" : "status"} className="mt-4">
           {error || "One moment while we find your stories."}
         </p>
+        {error && (
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={primary}
+              onClick={() => window.location.reload()}
+            >
+              Try again
+            </button>
+            <Link
+              href="/account"
+              className={`${secondary} inline-flex items-center`}
+            >
+              Find my interview by email
+            </Link>
+          </div>
+        )}
       </main>
     );
   if (collection.role !== "owner")
@@ -1268,22 +1325,16 @@ export default function LiveInterview({
             >
               {visibleStatus}
             </p>
-            <p className="min-h-7 text-sm leading-7 text-paper">
-              {archive.status === "recording"
-                ? archive.recordings.some(
-                    (r) => r.state === "recording" && r.localSaved,
-                  )
-                  ? "Recording · saving on this device"
-                  : "Recording · first save in progress"
-                : archive.saving
-                  ? "Backing up your recording"
-                  : savingWords
-                    ? "Backing up your words"
-                    : pending.length
-                      ? `${pending.length} updates waiting for backup`
-                      : sessionId
-                        ? "Your saved answers are backed up"
-                        : ""}
+            <p className="min-h-7 text-sm leading-7 text-paper" role="status">
+              {interviewSaveStatus({
+                recording: archive.status === "recording",
+                savingRecording: archive.saving,
+                savingWords,
+                pendingWords: pending.length,
+                memoryWarning: Boolean(memoryWarning),
+                recordings: archive.recordings,
+                hasSavedAnswers: Boolean(hasExistingRecordings),
+              })}
             </p>
           </div>
           <div
@@ -1656,6 +1707,30 @@ export default function LiveInterview({
             )}
         </div>
       </section>
+      {(!collection.capabilities.liveInterview || connectionFailed) &&
+        ["ready", "paused", "interrupted"].includes(phase) &&
+        !working &&
+        !archive.saving &&
+        !archive.pendingCount &&
+        !pending.length &&
+        !memoryWarning && (
+          <section className="mt-6 rounded-xl border border-warmgray-200 bg-white p-5">
+            <h2 className="text-lg font-semibold">Record at your own pace</h2>
+            <p className="mt-2 text-base leading-7 text-ink-600">
+              Read each question and record your answer with video and sound, or
+              audio only.
+              {collection.capabilities.transcription
+                ? ""
+                : " Your recordings stay saved while automatic transcription is unavailable."}
+            </p>
+            <Link
+              className={`${secondary} mt-4 inline-flex items-center`}
+              href={`/record/${collectionId}${query}&classic=1&chapter=${interviewResumeState(collection).missingChapterIds[0] ?? interviewResumeState(collection).chapterId}`}
+            >
+              Record one answer at a time
+            </Link>
+          </section>
+        )}
       {archive.recordings.length > 0 && (
         <details className="mt-8 rounded-xl border border-warmgray-200 bg-white p-5">
           <summary className="cursor-pointer text-base font-medium">
@@ -1674,48 +1749,52 @@ export default function LiveInterview({
                 <div>
                   <p>Recording {index + 1}</p>
                   <p className="mt-1 text-sm">
-                    {record.state === "recording"
-                      ? "Recording now"
-                      : record.state === "backed_up"
-                        ? "Backed up"
-                        : record.localSaved
-                          ? "Saved on this device; backup pending"
-                          : "Not yet saved on this device"}
+                    {record.empty
+                      ? "Recording did not start. No audio or video was captured."
+                      : record.state === "recording"
+                        ? "Recording now"
+                        : record.state === "backed_up"
+                          ? "Backed up"
+                          : record.localSaved
+                            ? "Saved on this device; backup pending"
+                            : "Not yet saved on this device"}
                   </p>
                 </div>
-                <div className="flex gap-4 text-sm text-oxblood">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void archive
-                        .getBlob(record.localTakeId)
-                        .then((blob) => {
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `time-tapestry-recording-${index + 1}.${record.mimeType.includes("mp4") ? "mp4" : "webm"}`;
-                          a.click();
-                          setTimeout(() => URL.revokeObjectURL(url), 1000);
-                        })
-                        .catch((e) => setError(friendly(e)))
-                    }
-                  >
-                    Download original
-                  </button>
-                  {record.state !== "backed_up" &&
-                    record.state !== "recording" && (
-                      <button
-                        disabled={archive.saving}
-                        onClick={() =>
-                          void archive
-                            .retry(record.localTakeId)
-                            .catch((e) => setError(friendly(e)))
-                        }
-                      >
-                        Retry backup
-                      </button>
-                    )}
-                </div>
+                {!record.empty && (
+                  <div className="flex gap-4 text-sm text-oxblood">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void archive
+                          .getBlob(record.localTakeId)
+                          .then((blob) => {
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `time-tapestry-recording-${index + 1}.${record.mimeType.includes("mp4") ? "mp4" : "webm"}`;
+                            a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                          })
+                          .catch((e) => setError(friendly(e)))
+                      }
+                    >
+                      Download original
+                    </button>
+                    {record.state !== "backed_up" &&
+                      record.state !== "recording" && (
+                        <button
+                          disabled={archive.saving}
+                          onClick={() =>
+                            void archive
+                              .retry(record.localTakeId)
+                              .catch((e) => setError(friendly(e)))
+                          }
+                        >
+                          Retry backup
+                        </button>
+                      )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

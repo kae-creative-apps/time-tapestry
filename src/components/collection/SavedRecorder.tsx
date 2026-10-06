@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock";
 import type { AnswerTake } from "@/lib/collection/types";
-import { requireInterviewAudioTrack } from "@/lib/collection/interview-devices";
+import {
+  requireActiveCapture,
+  requireInterviewAudioTrack,
+} from "@/lib/collection/interview-devices";
 import {
   answerFromLocal,
   appendTakeChunk,
@@ -203,6 +206,7 @@ export default function SavedRecorder({
   const startedAt = useRef(0);
   const mounted = useRef(true);
   const deviceLockRelease = useRef<(() => void) | null>(null);
+  const capturePending = useRef(false);
   const recoveryAttempted = useRef(new Set<string>());
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
@@ -259,14 +263,14 @@ export default function SavedRecorder({
           fallbacks[take.id] &&
           localCopies[take.id] !== true,
       );
-      if (recorder.current?.state === "recording" || uploading || memoryOnly) {
+      if (phase !== "idle" || uploading || memoryOnly) {
         event.preventDefault();
         event.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [uploading, takes, fallbacks, localCopies]);
+  }, [phase, uploading, takes, fallbacks, localCopies]);
   useEffect(
     () => () => {
       if (recorder.current?.state === "recording") recorder.current.stop();
@@ -517,6 +521,7 @@ export default function SavedRecorder({
     const take = takes.find(
       (item) =>
         item.state !== "backed_up" &&
+        item.state !== "recording" &&
         localCopies[item.id] === true &&
         !recoveryAttempted.current.has(item.id),
     );
@@ -538,6 +543,8 @@ export default function SavedRecorder({
   }, [autoRecoverBackup, busy, takes, localCopies, collectionId]);
 
   async function start() {
+    if (capturePending.current || busy) return;
+    capturePending.current = true;
     setError("");
     setMessage("");
     setStorageWarning("");
@@ -554,6 +561,7 @@ export default function SavedRecorder({
       deviceLockRelease.current ??=
         await claimRecordingDeviceLock(collectionId);
       const persistent = await requestRecordingStorage();
+      if (!mounted.current) throw new Error("Recording was cancelled.");
       if (!persistent)
         setStorageWarning(
           "Your browser may clear device storage. Keep this tab open until the take says Backed up, and download a backup for important recordings.",
@@ -569,14 +577,9 @@ export default function SavedRecorder({
               }
             : false,
       });
+      requireActiveCapture(mediaStream, mounted.current);
       stream.current = mediaStream;
       requireInterviewAudioTrack(mediaStream);
-      if (!mounted.current) {
-        mediaStream.getTracks().forEach((track) => track.stop());
-        deviceLockRelease.current?.();
-        deviceLockRelease.current = null;
-        return;
-      }
       if (video.current) video.current.srcObject = mediaStream;
       const mimeType = mimeTypeFor(kind);
       const mediaRecorder = new MediaRecorder(mediaStream, {
@@ -619,6 +622,7 @@ export default function SavedRecorder({
           : {}),
       };
       await putLocalTake(take);
+      requireActiveCapture(mediaStream, mounted.current);
       active.current = take;
       chunks.current = [];
       writeQueue.current = Promise.resolve();
@@ -716,6 +720,7 @@ export default function SavedRecorder({
         if (blob.size && mounted.current) await backup(complete, blob);
         deviceLockRelease.current?.();
         deviceLockRelease.current = null;
+        capturePending.current = false;
       };
       startedAt.current = Date.now();
       speechRecorder?.start(1000);
@@ -727,6 +732,7 @@ export default function SavedRecorder({
       stream.current?.getTracks().forEach((track) => track.stop());
       deviceLockRelease.current?.();
       deviceLockRelease.current = null;
+      capturePending.current = false;
       if (mounted.current) {
         setError(friendlyRecordingError(error));
         setPhase("idle");
@@ -762,7 +768,12 @@ export default function SavedRecorder({
             <button
               type="button"
               className={primary}
-              onClick={() => recorder.current?.stop()}
+              onClick={() => {
+                if (recorder.current?.state === "recording") {
+                  setPhase("saving");
+                  recorder.current.stop();
+                }
+              }}
             >
               Stop and save
             </button>

@@ -219,8 +219,8 @@ export function RecipientAccessGate({
                   role="status"
                   className="mt-5 text-lg leading-8 text-ink-500"
                 >
-                  Check your email for a sign-in link. Open it in this browser
-                  within 15 minutes to continue.
+                  Check {email.trim()} for a sign-in link. Open it in this
+                  browser within 15 minutes to continue.
                 </p>
                 <button
                   type="button"
@@ -248,6 +248,8 @@ export function RecipientAccessGate({
                     id={emailId}
                     type="email"
                     autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     required
                     maxLength={254}
                     value={email}

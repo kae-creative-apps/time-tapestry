@@ -9,7 +9,14 @@ import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
 import { recipientReplyDraftKey } from "./recipient-sharing";
-import { verifyReplyPlayback } from "./reply-playback";
+import {
+  rememberRecipientChapter,
+  restoreRecipientChapter,
+} from "./recipient-navigation";
+import {
+  createReplyPlaybackCheck,
+  replyAcknowledgement,
+} from "./reply-submission";
 import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 const primary =
@@ -61,6 +68,7 @@ function ReplyForm({
     chapter.id,
   );
   const draftQueue = useRef<Promise<void>>(Promise.resolve());
+  const checkReplyPlayback = useRef(createReplyPlaybackCheck());
   const persist = useCallback(
     (value: string) => {
       const next = draftQueue.current
@@ -167,7 +175,7 @@ function ReplyForm({
     await persist(currentDraft.current).catch(() => {});
     if (mediaId) {
       try {
-        await verifyReplyPlayback(
+        await checkReplyPlayback.current(
           `/api/collection/${encodeURIComponent(c.id)}/media/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(accessKey)}`,
         );
       } catch (cause) {
@@ -189,12 +197,19 @@ function ReplyForm({
     });
     setBusy(false);
     if (next) {
-      const savedReply = next.replies.find((reply) => reply.id === replyId);
-      if (
-        savedReply &&
-        (savedReply.text.trim() !== text.trim() ||
-          (savedReply.mediaId || "") !== mediaId)
-      ) {
+      const acknowledged = replyAcknowledgement(next.replies, {
+        replyId,
+        chapterId: chapter.id,
+        text,
+        mediaId,
+      });
+      if (acknowledged === "unconfirmed") {
+        setSendError(
+          "We could not confirm your message in the saved replies. Your words and recording are still here. Please try Send again.",
+        );
+        return;
+      }
+      if (acknowledged === "changed") {
         setReplyId(crypto.randomUUID());
         setSendError(
           "Your earlier message was already saved. Your newer changes are still here. Send them as a new message when you are ready.",
@@ -235,8 +250,9 @@ function ReplyForm({
       </p>
       {sent && (
         <p role="status" className="mb-4 rounded-md bg-paper-200 p-4">
-          Your message is saved here. An email notification is waiting to send
-          to {c.storyteller.name}.
+          {c.capabilities.email
+            ? `Your message is saved here. An email notification is waiting to send to ${c.storyteller.name}.`
+            : `Your message is saved here for ${c.storyteller.name}. Email notifications are not available right now.`}
         </p>
       )}
       <div className="mb-5 flex flex-wrap gap-3">
@@ -244,6 +260,7 @@ function ReplyForm({
           className={mode === "video" ? primary : secondary}
           disabled={!draftReady || busy || recording || anotherRecording}
           onClick={() => {
+            setSent(false);
             setMode("video");
             onOpenRecorder(chapter.id);
           }}
@@ -253,7 +270,10 @@ function ReplyForm({
         <button
           className={mode === "text" ? primary : secondary}
           disabled={!draftReady || busy || recording}
-          onClick={() => setMode("text")}
+          onClick={() => {
+            setSent(false);
+            setMode("text");
+          }}
         >
           Write a message
         </button>
@@ -293,7 +313,12 @@ function ReplyForm({
           </label>
           {mediaId && (
             <div className="my-4 text-sm">
-              <p>
+              <StoryMediaPlayer
+                key={mediaId}
+                label="Your selected reply recording"
+                src={`/api/collection/${encodeURIComponent(c.id)}/media/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(accessKey)}`}
+              />
+              <p className="mt-3 text-base leading-7">
                 Your selected recording is backed up. It will be shared when you
                 send this message.
               </p>
@@ -309,7 +334,9 @@ function ReplyForm({
           )}
           <button
             className={`${primary} mt-4`}
-            disabled={busy || recording || (!text.trim() && !mediaId)}
+            disabled={
+              busy || recording || !draftReady || (!text.trim() && !mediaId)
+            }
             onClick={() => void send()}
           >
             {busy ? "Sending..." : "Send my message"}
@@ -348,6 +375,34 @@ export default function CollectionHome({
   const [recordingChapter, setRecordingChapter] = useState<string | null>(null);
   const chapters = useRef<HTMLDivElement>(null);
   const focusSelectedStory = useRef(false);
+  const navigationState = useRef({ activeChapter, recordingChapter });
+  navigationState.current = { activeChapter, recordingChapter };
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    const restore = (focus = true) => {
+      if (window.location.pathname !== pathname) return;
+      const current = navigationState.current;
+      const next = restoreRecipientChapter(
+        window.location,
+        window.history,
+        chapterId,
+        current.activeChapter,
+        Boolean(current.recordingChapter),
+      );
+      if (!next || next === current.activeChapter) return;
+      focusSelectedStory.current = focus;
+      navigationState.current.activeChapter = next;
+      setActiveChapter(next);
+    };
+    restore(false);
+    const onHistoryChange = () => restore();
+    window.addEventListener("popstate", onHistoryChange);
+    window.addEventListener("hashchange", onHistoryChange);
+    return () => {
+      window.removeEventListener("popstate", onHistoryChange);
+      window.removeEventListener("hashchange", onHistoryChange);
+    };
+  }, [id, chapterId]);
   // Opening an approved story counts as a visit for readers as well as viewers.
   useEffect(() => {
     if (c?.role !== "recipient" || c.status !== "approved") return;
@@ -485,7 +540,15 @@ export default function CollectionHome({
       );
   };
   const openAdjacentStory = (nextId: string) => {
-    if (recordingChapter) return;
+    if (
+      !rememberRecipientChapter(
+        window.location,
+        window.history,
+        nextId,
+        Boolean(recordingChapter),
+      )
+    )
+      return;
     focusSelectedStory.current = true;
     setActiveChapter(nextId);
   };
@@ -606,9 +669,7 @@ export default function CollectionHome({
             key={chapter.id}
             disabled={Boolean(recordingChapter)}
             aria-current={selectedId === chapter.id ? "page" : undefined}
-            onClick={() => {
-              setActiveChapter(chapter.id);
-            }}
+            onClick={() => openAdjacentStory(chapter.id)}
             className={`min-h-28 rounded-2xl border p-4 text-left transition-colors disabled:opacity-60 ${selectedId === chapter.id ? "border-espresso bg-espresso text-paper" : "border-warmgray-300 bg-white text-espresso hover:border-espresso"}`}
           >
             <span className="text-base font-medium">Story {index + 1}</span>
@@ -653,7 +714,7 @@ export default function CollectionHome({
               }}
             >
               <div className="grid items-start gap-7 lg:grid-cols-[1fr_.9fr]">
-                <div className="min-w-0 lg:sticky lg:top-6">
+                <div className="min-w-0">
                   <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
                     {hasRecordedVoiceFilm(chapter) ? (
                       <>
