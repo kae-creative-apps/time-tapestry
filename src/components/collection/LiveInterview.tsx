@@ -25,6 +25,7 @@ import {
 } from "@/lib/collection/interview-progress";
 import { collectionRequest } from "@/lib/collection/client-request";
 import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
+import { classifyInterviewMessage } from "@/lib/collection/interview-message-identity";
 import {
   startConnectionCue,
   type ConnectionCue,
@@ -468,9 +469,12 @@ export default function LiveInterview({
         setQuestion(spokenWords);
       }
     }
-    const eventKey = `${connectionEpoch.current}:${message.role}:${message.response_id ?? message.event_id}`;
-    const previous = messages.current.get(eventKey);
-    if (previous?.text === text) return;
+    const identity = classifyInterviewMessage(
+      connectionEpoch.current,
+      { ...message, message: text },
+      messages.current,
+    );
+    if (identity.duplicate) return;
     const s = sessionRef.current;
     const turn: InterviewTurn = {
       id: crypto.randomUUID(),
@@ -480,11 +484,12 @@ export default function LiveInterview({
       capturedAt: new Date().toISOString(),
       timing: "unaligned",
       ...(message.role === "user" ? { chapterId: theme.current } : {}),
-      ...(previous && message.role === "user"
-        ? { supersedesTurnId: previous.id }
+      ...(identity.supersedesTurnId
+        ? { supersedesTurnId: identity.supersedesTurnId }
         : {}),
     };
-    messages.current.set(eventKey, turn);
+    if (identity.eventKey !== null)
+      messages.current.set(identity.eventKey, turn);
     void enqueue({
       action: "append_turns",
       sessionId: s.id,
