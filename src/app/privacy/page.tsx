@@ -28,9 +28,9 @@ export default function Privacy() {
           before sharing. Original recordings are kept separately from edited
           videos. This pilot does not yet offer self-service account deletion,
           complete data export or story-link revocation. Organization organizers
-          can revoke unclaimed gift invitations, but cannot view a family’s
-          interview answers, recordings or approved story page through the
-          organization dashboard.
+          can revoke unclaimed gift invitations and see chapter completion and
+          mailing status, but cannot view a family’s interview answers,
+          recordings or approved story page through the organization dashboard.
         </p>
         <h2 className="font-serif text-2xl">Services used to make the gift</h2>
         <p>

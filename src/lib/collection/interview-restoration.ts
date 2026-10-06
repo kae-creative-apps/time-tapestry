@@ -1,3 +1,4 @@
+import { isMeaningfulInterviewSpeech } from "./interview-speech";
 import { createHash } from "node:crypto";
 import { CHAPTERS } from "../interview-state";
 import { SecurityError } from "../security/policy";
@@ -167,7 +168,10 @@ export async function restoreCompletedInterview(
     restored.excludedTurnIds = [];
     for (const chapter of CHAPTERS) {
       const answers = interviewAnswers({ interviews: [restored] }, chapter.id);
-      if (!answers.length || answers.some((answer) => !answer.text.trim()))
+      if (
+        !answers.length ||
+        answers.some((answer) => !isMeaningfulInterviewSpeech(answer.text))
+      )
         throw new InterviewRestorationError(
           "Your full interview needs saved words in all four story areas before it can be restored.",
         );

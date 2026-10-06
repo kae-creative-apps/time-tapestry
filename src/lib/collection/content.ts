@@ -4,6 +4,7 @@ import type { Collection, ChapterPackage } from "./types";
 import { interviewAnswers } from "./interview";
 import { cleanTranscriptForReading } from "./transcript-reading";
 import { postcardScheduledDate } from "./postcard-cadence";
+import { hasChapterPlayback } from "../audio/playback-types";
 export { addCalendarMonths } from "./postcard-cadence";
 import {
   POSTCARD_NOTE_LIMIT,
@@ -89,14 +90,17 @@ export function approveCollection(
     allowWrittenOnly?: boolean;
     recordingsReviewed?: boolean;
     reviewedFilmHashes?: Record<string, string>;
+    reviewedPlaybackHashes?: Record<string, string>;
   } = {},
 ): Collection {
   if (c.status === "approved") return c;
   if (c.storyIssues?.some((issue) => issue.status === "open"))
-    throw new Error("A story detail is being checked. Review the corrected version before sharing your gift.");
+    throw new Error(
+      "A story detail is being checked. Review the corrected version before sharing your gift.",
+    );
   if (options.recordingsReviewed !== true)
     throw new Error(
-      "Review your four recorded films before approving your collection.",
+      "Review your four recorded chapters before approving your collection.",
     );
   if (
     c.chapters.length !== 4 ||
@@ -104,28 +108,43 @@ export function approveCollection(
       const ch = c.chapters.find((chapter) => chapter.id === id);
       const film = ch?.film;
       const answers = selectedAnswers(c, id);
+      const playback = ch?.playback;
+      const playbackApproved = Boolean(
+        ch &&
+        hasChapterPlayback(ch) &&
+        playback &&
+        options.reviewedPlaybackHashes?.[id] === playback.outputSha256 &&
+        playback.sourceTakeIds.length === ch.sourceTakeIds.length &&
+        ch.sourceTakeIds.every((takeId) =>
+          playback.sourceTakeIds.includes(takeId),
+        ),
+      );
+      const filmApproved = Boolean(
+        ch &&
+        film &&
+        ch.videoStatus === "ready" &&
+        film.narrationKind === "original_recording" &&
+        film.chapterId === id &&
+        ch.videoMediaId === film.mediaId &&
+        /^[a-f0-9]{64}$/i.test(film.outputSha256) &&
+        options.reviewedFilmHashes?.[id] === film.outputSha256 &&
+        film.sourceTakeIds.length === ch.sourceTakeIds.length &&
+        ch.sourceTakeIds.every((takeId) => film.sourceTakeIds.includes(takeId)),
+      );
       return (
         !ch ||
-        ch.videoStatus !== "ready" ||
-        !film ||
-        film.narrationKind !== "original_recording" ||
-        film.chapterId !== id ||
-        ch.videoMediaId !== film.mediaId ||
-        !/^[a-f0-9]{64}$/i.test(film.outputSha256) ||
-        options.reviewedFilmHashes?.[id] !== film.outputSha256 ||
+        (!playbackApproved && !filmApproved) ||
         !answers.length ||
         answers.length !== ch.sourceTakeIds.length ||
         answers.some(
           (answer) =>
             answer.kind === "text" || !ch.sourceTakeIds.includes(answer.id),
-        ) ||
-        film.sourceTakeIds.length !== ch.sourceTakeIds.length ||
-        ch.sourceTakeIds.some((takeId) => !film.sourceTakeIds.includes(takeId))
+        )
       );
     })
   )
     throw new Error(
-      "Watch all four current films and approve their latest versions together.",
+      "Review all four current chapters and approve their latest versions together.",
     );
   if (c.draftOutdated)
     throw new Error(
@@ -137,11 +156,13 @@ export function approveCollection(
       (ch) =>
         !ch.content.trim() ||
         !ch.postcardNote.trim() ||
-        (ch.videoStatus === "ready" && !ch.videoMediaId),
+        (!hasChapterPlayback(ch) &&
+          ch.videoStatus === "ready" &&
+          !ch.videoMediaId),
     )
   )
     throw new Error(
-      "Finish preparing all four recorded films before approval.",
+      "Finish preparing all four recorded chapters before approval.",
     );
   if (
     c.chapters.some((ch) => {
@@ -168,7 +189,11 @@ export function approveCollection(
     chapters: c.chapters.map((chapter) => ({
       ...chapter,
       editorialReviewed: true,
-      reviewedFilmSha256: chapter.film!.outputSha256,
+      ...(chapter.playback &&
+      options.reviewedPlaybackHashes?.[chapter.id] ===
+        chapter.playback.outputSha256
+        ? { reviewedPlaybackSha256: chapter.playback.outputSha256 }
+        : { reviewedFilmSha256: chapter.film!.outputSha256 }),
     })),
     status: "approved",
     approvedAt: now,

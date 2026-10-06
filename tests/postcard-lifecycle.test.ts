@@ -297,7 +297,7 @@ test("legacy postcards retain calendar-quarter dispatch through authenticated jo
         "to[address_zip]": "90001",
         "to[address_country]": "US",
         from: "adr_fixture",
-        size: "6x9",
+        size: "4x6",
         mail_type: "usps_first_class",
         use_type: "operational",
       }))

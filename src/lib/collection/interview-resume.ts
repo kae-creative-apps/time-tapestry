@@ -1,3 +1,4 @@
+import { isMeaningfulInterviewSpeech } from "./interview-speech";
 import {
   CHAPTERS,
   getChapterQuestion,
@@ -39,7 +40,7 @@ export function recordedInterviewChapterIds(c: ResumeSource): ChapterId[] {
           take.kind !== "text" &&
           !take.liveSource &&
           take.mediaId &&
-          take.text.trim() &&
+          isMeaningfulInterviewSpeech(take.text) &&
           (take.questionId === chapter.id ||
             take.questionId.startsWith(`${chapter.id}-f`)) &&
           c.selectedTakeIds[take.questionId] === take.id,
@@ -51,7 +52,7 @@ export function recordedInterviewChapterIds(c: ResumeSource): ChapterId[] {
             (turn) =>
               turn.role === "user" &&
               turn.chapterId === chapter.id &&
-              turn.text.trim(),
+              isMeaningfulInterviewSpeech(turn.text),
           ),
       ),
   ).map((chapter) => chapter.id);
@@ -68,10 +69,17 @@ export function interviewResumeState(c: ResumeSource) {
   const turns = session ? includedTurns(session) : [];
   const lastQuestion = [...turns]
     .reverse()
-    .find((turn) => turn.role === "agent" && turn.text.trim());
+    .find(
+      (turn) => turn.role === "agent" && isMeaningfulInterviewSpeech(turn.text),
+    );
   const lastAnswer = [...turns]
     .reverse()
-    .find((turn) => turn.role === "user" && turn.chapterId && turn.text.trim());
+    .find(
+      (turn) =>
+        turn.role === "user" &&
+        turn.chapterId &&
+        isMeaningfulInterviewSpeech(turn.text),
+    );
   const detected =
     lastQuestion && (!lastAnswer || lastQuestion.sequence > lastAnswer.sequence)
       ? detectInterviewThemeFromQuestion(lastQuestion.text)

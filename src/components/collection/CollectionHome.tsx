@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Review from "./Review";
 import { AppIcon } from "@/components/icons";
 import { PortalError, PortalShell } from "./PortalUI";
+import { hasChapterPlayback } from "@/lib/audio/playback-types";
+import { StoryFilmPlayer } from "./StoryFilmPlayer";
 import { hasRecordedVoiceFilm } from "./recorded-films";
 import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
@@ -524,7 +526,9 @@ export default function CollectionHome({
   const selectedIndex = c.chapters.findIndex(
     (chapter) => chapter.id === selectedId,
   );
-  const filmCount = c.chapters.filter(hasRecordedVoiceFilm).length;
+  const filmCount = c.chapters.filter(
+    (chapter) => hasChapterPlayback(chapter) || hasRecordedVoiceFilm(chapter),
+  ).length;
   const coverFilm = c.chapters.find(
     (chapter) =>
       hasRecordedVoiceFilm(chapter) && chapter.film.presentation === "video",
@@ -648,7 +652,8 @@ export default function CollectionHome({
             story.
           </p>
           <p className="mt-5 text-base font-medium">
-            {filmCount} {filmCount === 1 ? "film" : "films"} ·{" "}
+            {filmCount}{" "}
+            {filmCount === 1 ? "recorded story" : "recorded stories"} ·{" "}
             {c.chapters.length} stories
           </p>
           <a
@@ -684,11 +689,15 @@ export default function CollectionHome({
             </span>
             <span className="mt-3 flex items-center gap-2 text-base">
               <AppIcon
-                name={hasRecordedVoiceFilm(chapter) ? "play" : "collection"}
+                name={
+                  hasChapterPlayback(chapter) || hasRecordedVoiceFilm(chapter)
+                    ? "play"
+                    : "collection"
+                }
                 size={18}
               />
-              {hasRecordedVoiceFilm(chapter)
-                ? "Video and story"
+              {hasChapterPlayback(chapter) || hasRecordedVoiceFilm(chapter)
+                ? "Voice and story"
                 : "Written story"}
             </span>
           </button>
@@ -722,7 +731,25 @@ export default function CollectionHome({
               <div className="grid items-start gap-7 lg:grid-cols-[1fr_.9fr]">
                 <div className="min-w-0">
                   <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
-                    {hasRecordedVoiceFilm(chapter) ? (
+                    {hasChapterPlayback(chapter) ? (
+                      <StoryFilmPlayer
+                        key={chapter.playback!.mediaId}
+                        title={chapter.title}
+                        storytellerName={c.storyteller.name}
+                        src={url(chapter.playback!.mediaId)}
+                        playback={chapter.playback!}
+                        active={selectedId === chapter.id}
+                        preload={
+                          selectedId === chapter.id ? "metadata" : "none"
+                        }
+                        onEnded={() => revealReply(chapter.id)}
+                        downloadUrl={
+                          chapter.playback!.exportMediaId
+                            ? url(chapter.playback!.exportMediaId!)
+                            : undefined
+                        }
+                      />
+                    ) : hasRecordedVoiceFilm(chapter) ? (
                       <>
                         <h2 className="px-5 pb-4 pt-5 text-2xl font-semibold text-espresso">
                           Watch this story
@@ -847,7 +874,7 @@ export default function CollectionHome({
                       {!replyRevealed[chapter.id] && (
                         <div className="mt-5 flex flex-wrap items-center gap-4">
                           <p className="text-base leading-7 text-ink-500">
-                            A reply box opens when this film finishes. You can
+                            A reply box opens when this story finishes. You can
                             also reply at any time.
                           </p>
                           <button
@@ -864,7 +891,8 @@ export default function CollectionHome({
                         key={`${c.recipientId || c.recipient.email}:${chapter.id}`}
                         revealed={
                           Boolean(replyRevealed[chapter.id]) ||
-                          !hasRecordedVoiceFilm(chapter)
+                          (!hasChapterPlayback(chapter) &&
+                            !hasRecordedVoiceFilm(chapter))
                         }
                         c={c}
                         chapter={chapter}

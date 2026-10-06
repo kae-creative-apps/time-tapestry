@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AppIcon } from "@/components/icons";
+import { progressLabels } from "@/lib/organizations/progress";
 import {
   CopyLink,
   FormError,
@@ -36,6 +37,8 @@ export function OrganizationDashboard({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [assignRecipient, setAssignRecipient] = useState(false);
+  const [confirmReplacement, setConfirmReplacement] = useState("");
   const [newGift, setNewGift] = useState<{ name: string; url: string } | null>(
     null,
   );
@@ -86,6 +89,14 @@ export function OrganizationDashboard({
         body: JSON.stringify({
           name,
           email: String(form.get("email") || "").trim(),
+          ...(assignRecipient
+            ? {
+                designatedRecipient: {
+                  name: String(form.get("recipientName") || "").trim(),
+                  email: String(form.get("recipientEmail") || "").trim(),
+                },
+              }
+            : {}),
         }),
       });
       setOrganization(result.organization);
@@ -94,6 +105,33 @@ export function OrganizationDashboard({
         `Gift link ready for ${name}. Copy it below and share it with them.`,
       );
       formElement.reset();
+      setAssignRecipient(false);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function replaceLink(gift: OrganizationGift) {
+    if (busy || loading) return;
+    setBusy(gift.id);
+    setError("");
+    try {
+      const result = await requestJson<{
+        organization: Organization;
+        giftUrl: string;
+      }>(`${endpoint}/gifts${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "replace_link", giftId: gift.id }),
+      });
+      setOrganization(result.organization);
+      setNewGift({ name: gift.name, url: result.giftUrl });
+      setConfirmReplacement("");
+      setNotice(
+        `A new invitation is ready for ${gift.name}. Their previous link no longer works.`,
+      );
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -208,8 +246,9 @@ export function OrganizationDashboard({
               <p className="mb-4 mt-2 max-w-3xl text-sm leading-6 text-ink-500">
                 Bookmark this page or copy the link below. Anyone with this link
                 can see names and emails and manage your gifts. Share it only
-                with someone helping you organize the group. Family stories and
-                recordings are not shown here.
+                with someone helping you organize the group. Chapter and mailing
+                status appear below. Family stories and recordings are not shown
+                here.
               </p>
               <CopyLink
                 path={`/organizations/${encodeURIComponent(id)}${query}`}
@@ -276,8 +315,8 @@ export function OrganizationDashboard({
                 Create a storyteller’s gift link.
               </h2>
               <p className="mt-2 text-base leading-7 text-ink-500">
-                Add the person who will share their stories. They’ll choose who
-                receives them.
+                Add the person who will share their stories. They can choose a
+                recipient, or you can assign one for this gift.
               </p>
             </div>
           </div>
@@ -314,6 +353,47 @@ export function OrganizationDashboard({
                     className={inputClass}
                   />
                 </label>
+                <div className="md:col-span-3">
+                  <label className="flex items-start gap-3 text-base leading-7">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-5 w-5 accent-espresso"
+                      checked={assignRecipient}
+                      onChange={(event) =>
+                        setAssignRecipient(event.target.checked)
+                      }
+                    />
+                    Assign a recipient for this gift
+                  </label>
+                  {assignRecipient && (
+                    <div className="mt-4 grid gap-4 rounded-xl bg-paper p-4 sm:grid-cols-2">
+                      <label>
+                        Recipient name
+                        <input
+                          name="recipientName"
+                          required
+                          maxLength={120}
+                          className={inputClass}
+                        />
+                      </label>
+                      <label>
+                        Recipient email
+                        <input
+                          name="recipientEmail"
+                          type="email"
+                          required
+                          maxLength={254}
+                          className={inputClass}
+                        />
+                      </label>
+                      <p className="text-sm leading-6 sm:col-span-2">
+                        The storyteller will confirm this person before
+                        starting. Their stories stay private from the group
+                        organizer.
+                      </p>
+                    </div>
+                  )}
+                </div>
                 <button className={`${primaryClass} w-full`} type="submit">
                   {busy === "invite" ? "Creating…" : "Create gift link"}
                   <AppIcon name="arrowRight" size={18} />
@@ -345,8 +425,9 @@ export function OrganizationDashboard({
               Your gift invitations
             </h2>
             <p className="mt-2 text-base leading-7 text-ink-500">
-              Redeemed means the storyteller has started their collection. It
-              does not mean their stories are finished.
+              Follow each storyteller’s four chapters. Completed means the
+              storyteller has approved the story. Postcard Shipped means mailing
+              has been confirmed.
             </p>
           </div>
           {organization.gifts.length === 0 ? (
@@ -364,56 +445,116 @@ export function OrganizationDashboard({
               </p>
             </div>
           ) : (
-            <ul className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
-              {organization.gifts.map((gift) => (
-                <li
-                  key={gift.id}
-                  className="flex flex-col gap-4 border-b border-warmgray-200 p-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:p-6"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-paper-200 font-display text-lg font-semibold"
+            <div className="overflow-x-auto rounded-2xl border border-warmgray-200 bg-white">
+              <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                <caption className="sr-only">
+                  Storyteller progress across four chapters
+                </caption>
+                <thead className="bg-paper text-ink-500">
+                  <tr>
+                    <th scope="col" className="p-5">
+                      Storyteller
+                    </th>
+                    {[1, 2, 3, 4].map((number) => (
+                      <th key={number} scope="col" className="p-4">
+                        Chapter {number}
+                      </th>
+                    ))}
+                    <th scope="col" className="p-5">
+                      Invitation
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {organization.gifts.map((gift) => (
+                    <tr
+                      key={gift.id}
+                      className="border-t border-warmgray-200 align-top"
                     >
-                      {Array.from(gift.name.trim())[0]?.toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="break-words text-lg font-semibold">
-                        {gift.name}
-                      </h3>
-                      <p className="break-all text-sm leading-6 text-ink-500">
-                        {gift.email}
-                      </p>
-                      <span
-                        className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-medium ${gift.status === "redeemed" ? "bg-sage-100 text-sage-700" : "bg-paper-200 text-ink-500"}`}
-                      >
-                        {statusLabels[gift.status]}
-                      </span>
-                    </div>
-                  </div>
-                  {gift.status === "issued" && (
-                    <div className="flex shrink-0 flex-wrap items-start gap-3">
-                      {gift.giftUrl && (
-                        <CopyLink
-                          path={gift.giftUrl}
-                          label={`Copy gift link`}
-                          accessibleLabel={`Copy gift link for ${gift.name}`}
-                        />
-                      )}
-                      <button
-                        type="button"
-                        disabled={!!busy || loading}
-                        aria-label={`Revoke gift for ${gift.name}`}
-                        onClick={() => revoke(gift)}
-                        className="min-h-12 px-3 text-sm text-ink-500 underline underline-offset-4 disabled:opacity-50"
-                      >
-                        {busy === gift.id ? "Revoking…" : "Revoke"}
-                      </button>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+                      <th scope="row" className="max-w-56 p-5 font-normal">
+                        <p className="break-words text-base font-semibold">
+                          {gift.name}
+                        </p>
+                        <p className="break-all leading-6 text-ink-500">
+                          {gift.email}
+                        </p>
+                        {gift.designatedRecipient && (
+                          <p className="mt-2 leading-6 text-ink-500">
+                            For {gift.designatedRecipient.name}
+                          </p>
+                        )}
+                      </th>
+                      {gift.progress.map((chapter) => (
+                        <td key={chapter.chapterId} className="p-4">
+                          <span
+                            className={`inline-block rounded-full px-3 py-1.5 ${chapter.status === "completed" || chapter.status === "postcard_shipped" ? "bg-sage-100 text-sage-700" : "bg-paper text-ink-500"}`}
+                          >
+                            {progressLabels[chapter.status]}
+                          </span>
+                          {chapter.mailingAttention && (
+                            <p className="mt-2 text-oxblood">
+                              Mailing needs attention
+                            </p>
+                          )}
+                        </td>
+                      ))}
+                      <td className="max-w-64 p-5">
+                        <p className="font-medium">
+                          {statusLabels[gift.status]}
+                        </p>
+                        {gift.status === "issued" && (
+                          <div className="mt-2 space-y-2">
+                            {confirmReplacement === gift.id ? (
+                              <div className="rounded-xl bg-paper p-3">
+                                <p className="leading-6">
+                                  Replace this invitation? The previous link
+                                  will stop working.
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled={!!busy || loading}
+                                  onClick={() => void replaceLink(gift)}
+                                  className={`${secondaryClass} mt-2`}
+                                >
+                                  Create new link
+                                </button>
+                                <button
+                                  type="button"
+                                  className="block min-h-11 underline underline-offset-4"
+                                  onClick={() => setConfirmReplacement("")}
+                                >
+                                  Keep existing link
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!!busy || loading}
+                                onClick={() => setConfirmReplacement(gift.id)}
+                                className="block min-h-11 underline underline-offset-4"
+                              >
+                                Replace invitation link
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              disabled={!!busy || loading}
+                              aria-label={`Revoke gift for ${gift.name}`}
+                              onClick={() => void revoke(gift)}
+                              className="block min-h-11 text-ink-500 underline underline-offset-4"
+                            >
+                              {busy === gift.id
+                                ? "Saving…"
+                                : "Revoke unused gift"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           <p className="mt-4 text-sm leading-6 text-ink-500">
             Revoking an unused gift turns off its link and makes that gift

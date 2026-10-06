@@ -59,6 +59,7 @@ export function cleanSourcePassage(
   clip: OriginalClipSelection,
   words: SourceWord[],
   confirmedSilence: SourceSilence[] = [],
+  options: { minimumSilenceMs?: number; keepSilenceMs?: number } = {},
 ): {
   clips: OriginalClipSelection[];
   removed: SourceRemoval[];
@@ -149,7 +150,7 @@ export function cleanSourcePassage(
       continue;
     const start = Math.max(clip.inMs, silence.inMs);
     const end = Math.min(clip.outMs, silence.outMs);
-    if (end - start <= MIN_SILENCE_MS) continue;
+    if (end - start <= (options.minimumSilenceMs ?? MIN_SILENCE_MS)) continue;
     if (words.some((word) => word.startMs < end && word.endMs > start))
       continue;
     const beforeIndex = words.findLastIndex((word) => word.endMs <= start);
@@ -159,8 +160,12 @@ export function cleanSourcePassage(
       removedWordIndices.has(afterIndex)
     )
       continue;
-    const inMs = frameAfter(start + KEEP_SILENCE_MS / 2);
-    const outMs = frameBefore(end - KEEP_SILENCE_MS / 2);
+    const inMs = frameAfter(
+      start + (options.keepSilenceMs ?? KEEP_SILENCE_MS) / 2,
+    );
+    const outMs = frameBefore(
+      end - (options.keepSilenceMs ?? KEEP_SILENCE_MS) / 2,
+    );
     if (outMs - inMs < 100 || inMs <= clip.inMs || outMs >= clip.outMs)
       continue;
     removals.push({ mediaId: clip.mediaId, inMs, outMs, reason: "silence" });

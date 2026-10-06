@@ -48,6 +48,12 @@ import {
 } from "@/lib/collection/interview-preparation";
 import { restoreCompletedInterview } from "@/lib/collection/interview-restoration";
 import { validateReplyRecording } from "@/lib/collection/reply-media";
+import { playbackReady } from "@/lib/collection/playback";
+import {
+  normalizePostalAddress,
+  assertAddressVerification,
+  postalAddressHash,
+} from "@/lib/lob/address-verification";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -365,7 +371,18 @@ export async function POST(
             );
           if (role === "requester" && c.requester.email !== c.recipient.email)
             throw new Error("Use the recipient address link.");
+          const address = normalizePostalAddress(b.address, c.recipient.name);
+          const sameAddress = Boolean(
+            c.address &&
+            postalAddressHash(c.id, c.address) ===
+              postalAddressHash(c.id, address),
+          );
+          const started = c.deliveries.some(
+            (delivery) =>
+              delivery.providerId || (delivery.dispatch?.attempts || 0) > 0,
+          );
           if (
+            !sameAddress &&
             c.deliveries.some(
               (d) =>
                 (d.dispatch?.leaseExpiresAt &&
@@ -377,18 +394,14 @@ export async function POST(
             throw new Error(
               "A postcard request is already in progress. Resolve that mailing before changing the address.",
             );
-          const a = b.address || {};
-          if (!a.line1 || !a.city || !a.region || !a.postalCode)
-            throw new Error("Complete the mailing address.");
-          c.address = {
-            name: c.recipient.name,
-            line1: clean(a.line1, 200),
-            line2: clean(a.line2, 200),
-            city: clean(a.city, 100),
-            region: clean(a.region, 100),
-            postalCode: clean(a.postalCode, 30),
-            country: clean(a.country, 2).toUpperCase() || "US",
-          };
+          c.addressVerification = assertAddressVerification(
+            c,
+            address,
+            b.verificationId,
+          );
+          delete c.pendingAddressVerification;
+          // Rechecking an unchanged address cannot change the frozen proof's spelling or request bytes.
+          if (!(sameAddress && started)) c.address = address;
           c.addressConfirmed = true;
           return c.status === "approved"
             ? await prepareAutomaticPostcards(c)
@@ -655,28 +668,37 @@ export async function POST(
         }
         if (b.action === "approve") {
           const job = await latestFilmJob(c.id);
+          const interactive = job?.outputMode === "interactive";
           if (
-            !job ||
-            job.mode !== "original" ||
-            job.status !== "ready" ||
-            !(await filmJobInputsCurrent(job, c)) ||
-            c.chapters.some((chapter) => {
-              const completed = job.chapters.find(
-                (item) => item.chapterId === chapter.id,
-              );
-              return (
-                completed?.status !== "ready" ||
-                !completed.artifact ||
-                chapter.film?.jobId !== job.id ||
-                chapter.film?.mediaId !== completed.artifact.mediaId ||
-                chapter.film?.outputSha256 !== completed.artifact.outputSha256
-              );
-            })
+            interactive &&
+            (job.status !== "ready" || !(await playbackReady(c, job)))
+          )
+            throw new Error(
+              "Finish preparing your four current recorded chapters before approval.",
+            );
+          if (
+            !interactive &&
+            (!job ||
+              job.mode !== "original" ||
+              job.status !== "ready" ||
+              !(await filmJobInputsCurrent(job, c)) ||
+              c.chapters.some((chapter) => {
+                const completed = job.chapters.find(
+                  (item) => item.chapterId === chapter.id,
+                );
+                return (
+                  completed?.status !== "ready" ||
+                  !completed.artifact ||
+                  chapter.film?.jobId !== job.id ||
+                  chapter.film?.mediaId !== completed.artifact.mediaId ||
+                  chapter.film?.outputSha256 !== completed.artifact.outputSha256
+                );
+              }))
           )
             throw new Error(
               "Finish preparing and reviewing your four current recorded films before approval.",
             );
-          for (const chapter of c.chapters) {
+          for (const chapter of interactive ? [] : c.chapters) {
             const media =
               chapter.film && (await getMedia(chapter.film.mediaId));
             if (
@@ -694,7 +716,10 @@ export async function POST(
           const approved = approveCollection(c, new Date().toISOString(), {
             deliveryMode: b.deliveryMode === "digital" ? "digital" : "postal",
             recordingsReviewed: b.recordingsReviewed === true,
-            reviewedFilmHashes: b.reviewedFilmHashes,
+            reviewedFilmHashes: interactive ? undefined : b.reviewedFilmHashes,
+            reviewedPlaybackHashes: interactive
+              ? b.reviewedPlaybackHashes
+              : undefined,
           });
           if (
             b.deliveryMode === "digital" &&

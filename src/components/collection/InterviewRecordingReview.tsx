@@ -85,11 +85,11 @@ export function RecordingReviewChapter({
           />
           <p className="text-base leading-7 text-ink-500">
             {chapter.awaitingChapterMatch
-              ? "Your original interview is saved. This part is not matched to an answer yet. You can replay the full interview here. We will try to recover its transcript after submission."
+              ? "Your interview is saved. We’ll check your saved interview for this section when you submit."
               : source.fromInterview
                 ? source.approximateStartSeconds !== undefined
-                  ? "Playback starts near this answer. This is the complete original recording, so it may include other parts. You can move through it using the player."
-                  : "This is the complete original recording containing this answer. It may include other parts. Your four finished videos are prepared after submission."
+                  ? "Playback starts near this answer in your full interview."
+                  : "Your full interview plays here. We’ll separate it into four videos after submission."
                 : "This plays the complete answer you recorded. Your original stays saved."}
           </p>
           {!chapter.ready && !chapter.awaitingChapterMatch && (
@@ -124,14 +124,11 @@ export function RecordingReviewChapter({
         disabled={busy}
         onClick={onRerecord}
       >
-        {source && !chapter.awaitingChapterMatch
-          ? "Record again"
-          : "Record this part"}
+        {source ? "Record again" : "Record this part"}
       </button>
       {source && !chapter.awaitingChapterMatch && (
         <p className="mt-2 text-sm leading-6 text-ink-500">
-          Your current answer stays selected until a new recording is backed up.
-          Earlier originals are kept.
+          Your original stays saved until your new answer is ready.
         </p>
       )}
     </section>
@@ -261,20 +258,13 @@ export default function InterviewRecordingReview({
     setBusy(true);
     setError("");
     try {
-      const current = await load();
+      let current = await load();
       if (current.role !== "owner" || current.status === "approved")
         throw new Error("Open your storyteller account to continue.");
       await requireInterviewReviewBackup(current);
       if (current.interviews?.some((session) => session.status === "active"))
         throw new Error(
           "Pause the interview in your recording tab before submitting. This keeps its latest recording safe.",
-        );
-      if (
-        interviewRecordingReview(current).some((chapter) => !chapter.ready) &&
-        !unassignedInterviewRecordings(current).length
-      )
-        throw new Error(
-          "Finish recording all four parts and let their automatic transcripts save before submitting. Your recordings are kept.",
         );
       for (const session of current.interviews ?? []) {
         if (session.status !== "completed")
@@ -288,6 +278,14 @@ export default function InterviewRecordingReview({
             }),
           });
       }
+      current = await load();
+      if (
+        interviewRecordingReview(current).some((chapter) => !chapter.ready) &&
+        !unassignedInterviewRecordings(current).length
+      )
+        throw new Error(
+          "Finish recording all four parts and let their automatic transcripts save before submitting. Your recordings are kept.",
+        );
       const result = await collectionRequest(endpoint + query, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -332,11 +330,10 @@ export default function InterviewRecordingReview({
         </Link>
       </header>
       <h1 className="font-display text-4xl font-medium text-espresso">
-        Your recordings, in four parts.
+        Review your four stories.
       </h1>
       <p className="mt-4 max-w-2xl text-lg leading-8">
-        Listen or watch before you finish, if you would like. To change an
-        answer, record that part again.
+        Watch or listen. Happy with your answers? Submit your interview.
       </p>
       {error && (
         <div
@@ -393,8 +390,7 @@ export default function InterviewRecordingReview({
       ) : (
         <>
           <p className="mt-3 text-base leading-7 text-ink-500">
-            These are your original recordings, before the four finished videos
-            are prepared. Your microphone and camera are off on this page.
+            Your recordings are saved. Your microphone and camera are off.
           </p>
           <RecordingReviewParts
             chapters={chapters}
@@ -415,21 +411,12 @@ export default function InterviewRecordingReview({
               disabled={busy}
               onClick={() => void finish()}
             >
-              {busy ? "Submitting recordings…" : "Finish interview"}
-            </button>
-            <button
-              type="button"
-              className={portalSecondary}
-              disabled={busy}
-              onClick={() => router.push(interviewPath)}
-            >
-              Back to interview
+              {busy ? "Submitting recordings…" : "Submit my interview"}
             </button>
           </div>
           <p className="mt-4 text-base leading-7 text-ink-500">
-            Finish interview starts preparing your four stories, four videos,
-            and postcard drafts. You can still personalize the postcard
-            encouragement and approve everything before sharing.
+            We’ll prepare your four videos and storybook, then email you when
+            they’re ready. You can still personalize your postcards.
           </p>
         </>
       )}

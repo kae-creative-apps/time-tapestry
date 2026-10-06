@@ -1,3 +1,4 @@
+import { fixtureVerifiedAddress } from "./address-verification-fixture";
 import { syntheticRecordedFilmCollection } from "./film-fixture";
 import {
   attachSyntheticOriginalFilms,
@@ -81,7 +82,7 @@ test("protected delivery automation separates email from printing and sends only
       messagesHash: postcardPublicMessagesHash(c),
       approvedAt: c.createdAt,
     };
-    return c;
+    return fixtureVerifiedAddress(c);
   };
   const originalFetch = globalThis.fetch;
   // Exercise hosted readiness without touching a real KV service. Keep the

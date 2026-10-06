@@ -1,3 +1,4 @@
+import { isMeaningfulInterviewSpeech } from "./interview-speech";
 import type {
   AnswerTake,
   Collection,
@@ -8,7 +9,10 @@ import type {
   InterviewTurn,
   StoredMedia,
 } from "./types";
-import { isStoredOwnerRecording } from "./recording-validation";
+import {
+  isStoredOwnerRecording,
+  hasRecordedAnswerSource,
+} from "./recording-validation";
 
 export class InterviewInputError extends Error {
   constructor(
@@ -127,6 +131,7 @@ export function interviewAnswers(
         (turn) =>
           turn.role === "user" &&
           turn.chapterId === chapterId &&
+          isMeaningfulInterviewSpeech(turn.text) &&
           !session.excludedTurnIds.includes(turn.id),
       )
       .map((turn) => {
@@ -189,7 +194,53 @@ export function interviewAnswers(
 function invalidateDraft(c: Collection) {
   if (!c.chapters.length) return;
   c.draftOutdated = true;
-  for (const item of c.chapters) item.editorialReviewed = false;
+  for (const item of c.chapters) {
+    item.editorialReviewed = false;
+    item.reviewedFilmSha256 = undefined;
+  }
+}
+
+/** Commit only a completed, verified spoken retake. Originals and other parts stay intact. */
+export async function commitInterviewReplacement(
+  c: Collection,
+  session: InterviewSession,
+  findMedia: (id: string) => Promise<StoredMedia | null>,
+  now = new Date().toISOString(),
+): Promise<boolean> {
+  const target = session.replacesChapterId;
+  if (
+    !target ||
+    session.replacementCommittedAt ||
+    session.status !== "completed"
+  )
+    return false;
+  const index = (c.interviews ?? []).findIndex(
+    (item) => item.id === session.id,
+  );
+  if (index < 0) return false;
+  const answers = interviewAnswers({ interviews: [session] }, target);
+  let verified = false;
+  for (const answer of answers) {
+    if (await hasRecordedAnswerSource(answer, c, findMedia)) verified = true;
+    else return false;
+  }
+  if (!verified) return false;
+  for (const older of (c.interviews ?? []).slice(0, index)) {
+    for (const turn of older.turns)
+      if (
+        turn.role === "user" &&
+        turn.chapterId === target &&
+        !older.excludedTurnIds.includes(turn.id)
+      )
+        older.excludedTurnIds.push(turn.id);
+  }
+  for (const questionId of Object.keys(c.selectedTakeIds))
+    if (questionId === target || questionId.startsWith(`${target}-f`))
+      delete c.selectedTakeIds[questionId];
+  session.replacementCommittedAt = now;
+  c.status = "recording";
+  invalidateDraft(c);
+  return true;
 }
 
 /** Apply inside mutateCollection so retries and concurrent updates are serialized. */
@@ -209,12 +260,21 @@ export async function applyInterviewAction(
   c.interviews ??= [];
   let session = c.interviews.find((item) => item.id === sessionId);
   if (body.action === "start") {
+    const replacement =
+      body.replaceChapterId === undefined
+        ? undefined
+        : chapter(body.replaceChapterId);
     const provider = body.provider ?? "elevenlabs";
     if (provider !== "elevenlabs" && provider !== "guided")
       return fail("Invalid interview provider.");
     if (session && session.provider !== provider)
       return fail(
         "This conversation was started with a different interview mode.",
+        409,
+      );
+    if (session && session.replacesChapterId !== replacement)
+      return fail(
+        "This conversation was started for a different story part.",
         409,
       );
     if (session) return c;
@@ -242,6 +302,7 @@ export async function applyInterviewAction(
       turns: [],
       segments: [],
       excludedTurnIds: [],
+      ...(replacement ? { replacesChapterId: replacement } : {}),
     };
     c.interviews.push(session);
     c.status = "recording";
@@ -257,6 +318,15 @@ export async function applyInterviewAction(
       return fail("Save between 1 and 20 conversation turns at a time.");
     const parsed = body.turns.map(turnFrom);
     for (const turn of parsed) {
+      if (
+        session.replacesChapterId &&
+        turn.role === "user" &&
+        turn.chapterId !== session.replacesChapterId
+      )
+        return fail(
+          "This conversation can replace only its selected story part.",
+          409,
+        );
       const existing = session.turns.find((item) => item.id === turn.id);
       if (existing) {
         if (JSON.stringify(existing) !== JSON.stringify(turn))
@@ -314,6 +384,7 @@ export async function applyInterviewAction(
       session.turns.push(turn);
       if (turn.role === "user") invalidateDraft(c);
     }
+    await commitInterviewReplacement(c, session, findMedia, now);
     return c;
   }
   if (body.action === "attach_segment") {
@@ -374,6 +445,7 @@ export async function applyInterviewAction(
     }
     session.segments.push(segment);
     invalidateDraft(c);
+    await commitInterviewReplacement(c, session, findMedia, now);
     return c;
   }
   if (body.action === "set_status") {
@@ -427,6 +499,7 @@ export async function applyInterviewAction(
     if (session.status === "completed" || session.status === "interrupted")
       session.endedAt ??= now;
     else delete session.endedAt;
+    await commitInterviewReplacement(c, session, findMedia, now);
     return c;
   }
   if (body.action === "select_turn") {
@@ -446,6 +519,7 @@ export async function applyInterviewAction(
       session.excludedTurnIds.push(turnId);
       invalidateDraft(c);
     }
+    await commitInterviewReplacement(c, session, findMedia, now);
     return c;
   }
   return fail("Unknown conversation update.");

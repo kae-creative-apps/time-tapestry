@@ -1,0 +1,77 @@
+You are the Principal Systems & Security Architect for Time Tapestry (`kae-creative-apps/time-tapestry`).
+We have already implemented our interactive web playback, resilient data layer, mobile take caching, and Lob flip preview. 
+
+Now, execute Phase 2: Production Hardening, Security, Audio Optimization, and Recipient Experience across the codebase. 
+
+Implement the following 6 modules with complete, production-ready TypeScript code:
+
+---
+
+### 1. Edge Audio Compression & Web Audio Normalizer
+**Goal:** Prevent bloated audio files (WAV/uncompressed WebM) from lagging on mobile and driving up Vercel Blob egress bills.
+**Files:** `src/lib/audio/compressor.ts`, `src/app/api/collection/[id]/media/compress/route.ts`
+- Implement an in-browser Web Audio compression routine prior to upload: downsample raw microphone input to 24kHz / 64kbps mono Opus/AAC.
+- Add an automatic dynamic range compression (DRC) audio pass that levels quiet whispers and loud moments so the speaker's voice is crisp and intelligible for elders.
+- Include an API route fallback that accepts incoming audio and streams it through `@ffmpeg/ffmpeg` (Wasm) or a serverless worker to ensure consistent `.m4a` output.
+
+---
+
+### 2. Cryptographic Security, Auth Hardening & Asset Protection
+**Goal:** Ensure personal family stories and postal addresses cannot be scraped via enumerated collection IDs.
+**Files:** `src/lib/auth/session.ts`, `src/middleware.ts`, `src/lib/auth/permissions.ts`
+- Replace plain cookie strings with cryptographically signed tokens (using `jose`) stored in `httpOnly`, `Secure`, `SameSite=Strict` cookies.
+- Implement strict access control guards:
+  - `Storyteller`: Can only read/edit their owned story collections.
+  - `Recipient`: Can only view the specific shared collection via an encrypted access token (embedded in the postcard QR code).
+  - `Admin`: Protected with constant-time password comparison and optional TOTP MFA.
+- Add signed, time-limited download URLs for raw audio files in Vercel Blob so media links cannot be shared publicly without authorization.
+
+---
+
+### 3. Idempotent Lob Webhook Pipeline with USPS Delivery Tracking
+**Goal:** Make postal delivery tracking resilient against network drops, retries, and out-of-order webhook delivery.
+**Files:** `src/app/api/collection/webhooks/lob/route.ts`, `src/lib/lob/webhook-handler.ts`
+- Verify Lob webhook signatures using the `lob-signature` header and our `LOB_WEBHOOK_SECRET`.
+- Create an idempotent event reconciliation handler:
+  - Track `event_id` and timestamp; discard stale or duplicate webhook payloads.
+  - Map Lob events (`postcard.created`, `postcard.rendered_pdf`, `postcard.in_transit`, `postcard.processed_for_delivery`, `postcard.delivered`) directly to the corresponding `print_orders` and `recipients` records.
+  - On `postcard.delivered`, automatically dispatch a notification email via Resend to the storyteller celebrating that their card has arrived.
+
+---
+
+### 4. Reciprocal "Voice Thank-You" Recipient Loop
+**Goal:** Turn the recipient experience into a two-way emotional connection.
+**Files:** `src/app/story/[id]/reply/page.tsx`, `src/components/reply/VoiceReactionRecorder.tsx`, `src/app/api/reply/submit/route.ts`
+- When a recipient listens to the story via their postcard QR code, present a warm prompt: *"Leave a voice note or prayer for [Storyteller Name]"*.
+- Provide a simple 1-tap voice recorder (max 90 seconds) with audio playback review.
+- On submission, upload the audio reaction, attach it to the story's `generosity_notes` collection, and send an email alert to the storyteller with a direct listen link.
+
+---
+
+### 5. Elder-First Accessibility (WCAG 2.2 AAA & Mobile Dynamic Type)
+**Goal:** Guarantee that non-technical seniors can comfortably listen, read, and navigate without assistance.
+**Files:** `src/components/playback/AccessibleTranscript.tsx`, `src/styles/accessibility.css`
+- Implement rem-based fluid typography that honors OS-level accessibility font scaling (`text-size-adjust: 100%`).
+- Add an accessible playback toolbar:
+  - Font Size Toggle: Standard / Large / Extra-Large.
+  - Audio Speed: 0.8x (slower for clarity), 1.0x, 1.2x.
+  - High-Contrast Mode toggle for paper texture vs. pure dark ink.
+- Add ARIA live-regions (`aria-live="polite"`) that announce current chapter changes and sync transcript highlighting to screen readers.
+
+---
+
+### 6. Mock Service Worker (MSW) & Deterministic Test Pipeline
+**Goal:** Stabilize the 90+ test suites in `tests/` so CI runs fast without hitting real external APIs or timing out.
+**Files:** `tests/mocks/handlers.ts`, `tests/mocks/server.ts`, `tests/setup.ts`
+- Build deterministic MSW mock handlers for:
+  - Lob API (`/v1/us_verifications`, `/v1/postcards`)
+  - ElevenLabs TTS & Speech-to-Text endpoints
+  - Resend Email API
+- Update `package.json` test scripts to isolate unit tests from Remotion render tests, ensuring `npm test` passes in under 30 seconds in CI.
+
+---
+
+### Deliverable Format:
+1. Provide the exact architectural file map of newly created or modified files.
+2. Output complete, production-ready TypeScript code for each file (no incomplete snippets or placeholders).
+3. Ensure backwards compatibility with our existing database fixtures and brand design tokens.

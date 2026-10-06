@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
-import { renderPostcardDesign } from "@/lib/collection/postcard-design";
+import {
+  renderPostcardDesign,
+  POSTCARD_THEMES,
+} from "@/lib/collection/postcard-design";
 import { assertPublicPostcardFits } from "@/lib/collection/postcard-fit";
 import { postcardPrintAssets } from "@/lib/collection/postcard-print-assets";
 import { PUBLIC_POSTCARD_DEFAULTS } from "@/lib/collection/postcard-public-message";
@@ -27,8 +30,12 @@ export async function GET() {
   const printAssets = { ...assets, qrPng };
   const artwork = renderPostcardDesign(content, printAssets);
   const fronts = Object.values(PUBLIC_POSTCARD_DEFAULTS).map(
-    (publicMessage) => {
-      const cardContent = { ...content, publicMessage };
+    (publicMessage, index) => {
+      const cardContent = {
+        ...content,
+        publicMessage,
+        theme: POSTCARD_THEMES[index],
+      };
       assertPublicPostcardFits(cardContent);
       return renderPostcardDesign(cardContent, printAssets).front;
     },

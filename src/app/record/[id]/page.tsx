@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { InterviewChapterId } from "@/lib/collection/types";
 import Interview from "@/components/collection/Interview";
 import LiveInterview from "@/components/collection/LiveInterview";
 
@@ -12,15 +13,23 @@ export default async function RecordPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ key?: string; classic?: string }>;
+  searchParams: Promise<{ key?: string; classic?: string; rerecord?: string }>;
 }) {
-  const [{ id }, { key = "", classic }] = await Promise.all([
+  const [{ id }, { key = "", classic, rerecord }] = await Promise.all([
     params,
     searchParams,
   ]);
   return classic === "1" ? (
     <Interview collectionId={id} accessKey={key} />
   ) : (
-    <LiveInterview collectionId={id} accessKey={key} />
+    <LiveInterview
+      collectionId={id}
+      accessKey={key}
+      rerecordChapterId={
+        rerecord && /^q[1-4]$/.test(rerecord)
+          ? (rerecord as InterviewChapterId)
+          : undefined
+      }
+    />
   );
 }

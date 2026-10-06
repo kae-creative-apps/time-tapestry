@@ -623,3 +623,68 @@ test("session budget is reserved after configuration validation and denial preve
     delete process.env.ELEVENLABS_AGENT_ID;
   }
 });
+
+test("a scoped re-record starts with its own question and preserves the four-part conversation prompt", async () => {
+  process.env.ELEVENLABS_API_KEY = "synthetic-provider-key";
+  process.env.ELEVENLABS_AGENT_ID = "synthetic-agent";
+  const c = collection();
+  const scoped = interview();
+  scoped.replacesChapterId = "q3";
+  scoped.turns = [];
+  c.interviews = [scoped];
+  const provider = {
+    getAgent: async () => agent(),
+    getTool: noToolLookup,
+    getToken: async () => ({
+      token: "scoped-token",
+      conversationId: "scoped-provider-conversation",
+    }),
+  };
+  const session = await createInterviewSession(
+    c,
+    c.ownerKey,
+    scoped.id,
+    provider,
+  );
+  assert.equal(session.currentThemeId, "q3");
+  assert.match(session.overrides.agent.firstMessage, /helping others/);
+  assert.match(session.overrides.agent.prompt.prompt, /ONLY for q3/);
+  scoped.turns.push({
+    id: "retake-first-answer",
+    role: "user",
+    sequence: 0,
+    chapterId: "q3",
+    text: "We brought dinner to our neighbor every week.",
+    capturedAt: scoped.startedAt,
+    timing: "unaligned",
+  });
+  const resumed = await createInterviewSession(
+    c,
+    c.ownerKey,
+    scoped.id,
+    provider,
+  );
+  assert.match(
+    resumed.overrides.agent.firstMessage,
+    /pick up where we left off/,
+  );
+  const resumedContext = JSON.parse(
+    resumed.dynamicVariables.interview_context_json as string,
+  );
+  assert.equal(resumedContext.sourceEntries.length, 1);
+  assert.equal(resumedContext.sourceEntries[0].text, scoped.turns[0].text);
+  assert.match(session.overrides.agent.prompt.prompt, /Back to review/);
+  assert.match(
+    INTERVIEW_AGENT_PROMPT,
+    /Complete all four themes in this one conversation/,
+  );
+  assert.match(
+    INTERVIEW_AGENT_PROMPT,
+    /Never count it toward completing a theme/,
+  );
+  assert.equal(
+    "tts" in session.overrides,
+    false,
+    "the established voice and delivery settings are preserved",
+  );
+});

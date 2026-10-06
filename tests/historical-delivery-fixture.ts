@@ -1,3 +1,4 @@
+import { fixtureAddressReceipt } from "./address-verification-fixture";
 import { postcardScheduledDate } from "../src/lib/collection/postcard-cadence";
 import type { Collection } from "../src/lib/collection/types";
 
@@ -9,6 +10,9 @@ export function historicalApprovedCollection(
 ): Collection {
   return {
     ...collection,
+    ...(collection.address
+      ? { addressVerification: fixtureAddressReceipt(collection) }
+      : {}),
     status: "approved",
     approvedAt,
     approvedVersion: 1,

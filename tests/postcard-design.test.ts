@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { postcardArtwork } from "../src/lib/collection/postcard-artwork";
 import {
   POSTCARD_LAYOUT,
+  POSTCARD_THEMES,
   renderPostcardDesign,
 } from "../src/lib/collection/postcard-design";
 import { assertPublicPostcardFits } from "../src/lib/collection/postcard-fit";
@@ -56,12 +57,12 @@ test("actual print artwork shares safe public text and first names, with exact a
     assert.match(html, /script-src 'none'/);
   }
   const thread = await readFile(
-    "public/brand/time-tapestry-quiet-flowing-thread-v41.png",
+    "public/brand/postcards/designer-2026-10-06-v2/postcard-01-kindness-print-background.png",
   );
   assert.ok(
     front.includes(`data:image/png;base64,${thread.toString("base64")}`),
   );
-  assert.match(back, /width:384px;height:228px/);
+  assert.match(back, /width:315\.21px;height:228px/);
   assert.match(back, /Scan to open your story and reply/);
   assert.match(back, /Sign in with the email address linked to this gift/);
 });
@@ -122,10 +123,10 @@ test("four public defaults and a full 240-character ordinary message fit without
   );
 });
 
-test("QR and back caption stay outside the official postal region; trim is exactly 6 by 9", () => {
+test("QR and back caption stay outside the official postal region; trim is exactly 6 by 4", () => {
   const layout = POSTCARD_LAYOUT;
-  assert.equal(layout.width - layout.bleed * 2, 9 * 96);
-  assert.equal(layout.height - layout.bleed * 2, 6 * 96);
+  assert.equal(layout.width - layout.bleed * 2, 6 * 96);
+  assert.equal(layout.height - layout.bleed * 2, 4 * 96);
   assert.ok(layout.qr.x + layout.qr.width < layout.postal.x);
   assert.ok(layout.caption.x + layout.caption.width < layout.postal.x);
   assert.ok(layout.note.bottom < layout.postal.y);
@@ -139,8 +140,12 @@ test("pure renderer escapes text and rejects external or injected asset referenc
   };
   const assets = {
     signaturePng: "data:image/png;base64,YQ==",
-    signatureLightPng: "data:image/png;base64,YQ==",
-    approvedThreadPng: "data:image/png;base64,YQ==",
+    approvedFrontPngs: {
+      kindness: "data:image/png;base64,YQ==",
+      faith: "data:image/png;base64,Yg==",
+      generosity: "data:image/png;base64,Yw==",
+      encouragement: "data:image/png;base64,ZA==",
+    },
     qrPng: "data:image/png;base64,YQ==",
     quicksandPrintTtf: "data:font/ttf;base64,YQ==",
   };
@@ -170,4 +175,54 @@ test("public sample route ignores customer identifiers and returns the actual re
   assert.ok(artwork.back.includes(PUBLIC_POSTCARD_DEFAULTS.q1));
   assert.doesNotMatch(JSON.stringify(artwork), /SECRET|PRIVATE-NAME/);
   assert.match(artwork.back, /class="ink-free"/);
+});
+
+test("each chapter prints its own approved front, card number and key-free chapter QR", async () => {
+  const c = privateCollection();
+  c.chapters = POSTCARD_THEMES.map((_, index) => ({
+    ...c.chapters[0],
+    id: `q${index + 1}`,
+  }));
+  const fronts: string[] = [];
+  for (const [index, theme] of POSTCARD_THEMES.entries()) {
+    const { front, back } = await postcardArtwork(
+      c,
+      `q${index + 1}`,
+      "https://stories.example.com",
+    );
+    const png = await readFile(
+      `public/brand/postcards/designer-2026-10-06-v2/postcard-${String(index + 1).padStart(2, "0")}-${theme}-print-background.png`,
+    );
+    assert.equal(png.readUInt32BE(16), 1875);
+    assert.equal(png.readUInt32BE(20), 1275);
+    assert.ok(
+      front.includes(`data:image/png;base64,${png.toString("base64")}`),
+    );
+    assert.ok(front.includes(`data-postcard-theme="${theme}"`));
+    assert.ok(front.includes(`<p class="number">0${index + 1}</p>`));
+    assert.match(front, /data-postcard-size="4x6"/);
+    assert.match(back, /data-postcard-size="4x6"/);
+    const QRCode = (await import("qrcode")).default;
+    const qr = await QRCode.toDataURL(
+      `https://stories.example.com/collection/${c.id}/chapter/q${index + 1}`,
+      { errorCorrectionLevel: "M", width: 600, margin: 4 },
+    );
+    assert.ok(back.includes(qr));
+    assert.doesNotMatch(front + back, /Gigi|Sammie|PRIVATE-|DO-NOT-PRINT/);
+    fronts.push(front);
+  }
+  assert.equal(new Set(fronts).size, 4);
+});
+
+test("all small-print zones retain safe separation from the provider address zone", () => {
+  const { sender, qr, caption, postal, backSignature } = POSTCARD_LAYOUT;
+  for (const box of [sender, qr, caption, backSignature]) {
+    assert.ok(box.x + box.width < postal.x);
+  }
+  assert.ok(sender.bottom < qr.y);
+  assert.ok(caption.bottom < backSignature.y);
+  assert.ok(
+    backSignature.y + backSignature.height <
+      POSTCARD_LAYOUT.height - POSTCARD_LAYOUT.bleed,
+  );
 });

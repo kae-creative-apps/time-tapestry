@@ -14,6 +14,8 @@ export function isGeneratedFilmMedia(
 ): boolean {
   if (
     media.provenance === "generated_film" ||
+    media.provenance === "chapter_playback" ||
+    media.id.startsWith("playbackmedia_") ||
     media.id.startsWith("filmmedia_")
   )
     return true;

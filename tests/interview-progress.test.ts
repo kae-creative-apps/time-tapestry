@@ -16,13 +16,55 @@ test("a new conversation has four areas and three other areas ahead", () => {
 });
 
 test("planned area questions are recognized without treating closing or follow-up text as a new area", () => {
-  assert.equal(detectInterviewThemeFromQuestion("Tell me about someone whose kindness has stayed with you."), "q1");
-  assert.equal(detectInterviewThemeFromQuestion("Tell me about a decision that mattered to you and what you learned from it."), "q2");
-  assert.equal(detectInterviewThemeFromQuestion("What is a decision you made while following Jesus that later changed your life for the better?"), "q2");
-  assert.equal(detectInterviewThemeFromQuestion("When you think about helping others over the years, is there a person or a story that comes to mind?"), "q3");
-  assert.equal(detectInterviewThemeFromQuestion("As we move to our final theme, what do you want Sam to remember?"), "q4");
-  assert.equal(detectInterviewThemeFromQuestion("Is there anything else you would like to say before we finish?"), null);
-  assert.equal(detectInterviewThemeFromQuestion("How did your faith help you during that time?"), null);
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "Tell me about someone whose kindness has stayed with you.",
+    ),
+    "q1",
+  );
+  for (const apostrophe of ["'", "’"])
+    assert.equal(
+      detectInterviewThemeFromQuestion(
+        `Take your time. Tell me about a moment when someone${apostrophe}s kindness made a difference in your life.`,
+      ),
+      "q1",
+    );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "Tell me about a decision that mattered to you and what you learned from it.",
+    ),
+    "q2",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "What is a decision you made while following Jesus that later changed your life for the better?",
+    ),
+    "q2",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "When you think about helping others over the years, is there a person or a story that comes to mind?",
+    ),
+    "q3",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "As we move to our final theme, what do you want Sam to remember?",
+    ),
+    "q4",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "Is there anything else you would like to say before we finish?",
+    ),
+    null,
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "How did your faith help you during that time?",
+    ),
+    null,
+  );
 });
 
 test("resuming a follow-up does not add another major area", () => {
@@ -37,7 +79,10 @@ test("the final area does not hide an earlier skipped area", () => {
   assert.equal(progress.position, 4);
   assert.equal(progress.otherAreasRemaining, 1);
   assert.equal(progress.nextUnansweredChapterId, "q2");
-  assert.equal(progress.areas.find((area) => area.id === "q2")?.answered, false);
+  assert.equal(
+    progress.areas.find((area) => area.id === "q2")?.answered,
+    false,
+  );
 });
 
 test("returning to an earlier area preserves the other shared answers", () => {

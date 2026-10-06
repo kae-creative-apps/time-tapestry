@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 import { StoryIssueReport } from "./StoryIssueReport";
+import { hasChapterPlayback } from "@/lib/audio/playback-types";
+import { StoryFilmPlayer } from "./StoryFilmPlayer";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
 import { storyOriginals } from "./story-originals";
 import { mediaPath, portalField } from "./PortalUI";
@@ -67,7 +69,7 @@ export function StoryReviewPanel({
       />
       <p className="mt-3 text-base leading-7 text-ink-600">
         {selected.fromInterview
-          ? "This is the complete saved interview segment. It may include other answers. Your finished film is prepared separately."
+          ? "This is the complete saved interview segment. It may include other answers. Your finished story is prepared separately."
           : "This is your complete saved answer, including your pauses."}
       </p>
     </div>
@@ -93,13 +95,37 @@ export function StoryReviewPanel({
         {chapter.title}
       </h2>
       <div>
-        {hasRecordedVoiceFilm(chapter) ? (
+        {hasChapterPlayback(chapter) || hasRecordedVoiceFilm(chapter) ? (
           <>
-            <StoryMediaPlayer
-              key={chapter.videoMediaId}
-              label={chapter.title}
-              src={mediaPath(collection.id, chapter.videoMediaId, accessKey)}
-            />
+            {hasChapterPlayback(chapter) ? (
+              <StoryFilmPlayer
+                key={chapter.playback!.mediaId}
+                title={chapter.title}
+                storytellerName={collection.storyteller.name}
+                src={mediaPath(
+                  collection.id,
+                  chapter.playback!.mediaId,
+                  accessKey,
+                )}
+                playback={chapter.playback!}
+                active={active}
+                downloadUrl={
+                  chapter.playback!.exportMediaId
+                    ? mediaPath(
+                        collection.id,
+                        chapter.playback!.exportMediaId!,
+                        accessKey,
+                      )
+                    : undefined
+                }
+              />
+            ) : hasRecordedVoiceFilm(chapter) ? (
+              <StoryMediaPlayer
+                key={chapter.videoMediaId}
+                label={chapter.title}
+                src={mediaPath(collection.id, chapter.videoMediaId, accessKey)}
+              />
+            ) : null}
             <details
               className="mt-5 rounded-xl border border-warmgray-200 p-4"
               onToggle={(event) => {

@@ -38,6 +38,8 @@ export type InterviewPreparationJob = {
   /** Current source before recovery, retained while cached recovery is committed. */
   recoveryInputSha256?: string;
   recoveredInterviews?: InterviewSession[];
+  /** Selected takes after a verified scoped conversational replacement is committed. */
+  recoveredSelectedTakeIds?: Record<string, string>;
   drafts?: ChapterPackage[];
   filmJobId?: string;
   missingAreas?: InterviewPreparationView["missingAreas"];

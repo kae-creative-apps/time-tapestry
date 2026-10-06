@@ -1,3 +1,4 @@
+import { isMeaningfulInterviewSpeech } from "./interview-speech";
 import { createHash } from "node:crypto";
 import { ElevenLabsClient, type ElevenLabs } from "@elevenlabs/elevenlabs-js";
 import { CHAPTERS } from "../interview-state";
@@ -6,26 +7,61 @@ import type { Collection, InterviewChapterId, InterviewTurn } from "./types";
 
 type ProviderConversation = ElevenLabs.GetConversationResponseModel;
 function normalized(text: string) {
-  return text.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim();
+  return text
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function successfulTheme(
   row: ProviderConversation["transcript"][number],
   pending: Map<string, InterviewChapterId>,
+  rejected: Set<InterviewChapterId>,
 ): InterviewChapterId | null {
   for (const call of row.toolCalls ?? []) {
-    if (call.toolName !== "set_interview_theme" || !call.toolHasBeenCalled) continue;
+    if (call.toolName !== "set_interview_theme" || !call.toolHasBeenCalled)
+      continue;
     try {
       const id = JSON.parse(call.paramsAsJson).themeId;
-      if (CHAPTERS.some((chapter) => chapter.id === id)) pending.set(call.requestId, id);
-    } catch { /* Invalid tool data never changes a story area. */ }
+      if (CHAPTERS.some((chapter) => chapter.id === id))
+        pending.set(call.requestId, id);
+    } catch {
+      /* Invalid tool data never changes a story area. */
+    }
   }
   let confirmed: InterviewChapterId | null = null;
   for (const result of row.toolResults ?? []) {
     const theme = pending.get(result.requestId);
     if (!theme) continue;
     pending.delete(result.requestId);
-    if (!result.isError && result.toolHasBeenCalled === true) confirmed = theme;
+    let value: unknown = result.resultValue;
+    if (typeof value === "string") {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        /* Older clients returned plain confirmation text. */
+      }
+    }
+    const structured =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
+    const denied =
+      result.isError ||
+      result.toolHasBeenCalled !== true ||
+      ("isBlocked" in result && result.isBlocked === true) ||
+      structured?.accepted === false ||
+      (structured?.accepted === true && structured.chapterId !== theme) ||
+      (typeof value === "string" &&
+        /^(?:Stay with this story only|No spoken answer|Unknown interview theme|This interview connection has ended)/i.test(
+          value.trim(),
+        ));
+    if (denied) rejected.add(theme);
+    else {
+      rejected.delete(theme);
+      confirmed = theme;
+    }
   }
   return confirmed;
 }
@@ -40,9 +76,11 @@ export async function reconcileRecordedInterview(
   } = {},
 ): Promise<Collection> {
   const copy = structuredClone(collection);
-  const sessions = copy.interviews?.filter(
-    (session) => session.provider === "elevenlabs" && session.segments.length > 0,
-  ) ?? [];
+  const sessions =
+    copy.interviews?.filter(
+      (session) =>
+        session.provider === "elevenlabs" && session.segments.length > 0,
+    ) ?? [];
   if (!sessions.length) return copy;
   const agentId = options.agentId || process.env.ELEVENLABS_AGENT_ID?.trim();
   const ids = sessions.flatMap((session) => [
@@ -50,92 +88,164 @@ export async function reconcileRecordedInterview(
     ...(session.providerConversationId ? [session.providerConversationId] : []),
   ]);
   if (!ids.length) return copy;
-  if (!agentId || (!options.getConversation && !process.env.ELEVENLABS_API_KEY?.trim()))
-    throw new Error("Your original interview is saved. Its transcript connection needs a setup check.");
-  const client = options.getConversation ? null : new ElevenLabsClient({
-    apiKey: process.env.ELEVENLABS_API_KEY!.trim(),
-    timeoutInSeconds: 20,
-    maxRetries: 0,
-  });
-  const read = options.getConversation ?? ((id: string) => client!.conversationalAi.conversations.get(id));
+  if (
+    !agentId ||
+    (!options.getConversation && !process.env.ELEVENLABS_API_KEY?.trim())
+  )
+    throw new Error(
+      "Your original interview is saved. Its transcript connection needs a setup check.",
+    );
+  const client = options.getConversation
+    ? null
+    : new ElevenLabsClient({
+        apiKey: process.env.ELEVENLABS_API_KEY!.trim(),
+        timeoutInSeconds: 20,
+        maxRetries: 0,
+      });
+  const read =
+    options.getConversation ??
+    ((id: string) => client!.conversationalAi.conversations.get(id));
 
   for (const session of sessions) {
-    const conversationIds = [...new Set([
-      ...(session.providerConversationIds ?? []),
-      ...(session.providerConversationId ? [session.providerConversationId] : []),
-    ])];
+    const conversationIds = [
+      ...new Set([
+        ...(session.providerConversationIds ?? []),
+        ...(session.providerConversationId
+          ? [session.providerConversationId]
+          : []),
+      ]),
+    ];
     const conversations: ProviderConversation[] = [];
     for (const id of conversationIds) {
       await options.assertCurrent?.();
       await options.beforeProvider?.();
       const conversation = await read(id);
       await options.assertCurrent?.();
-      let context: { sessionId?: string; collectionId?: string; currentThemeId?: string };
+      let context: {
+        sessionId?: string;
+        collectionId?: string;
+        currentThemeId?: string;
+      };
       try {
-        const value = conversation.conversationInitiationClientData?.dynamicVariables?.interview_context_json;
+        const value =
+          conversation.conversationInitiationClientData?.dynamicVariables
+            ?.interview_context_json;
         if (typeof value !== "string") throw new Error("Missing context");
         context = JSON.parse(value);
       } catch {
-        throw new Error("The saved conversation could not be matched to this interview. Your original recording is kept.");
+        throw new Error(
+          "The saved conversation could not be matched to this interview. Your original recording is kept.",
+        );
       }
       const start = conversation.metadata.startTimeUnixSecs * 1000;
       const sessionStart = Date.parse(session.startedAt);
-      const sessionEnd = session.endedAt ? Date.parse(session.endedAt) : Date.now();
+      const sessionEnd = session.endedAt
+        ? Date.parse(session.endedAt)
+        : Date.now();
       if (
-        conversation.conversationId !== id || conversation.agentId !== agentId ||
-        conversation.userId !== collection.id || context.sessionId !== session.id ||
+        conversation.conversationId !== id ||
+        conversation.agentId !== agentId ||
+        conversation.userId !== collection.id ||
+        context.sessionId !== session.id ||
         (context.collectionId && context.collectionId !== collection.id) ||
-        !Number.isFinite(start) || !Number.isFinite(sessionStart) || !Number.isFinite(sessionEnd) ||
-        start < sessionStart - 120_000 || start > sessionEnd + 120_000
-      ) throw new Error("The saved conversation does not belong to this interview. Your original recording is kept.");
-      if (conversation.status === "in-progress" || conversation.status === "initiated")
-        throw new Error("The saved interview transcript is still finishing. Preparation will retry.");
+        !Number.isFinite(start) ||
+        !Number.isFinite(sessionStart) ||
+        !Number.isFinite(sessionEnd) ||
+        start < sessionStart - 120_000 ||
+        start > sessionEnd + 120_000
+      )
+        throw new Error(
+          "The saved conversation does not belong to this interview. Your original recording is kept.",
+        );
+      if (
+        conversation.status === "in-progress" ||
+        conversation.status === "initiated"
+      )
+        throw new Error(
+          "The saved interview transcript is still finishing. Preparation will retry.",
+        );
       conversations.push(conversation);
     }
-    conversations.sort((a, b) => a.metadata.startTimeUnixSecs - b.metadata.startTimeUnixSecs);
+    conversations.sort(
+      (a, b) => a.metadata.startTimeUnixSecs - b.metadata.startTimeUnixSecs,
+    );
     const existing = session.turns;
     const used = new Set<string>();
     const recovered: InterviewTurn[] = [];
     for (const conversation of conversations) {
-      const context = JSON.parse(String(conversation.conversationInitiationClientData!.dynamicVariables!.interview_context_json));
-      let theme: InterviewChapterId = CHAPTERS.some((chapter) => chapter.id === context.currentThemeId)
-        ? context.currentThemeId : "q1";
+      const context = JSON.parse(
+        String(
+          conversation.conversationInitiationClientData!.dynamicVariables!
+            .interview_context_json,
+        ),
+      );
+      let theme: InterviewChapterId = CHAPTERS.some(
+        (chapter) => chapter.id === context.currentThemeId,
+      )
+        ? context.currentThemeId
+        : "q1";
       const pending = new Map<string, InterviewChapterId>();
+      const rejected = new Set<InterviewChapterId>();
       for (const [rowIndex, row] of conversation.transcript.entries()) {
-        const confirmed = successfulTheme(row, pending);
+        const confirmed = successfulTheme(row, pending, rejected);
         if (confirmed) theme = confirmed;
         if (row.role === "agent") {
-          theme = confirmed ?? detectInterviewThemeFromQuestion(row.message ?? "") ?? theme;
+          const detected = detectInterviewThemeFromQuestion(row.message ?? "");
+          const blocked =
+            detected &&
+            (rejected.has(detected) ||
+              [...pending.values()].includes(detected));
+          theme = confirmed ?? (!blocked && detected ? detected : theme);
         }
         const text = row.message?.trim();
         if (!text || !["agent", "user"].includes(row.role)) continue;
         // The app's explicit controls are not the storyteller's spoken memories.
-        if (row.role === "user" && row.sourceMedium === "text" && /^\[Interview control:/.test(text)) continue;
-        const prior = existing.find((turn) => !used.has(turn.id) &&
-          (turn.providerTranscript?.conversationId === conversation.conversationId &&
-            turn.providerTranscript.rowIndex === rowIndex ||
-            turn.role === row.role && normalized(turn.text) === normalized(text)));
+        if (row.role === "user" && !isMeaningfulInterviewSpeech(text)) continue;
+        const prior = existing.find(
+          (turn) =>
+            !used.has(turn.id) &&
+            ((turn.providerTranscript?.conversationId ===
+              conversation.conversationId &&
+              turn.providerTranscript.rowIndex === rowIndex) ||
+              (turn.role === row.role &&
+                normalized(turn.text) === normalized(text))),
+        );
         if (prior) used.add(prior.id);
         const eventIdentity = `${conversation.conversationId}:${rowIndex}:${row.role}`;
-        const id = prior?.id ?? `provider-${createHash("sha256").update(eventIdentity).digest("hex").slice(0, 40)}`;
+        const id =
+          prior?.id ??
+          `provider-${createHash("sha256").update(eventIdentity).digest("hex").slice(0, 40)}`;
         const turn: InterviewTurn = {
           ...(prior ?? {}),
           id,
           sequence: recovered.length,
           role: row.role as "agent" | "user",
           text: prior?.text ?? text,
-          capturedAt: prior?.capturedAt ?? new Date(
-            (conversation.metadata.startTimeUnixSecs + row.timeInCallSecs) * 1000,
-          ).toISOString(),
+          capturedAt:
+            prior?.capturedAt ??
+            new Date(
+              (conversation.metadata.startTimeUnixSecs + row.timeInCallSecs) *
+                1000,
+            ).toISOString(),
           // Provider turn-arrival times are not word boundaries or film cuts.
           timing: prior?.timing ?? "unaligned",
-          ...(row.role === "user" ? { chapterId: theme } : {}),
+          // Keep the accepted area on questions too, so source recovery cannot bypass a denied transition.
+          chapterId: session.replacesChapterId ?? theme,
           providerTranscript: {
             conversationId: conversation.conversationId,
             rowIndex,
-            ...(row.sourceEventId !== undefined ? { sourceEventId: row.sourceEventId } : {}),
-            ...(prior && (!prior.providerTranscript || prior.providerTranscript.originalSequence !== undefined)
-              ? { originalSequence: prior.providerTranscript?.originalSequence ?? prior.sequence } : {}),
+            ...(row.sourceEventId !== undefined
+              ? { sourceEventId: row.sourceEventId }
+              : {}),
+            ...(prior &&
+            (!prior.providerTranscript ||
+              prior.providerTranscript.originalSequence !== undefined)
+              ? {
+                  originalSequence:
+                    prior.providerTranscript?.originalSequence ??
+                    prior.sequence,
+                }
+              : {}),
           },
         };
         recovered.push(turn);

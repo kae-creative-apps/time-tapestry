@@ -222,10 +222,7 @@ test("recording review offers actual playback and retake with no written-answer 
   assert.match(html, /\/media\/original-recording/);
   assert.match(html, /Record again/);
   assert.match(html, /My neighbor helped\./);
-  assert.match(
-    html,
-    /current answer stays selected until a new recording is backed up/,
-  );
+  assert.match(html, /original stays saved until your new answer is ready/);
   assert.doesNotMatch(
     html,
     /textarea|contenteditable|<input|autoplay|Add words that were missed|\/speak/,
@@ -239,7 +236,7 @@ test("recording review and retake routes retain encoded access and the exact sel
   );
   assert.equal(
     interviewRerecordPath("collection", "key&example", "q3"),
-    "/record/collection?key=key%26example&classic=1&chapter=q3&returnToReview=1",
+    "/record/collection?key=key%26example&rerecord=q3",
   );
   assert.equal(
     interviewReviewPath("collection", "key", "q3"),
@@ -289,7 +286,7 @@ test("saved live originals stay playable before provider transcript recovery or 
     }),
   );
   assert.match(html, /<audio/);
-  assert.match(html, /not matched to an answer yet/);
+  assert.match(html, /check your saved interview for this section/);
   assert.doesNotMatch(html, /This part still needs a recorded answer/);
   c.interviews[0].turns = [
     {

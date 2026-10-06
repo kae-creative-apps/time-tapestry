@@ -1,3 +1,9 @@
+import {
+  isMeaningfulInterviewSpeech,
+  interviewSessionNeedsTranscriptRecovery,
+} from "./interview-speech";
+import { commitInterviewReplacement } from "./interview";
+import { playbackReady } from "./playback";
 import { createHash, randomUUID } from "node:crypto";
 import { CHAPTERS } from "../interview-state";
 import { reserveProviderBudget } from "../security/request";
@@ -83,6 +89,8 @@ async function snapshotInputs(c: Collection) {
       providerConversationId: session.providerConversationId,
       providerConversationIds: session.providerConversationIds,
       startedAt: session.startedAt,
+      replacesChapterId: session.replacesChapterId,
+      replacementCommittedAt: session.replacementCommittedAt,
       segments: [...session.segments].sort((a, b) => a.id.localeCompare(b.id)),
       excludedTurnIds: [...session.excludedTurnIds].sort(),
       turns: [...session.turns].sort((a, b) => a.sequence - b.sequence),
@@ -265,6 +273,7 @@ export async function enqueueInterviewPreparation(
               ...(existing.missingAreas?.length
                 ? {
                     recoveredInterviews: undefined,
+                    recoveredSelectedTakeIds: undefined,
                     drafts: undefined,
                     recoveryInputSha256: inputs.sourceSha256,
                   }
@@ -436,10 +445,11 @@ type WorkerOptions = {
   shouldStop?: () => boolean;
   onlyId?: string;
   reconcile?: (c: Collection) => Promise<Collection>;
+  recoverOriginal?: (c: Collection) => Promise<Collection>;
   draft?: (c: Collection) => Promise<ChapterPackage[]>;
   enqueueFilms?: (
     c: Collection,
-    options: { processingApproved: true },
+    options: { processingApproved: true; outputMode?: "interactive" | "mp4" },
   ) => Promise<{ id: string }>;
   reserveDraftBudget?: () => Promise<void>;
 };
@@ -496,7 +506,33 @@ export async function runInterviewPreparationOnce(
         });
       if (options.shouldStop?.()) throw new Error("Worker stopping");
       workStarted = true;
-      const recovered = await reconcile(structuredClone(c));
+      let recovered = await reconcile(structuredClone(c));
+      if (
+        recovered.interviews?.some(interviewSessionNeedsTranscriptRecovery) &&
+        (options.recoverOriginal || process.env.ELEVENLABS_API_KEY?.trim())
+      ) {
+        const { recoverOriginalInterviewSpeech, InterviewSourceRecoveryError } =
+          await import("./interview-source-recovery");
+        try {
+          recovered = await (
+            options.recoverOriginal ??
+            ((current: Collection) =>
+              recoverOriginalInterviewSpeech(current, {
+                processingApprovedAt: job!.processingApprovedAt,
+                jobId: job!.id,
+                attempt: job!.attempts,
+                originalMedia: job!.originalMedia,
+                assertCurrent: async () => {
+                  await currentInputs(job!);
+                },
+              }))
+          )(recovered);
+        } catch (error) {
+          if (error instanceof InterviewSourceRecoveryError)
+            throw new InterviewPreparationError(error.message);
+          throw error;
+        }
+      }
       await currentInputs(job);
       for (const session of c.interviews ?? []) {
         const recoveredSession = recovered.interviews?.find(
@@ -533,18 +569,43 @@ export async function runInterviewPreparationOnce(
           "The saved originals changed during recovery. Submit your latest recording.",
           409,
         );
+      for (const session of recovered.interviews ?? [])
+        await commitInterviewReplacement(recovered, session, getMedia);
+      const committedInputs = await snapshotInputs(recovered);
       await checkpoint((saved) => ({
         ...saved,
         recoveredInterviews: structuredClone(recovered.interviews ?? []),
+        recoveredSelectedTakeIds: { ...recovered.selectedTakeIds },
         recoveryInputSha256,
-        reconciledSourceSha256: recoveredInputs.sourceSha256,
+        recordingSha256: committedInputs.recordingSha256,
+        reconciledSourceSha256: committedInputs.sourceSha256,
       }));
     }
     if (options.shouldStop?.()) throw new Error("Worker stopping");
     workStarted = true;
     c = await mutateCollection(job.collectionId, async (current) => {
       await currentInputs(job!, current);
+      const committedBefore = new Set(
+        (current.interviews ?? [])
+          .filter((session) => session.replacementCommittedAt)
+          .map((session) => session.id),
+      );
       current.interviews = structuredClone(job!.recoveredInterviews!);
+      if (job!.recoveredSelectedTakeIds)
+        current.selectedTakeIds = { ...job!.recoveredSelectedTakeIds };
+      if (
+        current.interviews.some(
+          (session) =>
+            session.replacementCommittedAt && !committedBefore.has(session.id),
+        )
+      ) {
+        current.status = "recording";
+        if (current.chapters.length) current.draftOutdated = true;
+        for (const chapter of current.chapters) {
+          chapter.editorialReviewed = false;
+          chapter.reviewedFilmSha256 = undefined;
+        }
+      }
       return current;
     });
     const missingAreas: NonNullable<InterviewPreparationView["missingAreas"]> =
@@ -554,7 +615,7 @@ export async function runInterviewPreparationOnce(
       let complete = answers.length > 0;
       for (const answer of answers)
         if (
-          !answer.text.trim() ||
+          !isMeaningfulInterviewSpeech(answer.text) ||
           !(await hasRecordedAnswerSource(answer, c, getMedia))
         )
           complete = false;
@@ -647,7 +708,7 @@ export async function runInterviewPreparationOnce(
     if (options.shouldStop?.()) throw new Error("Worker stopping");
     let filmJob = await (options.enqueueFilms ?? enqueueAutomaticOriginalFilms)(
       c,
-      { processingApproved: true },
+      { processingApproved: true, outputMode: "interactive" },
     );
     if ("status" in filmJob && filmJob.status === "failed") {
       try {
@@ -748,6 +809,10 @@ export async function getInterviewPreparationView(c: Collection) {
           ? "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your stories and recordings are saved."
           : "Film preparation needs attention. Your written stories and original recordings are saved.",
     };
+  if (films.outputMode === "interactive") {
+    view.ready = await playbackReady(c, films);
+    return view;
+  }
   view.ready =
     films.status === "ready" &&
     c.chapters.length === 4 &&

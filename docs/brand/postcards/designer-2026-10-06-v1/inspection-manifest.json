@@ -1,0 +1,93 @@
+{
+  "source_pdf": "time-tapestry-postcard-set-original.pdf",
+  "source_sha256": "217c035fb4fce41c01b427a85b270bfcdf224b3d6ffe9d6854f4fdb5a63fb543",
+  "inspected_date": "2026-10-06",
+  "source_page_count": 8,
+  "source_page_points": {
+    "width": 720,
+    "height": 504
+  },
+  "source_page_inches": {
+    "width": 10,
+    "height": 7
+  },
+  "printed_trim_points": {
+    "left": 36,
+    "bottom": 36,
+    "right": 684,
+    "top": 468
+  },
+  "printed_trim_inches": {
+    "width": 9,
+    "height": 6
+  },
+  "render": {
+    "width": 1500,
+    "height": 1000,
+    "format": "WebP",
+    "encoding": "lossless",
+    "method": "pdftoppm PDF rasterization after applying the printed trim as cropbox; no content redrawing or retouching"
+  },
+  "fonts": [
+    "QuicksandLight-Medium"
+  ],
+  "text_color": "#432e23",
+  "privacy": {
+    "front_names": "From Gigi, for Sammie.",
+    "sample_evidence": "src/lib/mock-data.ts defines demoStory id demo-gigi, Gigi and Sammie with example.com emails.",
+    "front_release": "Suitable as clearly presented sample postcard fronts. No address, QR, token, or private contact details are present on these pages.",
+    "back_release": "Not included in public assets. Each back contains recipient and return postal addresses, a mailing barcode, and a QR code.",
+    "qr_destination": "Unverified. Native decoding failed in the local execution environment. The destinations were not opened.",
+    "pdf_release": "Keep this original under docs; do not expose it as a public download."
+  },
+  "cards": [
+    {
+      "name": "kindness",
+      "front_page": 1,
+      "back_page": 2,
+      "front_path": "/brand/postcards/designer-2026-10-06-v1/postcard-01-kindness-front.webp",
+      "file_bytes": 34304,
+      "sha256": "c25392b52905e8ea7c2567ddc9e195a1c2fd2cf941ba1bd8f22fe07f9b8d8efb",
+      "background": "#f1e6db",
+      "weave": "#d5bfac",
+      "layout": "Sand weave panel on right; title stays to its left.",
+      "front_text": "01 From Gigi, for Sammie.\nkindness"
+    },
+    {
+      "name": "faith",
+      "front_page": 3,
+      "back_page": 4,
+      "front_path": "/brand/postcards/designer-2026-10-06-v1/postcard-02-faith-front.webp",
+      "file_bytes": 30524,
+      "sha256": "d8b4492e25789377ee43e66bc285e578d26f3e5ba33f99f89014a5e047e8692c",
+      "background": "#fbfaf8",
+      "weave": "#d4cfc9",
+      "layout": "Warm gray weave panel on right; title stays to its left.",
+      "front_text": "02 From Gigi, for Sammie.\nfaith"
+    },
+    {
+      "name": "generosity",
+      "front_page": 5,
+      "back_page": 6,
+      "front_path": "/brand/postcards/designer-2026-10-06-v1/postcard-03-generosity-front.webp",
+      "file_bytes": 25284,
+      "sha256": "30a52b946073b472b7808898573fd26be59889757f1dc7a6416c7fd4bd86cd93",
+      "background": "#dadecf",
+      "weave": "#b7b7aa",
+      "layout": "Enlarged sage-gray weave bleeds through the right edge; title overlaps motif.",
+      "front_text": "03 From Gigi, for Sammie.\ngenerosity"
+    },
+    {
+      "name": "encouragement",
+      "front_page": 7,
+      "back_page": 8,
+      "front_path": "/brand/postcards/designer-2026-10-06-v1/postcard-04-encouragement-front.webp",
+      "file_bytes": 38100,
+      "sha256": "b0278ae1835601005c2f5632c115fdb37dab7d43c9d2e598c6701587baae4c7e",
+      "background": "#e5c8bb",
+      "weave": "#c8a696",
+      "layout": "Clay weave panel on right; long title overlaps motif.",
+      "front_text": "04 From Gigi, for Sammie.\nencouragement"
+    }
+  ]
+}

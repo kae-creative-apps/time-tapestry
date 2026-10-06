@@ -5,6 +5,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
+import { parseOrganizationJoinToken } from "../src/lib/organizations/join-token";
 import type { OrganizationRecord } from "../src/lib/organizations/types";
 
 let directory: string;
@@ -112,9 +113,13 @@ async function issue(g: Group, name = "Gift Recipient"): Promise<Gift> {
   assert.equal(result.status, 201);
   const body = await result.json();
   const url = new URL(body.giftUrl, "http://localhost");
+  const invitation = parseOrganizationJoinToken(
+    url.pathname.split("/").at(-1)!,
+  );
+  assert.ok(invitation);
   return {
-    giftId: url.pathname.split("/").at(-1)!,
-    key: url.searchParams.get("key")!,
+    giftId: invitation.giftId,
+    key: invitation.accessKey,
     url: url.pathname + url.search,
   };
 }
@@ -436,4 +441,180 @@ test("malformed and oversized organization requests fail without creating a grou
   assert.equal((await create(huge)).status, 413);
   const array = await create(req("/api/organizations", []));
   assert.equal(array.status, 400);
+});
+
+test("new join invitations store only a digest and replacing an unused link invalidates its predecessor", async () => {
+  const g = await group(1);
+  const first = await issue(g);
+  assert.match(first.url, /^\/join\//);
+  let stored = await store.readRecord<OrganizationRecord>(`org-${g.id}`);
+  assert.equal(stored!.gifts[0].key, undefined);
+  assert.equal(
+    stored!.gifts[0].keyHash,
+    createHash("sha256").update(first.key).digest("hex"),
+  );
+  const projection = JSON.stringify(await view(g));
+  assert.ok(!projection.includes(first.key));
+  assert.ok(!projection.includes(stored!.gifts[0].keyHash!));
+  const replaced = await giftsPost(
+    req(giftsUrl(g), { action: "replace_link", giftId: first.giftId }),
+    context(g.id),
+  );
+  assert.equal(replaced.status, 200);
+  const replacement = parseOrganizationJoinToken(
+    (await replaced.json()).giftUrl.split("/").at(-1)!,
+  );
+  assert.ok(replacement);
+  assert.equal(
+    (await giftGet(req(claimUrl(g, first)), giftContext(g.id, first.giftId)))
+      .status,
+    404,
+  );
+  const second = { ...first, key: replacement.accessKey };
+  assert.equal(
+    (await giftGet(req(claimUrl(g, second)), giftContext(g.id, second.giftId)))
+      .status,
+    200,
+  );
+  assert.equal((await redeem(g, second, shareInput())).status, 200);
+  assert.equal(
+    (
+      await giftsPost(
+        req(giftsUrl(g), { action: "replace_link", giftId: first.giftId }),
+        context(g.id),
+      )
+    ).status,
+    409,
+  );
+  stored = await store.readRecord<OrganizationRecord>(`org-${g.id}`);
+  assert.equal(stored!.gifts[0].key, undefined);
+});
+
+test("assigned recipients require confirmation and cannot be replaced by claim request fields", async () => {
+  const g = await group(1);
+  const issued = await giftsPost(
+    req(giftsUrl(g), {
+      name: "Storyteller",
+      email: "storyteller@example.com",
+      designatedRecipient: {
+        name: "Assigned Recipient",
+        email: "assigned@example.com",
+      },
+    }),
+    context(g.id),
+  );
+  assert.equal(issued.status, 201);
+  const result = await issued.json();
+  const parsed = parseOrganizationJoinToken(result.giftUrl.split("/").at(-1)!);
+  assert.ok(parsed);
+  const gift = {
+    giftId: parsed.giftId,
+    key: parsed.accessKey,
+    url: result.giftUrl,
+  };
+  assert.equal((await redeem(g, gift, shareInput())).status, 400);
+  const claimed = await redeem(g, gift, {
+    ...shareInput(),
+    designatedRecipientConfirmed: true,
+  });
+  assert.equal(claimed.status, 200);
+  const stored = await store.readRecord<OrganizationRecord>(`org-${g.id}`);
+  const collection = await store.getCollection(
+    stored!.gifts[0].claim!.collectionId,
+  );
+  assert.equal(collection!.recipient.email, "assigned@example.com");
+  assert.deepEqual(collection!.sponsorship, {
+    organizationId: g.id,
+    giftId: gift.giftId,
+  });
+});
+
+test("sponsors see four chapter states without receiving story text, private contacts or access keys", async () => {
+  const g = await group(1);
+  const gift = await issue(g);
+  await redeem(g, gift, shareInput());
+  const stored = await store.readRecord<OrganizationRecord>(`org-${g.id}`);
+  const collectionId = stored!.gifts[0].claim!.collectionId;
+  await store.mutateCollection(collectionId, (c) => {
+    c.takes.push({
+      id: "take-one",
+      questionId: "q1",
+      prompt: "private prompt",
+      kind: "text",
+      text: "private family answer",
+      createdAt: c.createdAt,
+    });
+    c.chapters.push({
+      id: "q2",
+      title: "private chapter title",
+      content: "private chapter text",
+      postcardNote: "private note",
+      sourceTakeIds: [],
+      videoStatus: "not_requested",
+      editorialReviewed: true,
+      generatedWith: "source_text",
+    });
+    c.status = "approved";
+    c.deliveries.push({
+      chapterId: "q3",
+      status: "mailed",
+      mailedAt: new Date().toISOString(),
+      scheduledFor: c.createdAt,
+      providerId: "psc_secret",
+    });
+    c.deliveries.push({
+      chapterId: "q4",
+      status: "submitted",
+      scheduledFor: c.createdAt,
+      providerId: "psc_pending",
+    });
+    return c;
+  });
+  const projection = await view(g);
+  assert.deepEqual(
+    projection.gifts[0].progress.map(
+      (chapter: { status: string }) => chapter.status,
+    ),
+    ["in_progress", "completed", "postcard_shipped", "not_started"],
+  );
+  const serialized = JSON.stringify(projection);
+  for (const secret of [
+    "private family answer",
+    "private chapter title",
+    "private chapter text",
+    "psc_secret",
+    "psc_pending",
+    collectionId,
+    "recipient@example.com",
+  ])
+    assert.ok(!serialized.includes(secret));
+  await store.mutateCollection(collectionId, (c) => {
+    c.deliveries[0].status = "returned";
+    return c;
+  });
+  const returned = (await view(g)).gifts[0].progress[2];
+  assert.notEqual(returned.status, "postcard_shipped");
+  assert.equal(returned.mailingAttention, true);
+});
+
+test("legacy gift capabilities remain valid and malformed join locators are rejected", async () => {
+  const g = await group(1);
+  const gift = await issue(g);
+  await store.mutateRecord<OrganizationRecord>(`org-${g.id}`, (record) => {
+    record!.gifts[0].key = gift.key;
+    delete record!.gifts[0].keyHash;
+    return record!;
+  });
+  assert.equal(
+    (await giftGet(req(claimUrl(g, gift)), giftContext(g.id, gift.giftId)))
+      .status,
+    200,
+  );
+  for (const token of [
+    "",
+    "../../private",
+    `${g.id}.${gift.giftId}.short`,
+    `${g.id}.${gift.giftId}.${gift.key}.extra`,
+  ])
+    assert.equal(parseOrganizationJoinToken(token), null);
 });

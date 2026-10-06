@@ -1,0 +1,79 @@
+You are the Principal Full-Stack Architect for Time Tapestry (`kae-creative-apps/time-tapestry`).
+We are upgrading our existing Next.js 15 (App Router, React 19, Tailwind) codebase to solve 6 critical operational, UX, and scalability bottlenecks without abandoning our existing stack.
+
+Examine the current repository structure (`src/`, `scripts/`, `video/`, `public/`) and execute these 6 architectural upgrades step-by-step with complete, production-ready TypeScript code:
+
+---
+
+### 1. Instant Interactive Web Playback & Filler-Word Cut Engine
+**Problem:** Waiting for `Dockerfile.worker` Remotion rendering creates a 5-minute bottleneck before users see their story.
+**Requirements:**
+- Build an interactive, client-side story player component (`src/components/playback/StoryFilmPlayer.tsx`) that plays the raw chapter audio while animating synchronized kinetic typography and audio-reactive visuals.
+- Implement an audio-timestamp parser (`src/lib/audio/transcript-cleaner.ts`) that takes word-level timestamps from our transcription output (start/end offsets) and:
+  1. Detects dead pauses (> 1.2s) and shortens their playback jumps to ~300ms.
+  2. Flags filler words ("um", "uh", repeated stutters) and skips their timestamp ranges using HTML5 `AudioContext` / timeupdate events with seamless micro-crossfades.
+- Add an audio-reactive visualizer component using `AnalyserNode` that drives the signature Time Tapestry thread/orb animation smoothly at 60fps on canvas/SVG.
+- Keep Remotion rendering intact, but re-route it as an optional asynchronous background task: add a "Download Video (MP4)" button that triggers our existing Railway worker via webhook, emailing the user via Resend when ready.
+
+---
+
+### 2. Resilient Data Layer & State Management (Replacing Brittle KV Blobs)
+**Problem:** `@vercel/kv` stores entire story sessions as unstructured JSON blobs, causing race conditions and making relational queries impossible.
+**Requirements:**
+- Architect a clean, type-safe data access layer (`src/lib/db/`) with a structured schema for:
+  - `stories` (id, user_id, org_id, title, status, created_at)
+  - `chapters` (id, story_id, theme_index, title, audio_url, transcript_json, status)
+  - `takes` (id, chapter_id, take_number, audio_blob_url, duration, is_selected)
+  - `recipients` (id, story_id, name, email, street_address, city, state, zip, phone)
+  - `print_orders` (id, recipient_id, lob_job_id, status, tracking_events, expected_delivery)
+- Provide a database adapter interface (`src/lib/db/adapter.ts`) with typed CRUD operations and query helpers (e.g., `getStoriesByOrg(orgId)`, `getPostcardStatus(storyId)`).
+- Add an atomic update wrapper to prevent concurrent take uploads from overwriting chapter data.
+
+---
+
+### 3. Full-Featured B2B Organization Portal (`/for-organizations`)
+**Problem:** `/for-organizations` is currently static marketing copy. We need it to be a functional group-gifting portal for churches, retirement communities, and families.
+**Requirements:**
+- Upgrade `src/app/for-organizations/` into an interactive dashboard:
+  - Org Admin View: Bulk-purchase story licenses, generate unique story invite links/tokens, and assign designated recipients.
+  - Progress Tracker: Table showing members' progress across the 4 chapters (Not Started, In Progress, Completed, Postcard Shipped).
+  - Storyteller Invitation Route: `src/app/join/[orgToken]/page.tsx` that links an individual's session to the sponsoring organization.
+
+---
+
+### 4. Bulletproof Mobile Audio Recording & Fail-Safe Recovery
+**Problem:** Mobile Safari frequently drops recordings if the phone locks, an incoming call interrupts, or connection drops mid-upload.
+**Requirements:**
+- Rewrite the recording hook (`src/hooks/useStoryRecorder.ts`):
+  - Integrate an IndexedDB fallback cache (using `idb` or raw IndexedDB) that writes raw audio chunks (`MediaRecorder.ondataavailable`) to local storage in real time.
+  - Implement a session restoration check on mount: If an unfinalized take exists in IndexedDB, prompt the user: *"We recovered your recording from [time]. Would you like to keep it?"*
+  - Add explicit handling for iOS Safari `audioContext.state === 'suspended'` on user tap, along with a live input volume meter so the user visibly verifies their microphone before speaking.
+
+---
+
+### 5. Interactive 3D Postcard Flip Preview & Live USPS Verification via Lob
+**Problem:** Users cannot visually inspect the physical 4x6" card before paying, and invalid postal addresses cause Lob print failures.
+**Requirements:**
+- Create an interactive 3D flip card component (`src/components/postcard/PostcardPreview.tsx`) using Tailwind 3D transforms:
+  - **Front:** Displays the curated chapter theme artwork, selected excerpt, and brand closer.
+  - **Back:** Displays the personalized note, recipient address block, stamp design, and a live dynamically generated QR code pointing to `/story/[id]`.
+- Build an address verification server route (`src/app/api/lob/verify-address/route.ts`) calling Lob's `us_verifications` endpoint. Validate and standardize the user's address in real time with auto-suggestions before placing the print order.
+- Ensure the existing `pdf-lib` postcard compilation logic exactly mirrors this on-screen preview.
+
+---
+
+### 6. Centralized Error Handling, Logging & Pipeline Diagnostics
+**Problem:** Debugging failures across ElevenLabs, OpenAI, Lob, Vercel Blob, and Resend requires hunting through fragmented server logs.
+**Requirements:**
+- Create a unified pipeline logger and error handler (`src/lib/observability/pipeline-logger.ts`):
+  - Tag every story session with a correlation `traceId`.
+  - Log distinct lifecycle stages: `[RECORDING_UPLOAD]`, `[TRANSCRIPTION]`, `[THEME_EXTRACTION]`, `[LOB_VERIFICATION]`, `[LOB_DISPATCH]`, `[EMAIL_NOTIFY]`.
+  - Return user-friendly error banners on the frontend while capturing full diagnostic stack traces on the server.
+
+---
+
+### Guidelines:
+- Adhere strictly to Next.js 15 App Router conventions (`route.ts`, server vs. client components).
+- Ensure strict TypeScript typing throughout (no `any`).
+- Maintain our warm editorial design tokens (`brand-gradient-chocolate`, `espresso`, `sage`, `paper-texture`).
+- Begin by providing the exact project directory diff, followed by the code for each file.

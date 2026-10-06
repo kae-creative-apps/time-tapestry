@@ -1,3 +1,7 @@
+import {
+  pipelineContext,
+  withPipelineStage,
+} from "../observability/pipeline-logger";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { livingStoryNotificationSuppressionReason } from "./living-story-notifications";
 import { BRAND_COLORS } from "../brand-art";
@@ -248,6 +252,37 @@ export function notificationSuppressionReason(
         n.url !== appOrigin() + linksFor(c).review
       )
         return "The storyteller confirmation address and link need to be checked.";
+    } else if (
+      n.id.startsWith(`${c.id}:playback-ready:`) ||
+      n.id.startsWith(`${c.id}:export-ready:`)
+    ) {
+      const exporting = n.id.startsWith(`${c.id}:export-ready:`);
+      const prefix = `${c.id}:${exporting ? "export" : "playback"}-ready:`;
+      const jobId = n.id.slice(prefix.length);
+      if (
+        n.to !== c.storyteller.email ||
+        n.url !== appOrigin() + linksFor(c).review ||
+        (exporting
+          ? !["draft", "approved"].includes(c.status)
+          : c.status !== "draft") ||
+        c.draftOutdated ||
+        c.chapters.length !== 4 ||
+        !/^film_[a-f0-9]{64}$/.test(jobId) ||
+        !CHAPTERS.every(({ id }) => {
+          const chapter = c.chapters.find((item) => item.id === id);
+          return (
+            chapter?.content.trim() &&
+            chapter.playback &&
+            (exporting
+              ? Boolean(
+                  chapter.playback.exportMediaId &&
+                  chapter.playback.exportSha256,
+                )
+              : chapter.playback.jobId === jobId)
+          );
+        })
+      )
+        return "This notice does not match the four current prepared chapters.";
     } else if (c.status !== "draft") {
       return "This draft is no longer awaiting review.";
     } else if (n.id.startsWith(`${c.id}:films-ready:`)) {
@@ -638,8 +673,9 @@ class ProviderError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 async function providerPost(
@@ -677,13 +713,14 @@ async function providerPost(
         redirect: "error",
       },
     );
-  } catch {
+  } catch (error) {
     console.error("Delivery request timed out or could not be confirmed.", {
       provider,
     });
     throw new ProviderError(
       "We could not confirm whether this was sent. You do not need to send it again.",
       true,
+      { cause: error },
     );
   }
   if (!response.ok) {
@@ -860,10 +897,11 @@ async function processPostcard(id: string, now: number, origin: string) {
   });
   if (!lease) return false;
   try {
-    const providerId = await providerPost(
+    const providerId = await withPipelineStage(
+      "LOB_DISPATCH",
+      pipelineContext(id),
+      () => providerPost("lob", lease!.requestBody!, lease!.idempotencyKey!),
       "lob",
-      lease.requestBody!,
-      lease.idempotencyKey!,
     );
     await mutateCollection(id, (c) => {
       const d = c.deliveries.find(
@@ -955,6 +993,29 @@ export async function currentNotificationSuppressionReason(
       )
         return "This film preparation no longer needs attention.";
     }
+  }
+  if (
+    !reason &&
+    (n.id.startsWith(`${c.id}:playback-ready:`) ||
+      n.id.startsWith(`${c.id}:export-ready:`))
+  ) {
+    const exporting = n.id.startsWith(`${c.id}:export-ready:`);
+    const jobId = n.id.slice(
+      `${c.id}:${exporting ? "export" : "playback"}-ready:`.length,
+    );
+    const { getFilmJob, latestFilmJob } = await import("./films/jobstore");
+    const { playbackReady, playbackExportReady } = await import("./playback");
+    const job = await getFilmJob(jobId);
+    if (
+      !job ||
+      job.status !== "ready" ||
+      (exporting
+        ? !(await playbackExportReady(c, job))
+        : (await latestFilmJob(c.id))?.id !== jobId ||
+          !(await playbackReady(c, job)))
+    )
+      return "This chapter notice is waiting for the current verified private outputs.";
+    return null;
   }
   if (reason || !n.id.startsWith(`${c.id}:films-ready:`)) return reason;
   const { getFilmJob, latestFilmJob, filmJobInputsCurrent } =
@@ -1090,10 +1151,11 @@ async function processNotification(
     return false;
   }
   try {
-    const providerId = await providerPost(
+    const providerId = await withPipelineStage(
+      "EMAIL_NOTIFY",
+      pipelineContext(id),
+      () => providerPost("resend", lease!.requestBody!, lease!.idempotencyKey!),
       "resend",
-      lease.requestBody!,
-      lease.idempotencyKey!,
     );
     await mutateCollection(id, (c) => {
       const n = c.notifications.find((item) => item.id === notificationId);

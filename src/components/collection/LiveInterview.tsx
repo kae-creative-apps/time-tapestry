@@ -17,11 +17,10 @@ import type {
   InterviewTurn,
   InterviewChapterId,
 } from "@/lib/collection/types";
-import {
-  interviewResumeState,
-  recordedInterviewChapterIds,
-} from "@/lib/collection/interview-resume";
-import { CHAPTERS } from "@/lib/interview-state";
+import { interviewResumeState } from "@/lib/collection/interview-resume";
+import { CHAPTERS, getChapterQuestion } from "@/lib/interview-state";
+import { isMeaningfulInterviewSpeech } from "@/lib/collection/interview-speech";
+import { canChangeInterviewTheme } from "@/lib/collection/interview-theme-transition";
 import {
   detectInterviewThemeFromQuestion,
   interviewChapterTitle,
@@ -113,9 +112,11 @@ function CameraPreview({ stream }: { stream: MediaStream | null }) {
 export default function LiveInterview({
   collectionId,
   accessKey,
+  rerecordChapterId,
 }: {
   collectionId: string;
   accessKey: string;
+  rerecordChapterId?: InterviewChapterId;
 }) {
   const router = useRouter();
   const base = `/api/collection/${encodeURIComponent(collectionId)}`;
@@ -175,7 +176,12 @@ export default function LiveInterview({
   const lastMessageAt = useRef(0);
   const restoredPosition = useRef(false);
   const choseKind = useRef(false);
-  const [missingAreas, setMissingAreas] = useState<InterviewChapterId[]>([]);
+  const heardAnswerSinceQuestion = useRef(false);
+  const liveAnsweredThemes = useRef(new Set<InterviewChapterId>());
+  const explicitNextTheme = useRef<InterviewChapterId | null>(null);
+  const [inputLevel, setInputLevel] = useState(0);
+  const [inputNeedsCheck, setInputNeedsCheck] = useState(false);
+  const [inputNotice, setInputNotice] = useState("");
 
   useEffect(() => {
     setConnectionTakingLong(false);
@@ -198,6 +204,7 @@ export default function LiveInterview({
       collection?.role === "owner" &&
       collection.status !== "approved" &&
       collection.interviewPreparation &&
+      !rerecordChapterId &&
       !collection.draftOutdated &&
       !collection.interviewPreparation.missingAreas?.length &&
       phase === "ready"
@@ -206,7 +213,7 @@ export default function LiveInterview({
         `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
       );
     }
-  }, [collection, collectionId, phase, query, router]);
+  }, [collection, collectionId, phase, query, rerecordChapterId, router]);
 
   useEffect(() => {
     // Download code while the person reads the introduction. This neither opens
@@ -348,11 +355,18 @@ export default function LiveInterview({
       return;
     const saved = interviewResumeState(collection);
     restoredPosition.current = true;
-    theme.current = saved.chapterId;
-    setActiveChapterId(saved.chapterId);
-    setQuestion(saved.question);
+    theme.current = rerecordChapterId ?? saved.chapterId;
+    setActiveChapterId(theme.current);
+    setQuestion(
+      rerecordChapterId
+        ? getChapterQuestion(rerecordChapterId, {
+            recipientName: collection.recipient.name,
+            faithFraming: collection.faithFraming,
+          })
+        : saved.question,
+    );
     setKind(saved.kind);
-  }, [collection]);
+  }, [collection, rerecordChapterId]);
 
   useEffect(() => {
     if (phase !== "ready" || choseKind.current) return;
@@ -497,7 +511,10 @@ export default function LiveInterview({
     }
     c = collectionRef.current ?? c;
     let s = sessionRef.current;
-    if (s && s.provider !== provider) {
+    if (
+      s &&
+      (s.provider !== provider || s.replacesChapterId !== rerecordChapterId)
+    ) {
       if (s.status === "active")
         await request("/interview", {
           action: "set_status",
@@ -510,8 +527,12 @@ export default function LiveInterview({
       s =
         [...(c.interviews ?? [])]
           .reverse()
-          .find((x) => x.status !== "completed" && x.provider === provider) ??
-        null;
+          .find(
+            (x) =>
+              x.status !== "completed" &&
+              x.provider === provider &&
+              x.replacesChapterId === rerecordChapterId,
+          ) ?? null;
     }
     if (
       s &&
@@ -532,6 +553,7 @@ export default function LiveInterview({
         action: "start",
         sessionId: id,
         provider,
+        ...(rerecordChapterId ? { replaceChapterId: rerecordChapterId } : {}),
       });
       s = data.collection.interviews.find((x: InterviewSession) => x.id === id);
     }
@@ -542,7 +564,9 @@ export default function LiveInterview({
     sequence.current = Math.max(-1, ...s.turns.map((t) => t.sequence)) + 1;
     theme.current =
       [...s.turns].reverse().find((t) => t.role === "user" && t.chapterId)
-        ?.chapterId ?? "q1";
+        ?.chapterId ??
+      rerecordChapterId ??
+      "q1";
     setActiveChapterId(theme.current);
     return s;
   }
@@ -557,11 +581,27 @@ export default function LiveInterview({
         controlEchoes.current.splice(controlIndex, 1);
         return;
       }
+      if (!isMeaningfulInterviewSpeech(text)) return;
+      heardAnswerSinceQuestion.current = true;
+      liveAnsweredThemes.current.add(theme.current);
+      setInputNeedsCheck(false);
+      setInputNotice("");
     } else {
+      heardAnswerSinceQuestion.current = false;
       const spokenWords = stripConversationPerformanceCues(text);
       if (spokenWords) {
         const detectedChapterId = detectInterviewThemeFromQuestion(spokenWords);
-        if (detectedChapterId) {
+        if (
+          detectedChapterId &&
+          canChangeInterviewTheme(
+            theme.current,
+            detectedChapterId,
+            liveAnsweredThemes.current,
+            explicitNextTheme.current,
+            rerecordChapterId,
+          )
+        ) {
+          explicitNextTheme.current = null;
           theme.current = detectedChapterId;
           setActiveChapterId(detectedChapterId);
         }
@@ -650,6 +690,9 @@ export default function LiveInterview({
     setPlaybackBlocked(false);
     connectionTypeRef.current = connectionType;
     setError("");
+    setInputNeedsCheck(false);
+    setInputNotice("");
+    heardAnswerSinceQuestion.current = false;
     setConnectionFailed(false);
     setConnectionStage("saving");
     setPhase("connecting");
@@ -677,6 +720,20 @@ export default function LiveInterview({
         connectionType,
       });
       if (!isCurrent()) return;
+      liveAnsweredThemes.current = new Set(
+        (collectionRef.current?.interviews ?? []).flatMap((saved) =>
+          saved.turns
+            .filter(
+              (turn) =>
+                turn.role === "user" &&
+                turn.chapterId &&
+                isMeaningfulInterviewSpeech(turn.text) &&
+                !saved.excludedTurnIds.includes(turn.id),
+            )
+            .map((turn) => turn.chapterId!),
+        ),
+      );
+      explicitNextTheme.current = null;
       theme.current = config.currentThemeId ?? theme.current;
       setActiveChapterId(theme.current);
       await cue?.finished;
@@ -754,9 +811,37 @@ export default function LiveInterview({
               throw new Error("This interview connection has ended.");
             if (!CHAPTERS.some((ch) => ch.id === themeId))
               throw new Error("Unknown interview theme.");
+            if (rerecordChapterId && themeId !== rerecordChapterId)
+              return JSON.stringify({
+                accepted: false,
+                chapterId: theme.current,
+                reason:
+                  "Stay with this story only. When its answer is complete, invite the person to select Back to review. Do not ask about other themes.",
+              });
+            if (
+              !canChangeInterviewTheme(
+                theme.current,
+                themeId as InterviewChapterId,
+                liveAnsweredThemes.current,
+                explicitNextTheme.current,
+                rerecordChapterId,
+              )
+            )
+              return JSON.stringify({
+                accepted: false,
+                chapterId: theme.current,
+                reason:
+                  "No spoken answer has been received for the current theme. Stay here and ask gently if the person is still thinking or needs to check their microphone. Do not claim the story was captured.",
+              });
+            explicitNextTheme.current = null;
             theme.current = themeId as InterviewChapterId;
             setActiveChapterId(theme.current);
-            return "Theme updated. Ask one natural question without naming the section.";
+            return JSON.stringify({
+              accepted: true,
+              chapterId: theme.current,
+              guidance:
+                "Theme updated. Ask one natural question without naming the section.",
+            });
           },
         },
         onMessage: (message) => {
@@ -943,10 +1028,10 @@ export default function LiveInterview({
     }
   }
 
-  async function finish(reviewOnly = false) {
+  async function finish() {
     if (submitting.current || working) return;
     submitting.current = true;
-    setOpeningRecordingReview(reviewOnly);
+    setOpeningRecordingReview(true);
     setWorking(true);
     setPhase("finishing");
     intentionalStop.current = true;
@@ -1019,35 +1104,8 @@ export default function LiveInterview({
         throw new Error(
           "Your interview has not been submitted yet. Back up your remaining recordings and words before finishing.",
         );
-      if (reviewOnly) {
-        // This optional view never submits or marks a partial interview complete.
-        for (const savedSession of collectionRef.current?.interviews ?? []) {
-          if (savedSession.status === "active")
-            await request("/interview", {
-              action: "set_status",
-              sessionId: savedSession.id,
-              status: "paused",
-            });
-        }
-        router.push(
-          interviewReviewPath(collectionId, accessKey, activeChapterId),
-        );
-        return;
-      }
-      const saved = collectionRef.current;
-      if (saved) {
-        const answered = recordedInterviewChapterIds(saved);
-        const missing = CHAPTERS.filter(
-          (chapter) => !answered.includes(chapter.id),
-        ).map((chapter) => chapter.id);
-        if (missing.length) {
-          setMissingAreas(missing);
-          throw new Error(
-            "Your recording is saved. We still need a recorded answer for the story areas below before preparing all four chapters. You can take a break and return through My stories.",
-          );
-        }
-      }
-      setMissingAreas([]);
+      // Finish always opens the same review. Missing live transcript text is
+      // not proof that the securely saved original lacks an answer.
       for (const savedSession of collectionRef.current?.interviews ?? []) {
         if (savedSession.status !== "completed")
           await request("/interview", {
@@ -1056,16 +1114,8 @@ export default function LiveInterview({
             status: savedSession.segments.length ? "completed" : "interrupted",
           });
       }
-      const result = await request("", {
-        action: "submit_interview",
-        processingApproved: true,
-      });
-      if (!result.preparation?.id)
-        throw new Error(
-          "We could not confirm preparation yet. Your recording is kept. Check your preparation status before trying again.",
-        );
       router.push(
-        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
+        interviewReviewPath(collectionId, accessKey, rerecordChapterId ?? "q1"),
       );
     } catch (e) {
       submitting.current = false;
@@ -1143,7 +1193,7 @@ export default function LiveInterview({
       userItems.some(
         ({ turn, session }) =>
           turn.chapterId === chapter.id &&
-          turn.text.trim() &&
+          isMeaningfulInterviewSpeech(turn.text) &&
           !session.excludedTurnIds.includes(turn.id),
       ) ||
       collection?.takes.some(
@@ -1151,13 +1201,33 @@ export default function LiveInterview({
           (take.questionId === chapter.id ||
             take.questionId.startsWith(`${chapter.id}-f`)) &&
           collection.selectedTakeIds[take.questionId] === take.id &&
-          take.text.trim(),
+          isMeaningfulInterviewSpeech(take.text),
       ),
   ).map((chapter) => chapter.id);
   const nextChapterId = nextUnansweredChapterId(
     activeChapterId,
     answeredChapterIds,
   );
+  useEffect(() => {
+    if (phase !== "talking" || microphoneMuted) return;
+    let lastSignalAt = Date.now();
+    const timer = window.setInterval(() => {
+      try {
+        const volume = client.current?.getInputVolume() ?? 0;
+        setInputLevel(
+          Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0,
+        );
+        if (volume > 0.01) lastSignalAt = Date.now();
+        if (mode === "speaking") lastSignalAt = Date.now();
+        if (mode === "listening" && Date.now() - lastSignalAt > 20_000)
+          setInputNeedsCheck(true);
+      } catch {
+        // An unavailable meter is not evidence that the microphone has failed.
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [phase, mode, microphoneMuted]);
+
   const visibleStatus =
     phase === "connecting"
       ? connectionStageLabels[connectionStage]
@@ -1240,7 +1310,11 @@ export default function LiveInterview({
           onPointerEnter={warmConversation}
           onFocus={warmConversation}
         >
-          {resuming ? "Continue recording" : "Start conversation"}
+          {rerecordChapterId
+            ? "Record this part again"
+            : resuming
+              ? "Continue recording"
+              : "Start conversation"}
         </button>
       )}
       {hasExistingRecordings && !sessionRef.current && (
@@ -1250,7 +1324,7 @@ export default function LiveInterview({
           disabled={working || !journalReady}
           onClick={() => void finish()}
         >
-          Finish interview
+          {rerecordChapterId ? "Back to review" : "Finish interview"}
         </button>
       )}
     </div>
@@ -1302,12 +1376,18 @@ export default function LiveInterview({
       </header>
       <div className="mb-6 mt-7 max-w-3xl sm:mt-8">
         <h1 className="font-serif text-3xl leading-tight sm:text-[2.125rem]">
-          {resuming ? "Welcome back." : "Take your time. Your story matters."}
+          {rerecordChapterId
+            ? `Record again: ${interviewChapterTitle(rerecordChapterId, collection.faithFraming)}`
+            : resuming
+              ? "Welcome back."
+              : "Take your time. Your story matters."}
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
-          {resuming
-            ? `Continue with part ${activeChapterId.slice(1)} of 4: ${interviewChapterTitle(activeChapterId, collection.faithFraming)}.`
-            : `One conversation about your life, your walk with Jesus, and what you hope ${collection.recipient.name} carries forward.`}
+          {rerecordChapterId
+            ? "We’ll ask about just this part, then bring you back to your recordings."
+            : resuming
+              ? `Continue with part ${activeChapterId.slice(1)} of 4: ${interviewChapterTitle(activeChapterId, collection.faithFraming)}.`
+              : `One conversation about your life, your walk with Jesus, and what you hope ${collection.recipient.name} carries forward.`}
         </p>
         {resuming && <div className="mt-5">{startControls}</div>}
       </div>
@@ -1438,12 +1518,14 @@ export default function LiveInterview({
                   : phase === "finishing"
                     ? openingRecordingReview
                       ? "Your saved recordings will open when the backup is confirmed."
-                      : "Your stories and videos begin preparing after the save is confirmed."
+                      : "Your saved recordings will open when the backup is confirmed."
                     : !collection.capabilities.liveInterview
                       ? "Voice conversation is unavailable on this page. Check availability below when you are ready to try again."
                       : phase === "ready"
                         ? resuming
-                          ? "Your camera and microphone stay off until you choose Continue recording."
+                          ? rerecordChapterId
+                            ? "Your camera and microphone stay off until you choose Record this part again."
+                            : "Your camera and microphone stay off until you choose Continue recording."
                           : "We will take this one question at a time. You can pause whenever you need to. You review your stories and videos before anything is shared."
                         : phase === "paused"
                           ? "The conversation and recording are paused. Continue when you are ready."
@@ -1517,10 +1599,9 @@ export default function LiveInterview({
               {collection.capabilities.liveInterview && !resuming && (
                 <p className="max-w-2xl text-base leading-7 text-ink-500">
                   Starting the conversation uses your microphone and records
-                  your answers. Choosing Finish interview starts preparing your
-                  four stories, four videos, and postcard drafts. AI helps
-                  prepare the written stories. You review everything before
-                  sharing. Nothing is mailed until you approve.
+                  your answers. Choose Finish interview to watch or listen, then
+                  Submit my interview to prepare your stories and videos.
+                  Nothing is mailed until you approve your postcards.
                 </p>
               )}
               {!resuming && startControls}
@@ -1557,6 +1638,14 @@ export default function LiveInterview({
                   className={secondary}
                   disabled={working || !client.current}
                   onClick={() => {
+                    if (!heardAnswerSinceQuestion.current) {
+                      setInputNeedsCheck(true);
+                      setInputNotice(
+                        "We haven’t received your spoken answer yet. If you already answered, pause and check your microphone or reconnect. Your saved recording is kept.",
+                      );
+                      return;
+                    }
+                    heardAnswerSinceQuestion.current = false;
                     const text =
                       "[Interview control: I have finished this answer. Please continue with one relevant question.]";
                     controlEchoes.current.push(text);
@@ -1566,7 +1655,7 @@ export default function LiveInterview({
                   I’m finished with this answer
                 </button>
               )}
-              {phase === "talking" && nextChapterId && (
+              {phase === "talking" && nextChapterId && !rerecordChapterId && (
                 <button
                   type="button"
                   className={secondary}
@@ -1574,6 +1663,7 @@ export default function LiveInterview({
                   onClick={() => {
                     const conversation = client.current;
                     if (!conversation || working || mode === "speaking") return;
+                    explicitNextTheme.current = nextChapterId;
                     const title = interviewChapterTitle(
                       nextChapterId,
                       collection.faithFraming,
@@ -1592,7 +1682,8 @@ export default function LiveInterview({
                 disabled={working}
                 onClick={() => void finish()}
               >
-                <AppIcon name="check" size={20} /> Finish interview
+                <AppIcon name="check" size={20} />{" "}
+                {rerecordChapterId ? "Back to review" : "Finish interview"}
               </button>
               {phase === "talking" && (
                 <button
@@ -1665,6 +1756,29 @@ export default function LiveInterview({
               )}
             </div>
           )}
+          {phase === "talking" && !microphoneMuted && (
+            <div className="mt-4 max-w-xl">
+              <div className="flex items-center gap-3 text-sm text-ink-500">
+                <span>Microphone</span>
+                <meter
+                  min={0}
+                  max={1}
+                  value={inputLevel}
+                  aria-label="Sound reaching your interviewer"
+                  className="h-3 w-28"
+                />
+              </div>
+              {inputNeedsCheck && (
+                <p
+                  role="status"
+                  className="mt-3 rounded-xl bg-clay-50 p-4 text-base leading-7 text-ink-700"
+                >
+                  {inputNotice ||
+                    "Taking a moment is fine. If you are speaking and this meter is not moving, pause to check your microphone."}
+                </p>
+              )}
+            </div>
+          )}
           {phase === "talking" && (
             <p className="mt-4 text-sm leading-6 text-ink-500">
               {microphoneMuted
@@ -1689,17 +1803,6 @@ export default function LiveInterview({
             )}
         </div>
       </section>
-      {missingAreas.length > 0 && (
-        <div className="mt-5">
-          <Link
-            className={`${secondary} inline-flex items-center`}
-            href={`/record/${collectionId}${query}&classic=1&chapter=${missingAreas[0]}`}
-          >
-            Record part {missingAreas[0].slice(1)}:{" "}
-            {interviewChapterTitle(missingAreas[0], collection.faithFraming)}
-          </Link>
-        </div>
-      )}
       {hasExistingRecordings &&
         phase !== "connecting" &&
         phase !== "finishing" && (
@@ -1708,7 +1811,7 @@ export default function LiveInterview({
               type="button"
               className={secondary}
               disabled={working || !journalReady || archive.recovering}
-              onClick={() => void finish(true)}
+              onClick={() => void finish()}
             >
               Listen or record again
             </button>

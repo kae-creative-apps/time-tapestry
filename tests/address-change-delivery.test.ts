@@ -1,3 +1,4 @@
+import { fixtureAddressReceipt } from "./address-verification-fixture";
 import { historicalApprovedCollection } from "./historical-delivery-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -112,6 +113,14 @@ test("address updates preserve started mailings and safely replace untouched sch
           };
         const savedProof = JSON.stringify(collection.postcardProof);
         const savedDeliveries = JSON.stringify(collection.deliveries);
+        const updatedAddress = {
+          ...collection.address!,
+          line1: "2 Updated Way",
+        };
+        collection.pendingAddressVerification = fixtureAddressReceipt(
+          collection,
+          updatedAddress,
+        );
         await putCollection(collection);
         const cookie = await verifiedRecipientCookie(
           collection.recipient.email,
@@ -122,7 +131,8 @@ test("address updates preserve started mailings and safely replace untouched sch
             headers: { "Content-Type": "application/json", Cookie: cookie },
             body: JSON.stringify({
               action: "address",
-              address: { ...collection.address, line1: "2 Updated Way" },
+              address: updatedAddress,
+              verificationId: collection.pendingAddressVerification.id,
             }),
           }),
           { params: Promise.resolve({ id: collection.id }) },

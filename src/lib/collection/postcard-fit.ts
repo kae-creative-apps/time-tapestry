@@ -11,6 +11,7 @@ import {
   POSTCARD_BACK_INSTRUCTION,
   postcardFirstName,
   postcardMessageTypography,
+  postcardThemeForChapter,
   type PublicPostcardContent,
 } from "./postcard-design";
 
@@ -59,6 +60,7 @@ export function postcardPrintContent(
   chapterId: string,
 ): PublicPostcardContent {
   return {
+    theme: postcardThemeForChapter(chapterId),
     recipientFirstName: postcardFirstName(c.recipient.name, "friend"),
     storytellerFirstName: postcardFirstName(
       c.storyteller.name,
@@ -95,17 +97,22 @@ export function assertPublicPostcardFits(content: PublicPostcardContent) {
     ) *
       text.salutation.lineHeight +
     text.salutation.gap +
-    messageLines * type.lineHeight +
-    text.sender.gap +
-    lines(
-      `From ${content.storytellerFirstName}`,
-      text.sender.size,
-      layout.note.width - 12,
-    ) *
-      text.sender.lineHeight;
+    messageLines * type.lineHeight;
   if (noteHeight > layout.note.bottom - layout.note.y)
     throw new PostcardLayoutError(
       "The public postcard message needs a shorter print revision before mailing. Your private story remains saved.",
+    );
+  if (
+    lines(
+      `From ${content.storytellerFirstName}`,
+      text.sender.size,
+      layout.sender.width - 8,
+    ) *
+      text.sender.lineHeight >
+    layout.sender.bottom - layout.sender.y
+  )
+    throw new PostcardLayoutError(
+      "The postcard sender name needs a print layout check before mailing.",
     );
   const captionHeight =
     lines(
@@ -125,10 +132,10 @@ export function assertPublicPostcardFits(content: PublicPostcardContent) {
     lines(
       `From ${content.storytellerFirstName}, for ${content.recipientFirstName}.`,
       text.dedication.size,
-      716,
+      layout.dedication.width - 8,
     ) *
       text.dedication.lineHeight >
-    48
+    layout.dedication.bottom - layout.dedication.y
   )
     throw new PostcardLayoutError(
       "The postcard names need a print layout check before mailing.",

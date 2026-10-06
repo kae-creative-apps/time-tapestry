@@ -1,6 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { privateJson } from "./render";
+import { privateJson } from "./media-files";
 import { sha256 } from "./plan";
 import { validateSourceWords, type SourceWord } from "./word-matching";
 

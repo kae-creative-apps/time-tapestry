@@ -8,7 +8,7 @@
     "start": "next start",
     "preview:local": "node scripts/start-local-preview.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts src/components/collection/*.test.ts scripts/render-chapter.test.ts",
+    "test": "node --import tsx --test --test-concurrency=4 tests/*.test.ts src/components/collection/*.test.ts scripts/render-chapter.test.ts",
     "video:collection": "node --import tsx scripts/export-collection-video.ts",
     "video:render": "node --import tsx scripts/render-chapter.ts",
     "video:audio": "node --import tsx scripts/render-chapter-audio.ts",

@@ -1,13 +1,18 @@
-import type { Collection } from "../collection/types";
+import type { Collection, Contact } from "../collection/types";
+import type { OrganizationChapterProgress } from "./progress";
 
-export type OrganizationType = "church" | "nonprofit" | "other";
+export type OrganizationType =
+  "church" | "nonprofit" | "retirement_community" | "family" | "other";
 export type GiftStatus = "issued" | "redeeming" | "redeemed" | "revoked";
 
 export type OrganizationGift = {
   id: string;
   name: string;
   email: string;
-  key: string;
+  /** Legacy invitations retain their existing capability. New invitations keep only a digest. */
+  key?: string;
+  keyHash?: string;
+  designatedRecipient?: Contact;
   status: GiftStatus;
   createdAt: string;
   redeemedAt?: string;
@@ -51,7 +56,8 @@ export type OrganizationView = {
     email: string;
     status: GiftStatus;
     createdAt: string;
-    giftUrl?: string;
+    designatedRecipient?: Contact;
+    progress: OrganizationChapterProgress[];
   }>;
 };
 
@@ -60,4 +66,5 @@ export type GiftView = {
   name: string;
   email: string;
   status: GiftStatus;
+  designatedRecipient?: Contact;
 };

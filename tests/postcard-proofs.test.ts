@@ -1,3 +1,4 @@
+import { fixtureVerifiedAddress } from "./address-verification-fixture";
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
 import { mkdtemp } from "node:fs/promises";
@@ -74,7 +75,7 @@ function fixture(): Collection {
     messagesHash: postcardPublicMessagesHash(c),
     approvedAt: now,
   };
-  return c;
+  return fixtureVerifiedAddress(c);
 }
 function readiness(enabled: boolean) {
   process.env.COLLECTION_DELIVERY_ENABLED = enabled ? "true" : "false";
@@ -391,6 +392,7 @@ test("address edits invalidate a saved proof, and safe re-preparation retains th
   const c = await prepareAutomaticPostcards(fixture(), now, origin);
   const prior = structuredClone(c.postcardProof!);
   c.address!.line1 = "2 Changed Lane";
+  fixtureVerifiedAddress(c);
   assert.equal(postcardProofIsCurrent(c, c.postcardProof, origin), false);
   await prepareAutomaticPostcards(c, now, origin);
   assert.deepEqual(c.postcardProofHistory?.[0], prior);
