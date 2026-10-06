@@ -1,0 +1,73 @@
+TIME TAPESTRY V14 PRODUCTION BRIEF
+Read this together with the audience-specific direction and narration below.
+
+Preserve V13 and its selected source performances. Create V14 files separately. This is a film revision brief, not authorization to change live product behavior or publish unfinished features.
+
+VOICE
+Preserve each film's selected V13 performance and vocal identity. Use the approved homepage performance as the shared benchmark for naturalness, warmth and conversational tone. A closer match to the homepage narrator is an audition option requested by Tayloe, not permission to silently recast the other films. Preserve texture, accent and unhurried phrasing. Add only the emotion the thought calls for: curiosity in a question, appreciation for the storyteller, quiet delight in a family reply. Do not recast it as an announcer, make it sing, speed it up to meet runtime, or inflate the score into a sentimental climax.
+
+The existing V13 tracks are separate ElevenLabs Music v2.5 spoken-lyrics performances with integrated music. No common reusable narrator voice ID is recorded. Do not claim that repeating the prompt will reproduce the same speaker. Keep usable approved audio unchanged. For rewritten lines, first check whether the approved source can be used with reference conditioning/inpainting. Test a short passage and compare it with that film's selected master and the homepage tone reference before rendering complete films. If identity or naturalness drifts, report that and retain the original masters. Do not silently substitute an older Sarah TTS voice or clone a mixed music track and promise an exact match. If a separately controlled narration voice is proposed, it needs a new audition. Use separate narration/music stems where the chosen method supports them.
+
+This promotional narrator is separate from customer recordings. Customer story films always use that storyteller's actual recorded voice or video. Never generate words in their voice or substitute a narrator reading their story. Audio-only customer films use the approved orb, readable captions and a brand close. Preserve the meaning, laughter and useful pauses in source recordings.
+
+PRODUCT AND CLAIMS
+Website: https://timetapestry.app.
+Use “guided conversation” in customer-facing language. Never label the product an “AI interviewer.” The technical Gloo presentation may explain verified AI functions precisely.
+
+Target journey: record audio or video, then submit the interview; Time Tapestry prepares four original-voice chapter films and a printable four-chapter written story with a branded cover. No transcript editing or written-story rewrite task for the storyteller. Public postcard encouragement can still be personalized.
+
+Four postcards go to ONE primary postal recipient, scheduled at 0, 14, 28 and 42 days relative to the first send. Say “sent every two weeks over six weeks,” not guaranteed arrival dates. All four chapters belong to the same private collection. Later postcards invite a return. Additional people can be invited by email without a five-person product cap. A QR link does not bypass invited-email verification. Family members can reply privately.
+
+Current main still requires final owner approval before sharing. The no-review-before-send journey is a requested change, not verified live behavior. Original-voice film processing exists in code, but cloud output needs a successful end-to-end demonstration. Lob test proofs do not prove real mail was sent. Do not show a prototype as proof of completed production automation.
+
+The user wants ongoing new recordings and family-selected questions added. These are not implemented in the audited main. Keep them in the proposed V14 story as explicitly Planned/Coming next, or publish the present-tense version only after the features pass an end-to-end test. Never conceal this distinction. No fake adoption numbers, testimonials, donation lift, health benefits, permanent-storage promises or hackathon awards.
+
+DESIGN
+Capture the current product at the chosen release commit. Do not reuse V12 “Make the words your own,” “Your AI narrated version,” or “Approve the complete gift” screens as demonstrations of the requested new journey.
+Current app: paper #fbfaf8, espresso #432e23, sage #939480, clay #c18f7b, taupe #756454; Quicksand headings and Inter body. Use these as implementation references, not permission to invent a new pink/green palette.
+Resolve the print/website discrepancy before claiming the preview is exactly what arrives: four distinct chapter cards appear in marketing, while the current mailed front uses one shared v6 design. The v5 full-pattern note and v6 print renderer also differ. Use the approved mark and approved complete stitch pattern, appropriate transparency, full-background coverage, and generous print-safe logo padding. Do not invent a replacement motif or use a cropped square as the full pattern.
+Use the approved logo lockup once. Its embedded tagline must not be duplicated beneath it. The newest joining-hands-v4 motion is a review revision, not yet the deployed closer. Do not silently substitute it for the approved closing asset.
+Use one visual idea per shot, large readable UI crops, two caption lines maximum, and a clean 3-second final hold. Keep illustrative footage clearly illustrative. Preserve meaningful example disclosures without stacking captions, tiny UI, footnotes and extra explanation on the same frame.
+
+DELIVERY
+Provide the revised script, storyboard, a short voice comparison, final caption timing derived from the selected audio, 1080p master and web export, transcript/caption file, source project, selected-audio manifest and a list of claims verified versus planned. Check the exact exported MP4, including the opening, every product claim, print timeline, final frame, intelligibility and mobile readability. Do not replace natural timing with synthetic precision or overwrite an approved version.
+
+AUDIENCE: GLOO HACKATHON
+Purpose: make judges care, then show what works and why the technology is useful.
+Keep the current project limit of 90 seconds unless the actual submission rules confirm another limit. Target roughly 175-185 narrated words with space for a short authentic source clip. Shorten the script if the clip takes additional time; never rush the narrator.
+The public Gloo page emphasizes applied AI, faith, community and flourishing. Exact judging weights and submission rules were not available in this audit. Do not invent a rubric or imply an award is guaranteed.
+
+STORYBOARD
+0-8s: a specific family question or consented source moment.
+8-20s: the need and the guided recording experience.
+20-48s: evidence from one actual completed collection, including original recording, resulting chapter film, and printable PDF. Compare source and output briefly enough to establish that the family still hears the same person.
+48-65s: email access, the 0/2/4/6-week postal schedule and a reply.
+65-78s: a family asks the next question. Clearly Planned until the complete request-record-share loop works.
+78-90s: the ministry opportunity and a clear demo destination.
+
+Use a real working path for proof. A reconstructed chat, a fake scan animation or a static access slide is not evidence of a successful integration. Clearly separate prototype visuals from working output. An accelerated preparation sequence must say “Processing condensed.”
+When showing technology, explain only verified responsibility: Gloo can shape written chapters; ElevenLabs supplies the configured spoken conversation; the worker prepares films from original recordings; Lob handles print scheduling. Do not attribute the live ElevenLabs conversation to Gloo. Before adding “Gloo powered” to a completed sample, verify its actual provider trace; source-text fallback exists.
+Show one small pipeline graphic or short evidence overlay, not a vendor-logo parade. Keep customer-facing terminology “guided conversation.”
+
+PROPOSED NARRATION
+A family may know their mother always makes room for one more at the table. They may never have heard who taught her to do that.
+
+Time Tapestry helps them ask.
+
+A guided conversation follows the storyteller's memories. They record their voice or video, then submit.
+
+The gift brings together four films in their original voice and a printable, four-chapter storybook.
+
+Four postcards go to one chosen recipient, sent every two weeks over six weeks. They return the family to the same private collection. More relatives can join through verified email invitations, watch, read, and send a reply.
+
+Behind the experience, Gloo helps shape recorded answers into written chapters. The films preserve the storyteller's own voice.
+
+Next, we're building a way for families to choose what they'd love to hear next, and for storytellers to keep adding memories and prayers.
+
+We want churches and nonprofits to help families discover how faith and generosity took shape in someone they love, and carry those stories into their own lives.
+
+Time Tapestry. Stories woven together.
+
+RELEASE VERSION RULE
+The Gloo sentence requires an actual Gloo-backed sample and trace. If not available, use “The writing pipeline is built to use Gloo to shape recorded answers into chapters” and label that integration honestly.
+The future paragraph remains future tense and carries a Planned label until the new loop is tested. To show it as working, demonstrate a real invited family account sending a question, the storyteller recording a new answer, the saved addition appearing for the selected recipients, and a notification arriving. Do not show the requested no-review journey as deployed until verified. Show any remaining limits plainly on the final demonstration slate rather than implying complete production readiness.

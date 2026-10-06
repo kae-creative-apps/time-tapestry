@@ -1,0 +1,59 @@
+TIME TAPESTRY V14 PRODUCTION BRIEF
+Read this together with the audience-specific direction and narration below.
+
+Preserve V13 and its selected source performances. Create V14 files separately. This is a film revision brief, not authorization to change live product behavior or publish unfinished features.
+
+VOICE
+Preserve each film's selected V13 performance and vocal identity. Use the approved homepage performance as the shared benchmark for naturalness, warmth and conversational tone. A closer match to the homepage narrator is an audition option requested by Tayloe, not permission to silently recast the other films. Preserve texture, accent and unhurried phrasing. Add only the emotion the thought calls for: curiosity in a question, appreciation for the storyteller, quiet delight in a family reply. Do not recast it as an announcer, make it sing, speed it up to meet runtime, or inflate the score into a sentimental climax.
+
+The existing V13 tracks are separate ElevenLabs Music v2.5 spoken-lyrics performances with integrated music. No common reusable narrator voice ID is recorded. Do not claim that repeating the prompt will reproduce the same speaker. Keep usable approved audio unchanged. For rewritten lines, first check whether the approved source can be used with reference conditioning/inpainting. Test a short passage and compare it with that film's selected master and the homepage tone reference before rendering complete films. If identity or naturalness drifts, report that and retain the original masters. Do not silently substitute an older Sarah TTS voice or clone a mixed music track and promise an exact match. If a separately controlled narration voice is proposed, it needs a new audition. Use separate narration/music stems where the chosen method supports them.
+
+This promotional narrator is separate from customer recordings. Customer story films always use that storyteller's actual recorded voice or video. Never generate words in their voice or substitute a narrator reading their story. Audio-only customer films use the approved orb, readable captions and a brand close. Preserve the meaning, laughter and useful pauses in source recordings.
+
+PRODUCT AND CLAIMS
+Website: https://timetapestry.app.
+Use “guided conversation” in customer-facing language. Never label the product an “AI interviewer.” The technical Gloo presentation may explain verified AI functions precisely.
+
+Target journey: record audio or video, then submit the interview; Time Tapestry prepares four original-voice chapter films and a printable four-chapter written story with a branded cover. No transcript editing or written-story rewrite task for the storyteller. Public postcard encouragement can still be personalized.
+
+Four postcards go to ONE primary postal recipient, scheduled at 0, 14, 28 and 42 days relative to the first send. Say “sent every two weeks over six weeks,” not guaranteed arrival dates. All four chapters belong to the same private collection. Later postcards invite a return. Additional people can be invited by email without a five-person product cap. A QR link does not bypass invited-email verification. Family members can reply privately.
+
+Current main still requires final owner approval before sharing. The no-review-before-send journey is a requested change, not verified live behavior. Original-voice film processing exists in code, but cloud output needs a successful end-to-end demonstration. Lob test proofs do not prove real mail was sent. Do not show a prototype as proof of completed production automation.
+
+The user wants ongoing new recordings and family-selected questions added. These are not implemented in the audited main. Keep them in the proposed V14 story as explicitly Planned/Coming next, or publish the present-tense version only after the features pass an end-to-end test. Never conceal this distinction. No fake adoption numbers, testimonials, donation lift, health benefits, permanent-storage promises or hackathon awards.
+
+DESIGN
+Capture the current product at the chosen release commit. Do not reuse V12 “Make the words your own,” “Your AI narrated version,” or “Approve the complete gift” screens as demonstrations of the requested new journey.
+Current app: paper #fbfaf8, espresso #432e23, sage #939480, clay #c18f7b, taupe #756454; Quicksand headings and Inter body. Use these as implementation references, not permission to invent a new pink/green palette.
+Resolve the print/website discrepancy before claiming the preview is exactly what arrives: four distinct chapter cards appear in marketing, while the current mailed front uses one shared v6 design. The v5 full-pattern note and v6 print renderer also differ. Use the approved mark and approved complete stitch pattern, appropriate transparency, full-background coverage, and generous print-safe logo padding. Do not invent a replacement motif or use a cropped square as the full pattern.
+Use the approved logo lockup once. Its embedded tagline must not be duplicated beneath it. The newest joining-hands-v4 motion is a review revision, not yet the deployed closer. Do not silently substitute it for the approved closing asset.
+Use one visual idea per shot, large readable UI crops, two caption lines maximum, and a clean 3-second final hold. Keep illustrative footage clearly illustrative. Preserve meaningful example disclosures without stacking captions, tiny UI, footnotes and extra explanation on the same frame.
+
+DELIVERY
+Provide the revised script, storyboard, a short voice comparison, final caption timing derived from the selected audio, 1080p master and web export, transcript/caption file, source project, selected-audio manifest and a list of claims verified versus planned. Check the exact exported MP4, including the opening, every product claim, print timeline, final frame, intelligibility and mobile readability. Do not replace natural timing with synthetic precision or overwrite an approved version.
+
+AUDIENCE: HOMEPAGE
+Purpose: help a storyteller or inviting family member feel “I want us to have this” and understand the next step.
+Target 65-75 seconds if the continuing-story preview is included. Keep the current 54-second export as an archived reference. Do not cram the added feature into the old duration.
+
+STORYBOARD
+Open on one question worth asking, rather than an orb/logo bumper or an abstract search screen. A useful illustrative question is “Who taught you to make room for one more?” If a real, consented recording supplies a strong 4-6 second answer, use the actual clip. Otherwise use the brand narrator and clearly illustrative visuals; never invent a testimonial.
+Show record/submit, original-voice chapter playback, the printable book, four postcards over six weeks, and a family reply. Give the family-requested next story one clear shot. Show three suggested questions with a Browse more option, not a wall of dozens. End with a living family conversation and the actual homepage action: Share your story, https://timetapestry.app/share.
+
+PROPOSED NARRATION
+There are stories your family would love to hear, about who taught you to give, how your faith grew, and what you hope they carry forward.
+
+With Time Tapestry, a guided conversation helps you find the words. Record your voice or video, then submit your interview. We shape your memories into four short films in your own recorded voice and a four-chapter storybook you can download and print.
+
+Four personal postcards, sent over six weeks, invite someone you love to your private collection. You can invite more family by email, so they can watch, read, and reply.
+
+And the conversation can keep growing. Share another memory, record a prayer, or answer a question someone you love has chosen for you.
+
+Give your family a little more of you.
+
+Share your story with Time Tapestry. Stories woven together.
+
+RELEASE VERSION RULE
+The paragraph beginning “And the conversation” is target-product copy. Until continuing stories and family questions work, replace it with:
+“Next, we're making room for more memories, prayers, and questions from the people you love.”
+Show “Coming next” for that shot. A prayer is an optional kind of recorded story, not a claim of a separate prayer feature. The no-review submission shots also require the requested journey to be implemented. This is an internal target-state draft until those conditions are met.

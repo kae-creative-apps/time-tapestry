@@ -1,0 +1,32 @@
+{
+  "audited_application_commit": "3b31dcb5772e5203ed952f960e78171e17710d83",
+  "scope": "Visual key-frame, matching script, code and audio-provenance audit. Continuous audio audition not performed.",
+  "videos": [
+    {
+      "file": "01 - Time Tapestry - Homepage - V13.mp4",
+      "sha256": "d198786fb5e54b931d586fa96b6fd5cb6bbc9c8386539b8a5a658d827b3c9815",
+      "duration_seconds": 54.016,
+      "bytes": 37813903
+    },
+    {
+      "file": "02 - Time Tapestry - Churches and Nonprofits - V13.mp4",
+      "sha256": "edc5aabbcca6b9a81f2e0e047922f3a1f36eeff1129ca549f8747732cc59cbef",
+      "duration_seconds": 62.016,
+      "bytes": 41409858
+    },
+    {
+      "file": "03 - Time Tapestry - Gloo CP Hackathon - V13.mp4",
+      "sha256": "a61b33389802bdfe4227b0591967839971d906cf8dc198f15ce2dac663d616ae",
+      "duration_seconds": 88.0,
+      "bytes": 35263802
+    }
+  ],
+  "selected_audio": {
+    "homepage": "homepage-spoken-score-v1.wav, take 2",
+    "organizations": "churches_nonprofits-spoken-score-v1.wav, take 1",
+    "hackathon": "hackathon-spoken-score-v2.wav, take 4"
+  },
+  "voice_model": "ElevenLabs Music v2.5",
+  "shared_voice_id_recorded": false,
+  "rendered_revisions": false
+}

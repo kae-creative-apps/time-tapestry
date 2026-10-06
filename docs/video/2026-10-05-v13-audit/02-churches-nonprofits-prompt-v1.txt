@@ -1,0 +1,63 @@
+TIME TAPESTRY V14 PRODUCTION BRIEF
+Read this together with the audience-specific direction and narration below.
+
+Preserve V13 and its selected source performances. Create V14 files separately. This is a film revision brief, not authorization to change live product behavior or publish unfinished features.
+
+VOICE
+Preserve each film's selected V13 performance and vocal identity. Use the approved homepage performance as the shared benchmark for naturalness, warmth and conversational tone. A closer match to the homepage narrator is an audition option requested by Tayloe, not permission to silently recast the other films. Preserve texture, accent and unhurried phrasing. Add only the emotion the thought calls for: curiosity in a question, appreciation for the storyteller, quiet delight in a family reply. Do not recast it as an announcer, make it sing, speed it up to meet runtime, or inflate the score into a sentimental climax.
+
+The existing V13 tracks are separate ElevenLabs Music v2.5 spoken-lyrics performances with integrated music. No common reusable narrator voice ID is recorded. Do not claim that repeating the prompt will reproduce the same speaker. Keep usable approved audio unchanged. For rewritten lines, first check whether the approved source can be used with reference conditioning/inpainting. Test a short passage and compare it with that film's selected master and the homepage tone reference before rendering complete films. If identity or naturalness drifts, report that and retain the original masters. Do not silently substitute an older Sarah TTS voice or clone a mixed music track and promise an exact match. If a separately controlled narration voice is proposed, it needs a new audition. Use separate narration/music stems where the chosen method supports them.
+
+This promotional narrator is separate from customer recordings. Customer story films always use that storyteller's actual recorded voice or video. Never generate words in their voice or substitute a narrator reading their story. Audio-only customer films use the approved orb, readable captions and a brand close. Preserve the meaning, laughter and useful pauses in source recordings.
+
+PRODUCT AND CLAIMS
+Website: https://timetapestry.app.
+Use “guided conversation” in customer-facing language. Never label the product an “AI interviewer.” The technical Gloo presentation may explain verified AI functions precisely.
+
+Target journey: record audio or video, then submit the interview; Time Tapestry prepares four original-voice chapter films and a printable four-chapter written story with a branded cover. No transcript editing or written-story rewrite task for the storyteller. Public postcard encouragement can still be personalized.
+
+Four postcards go to ONE primary postal recipient, scheduled at 0, 14, 28 and 42 days relative to the first send. Say “sent every two weeks over six weeks,” not guaranteed arrival dates. All four chapters belong to the same private collection. Later postcards invite a return. Additional people can be invited by email without a five-person product cap. A QR link does not bypass invited-email verification. Family members can reply privately.
+
+Current main still requires final owner approval before sharing. The no-review-before-send journey is a requested change, not verified live behavior. Original-voice film processing exists in code, but cloud output needs a successful end-to-end demonstration. Lob test proofs do not prove real mail was sent. Do not show a prototype as proof of completed production automation.
+
+The user wants ongoing new recordings and family-selected questions added. These are not implemented in the audited main. Keep them in the proposed V14 story as explicitly Planned/Coming next, or publish the present-tense version only after the features pass an end-to-end test. Never conceal this distinction. No fake adoption numbers, testimonials, donation lift, health benefits, permanent-storage promises or hackathon awards.
+
+DESIGN
+Capture the current product at the chosen release commit. Do not reuse V12 “Make the words your own,” “Your AI narrated version,” or “Approve the complete gift” screens as demonstrations of the requested new journey.
+Current app: paper #fbfaf8, espresso #432e23, sage #939480, clay #c18f7b, taupe #756454; Quicksand headings and Inter body. Use these as implementation references, not permission to invent a new pink/green palette.
+Resolve the print/website discrepancy before claiming the preview is exactly what arrives: four distinct chapter cards appear in marketing, while the current mailed front uses one shared v6 design. The v5 full-pattern note and v6 print renderer also differ. Use the approved mark and approved complete stitch pattern, appropriate transparency, full-background coverage, and generous print-safe logo padding. Do not invent a replacement motif or use a cropped square as the full pattern.
+Use the approved logo lockup once. Its embedded tagline must not be duplicated beneath it. The newest joining-hands-v4 motion is a review revision, not yet the deployed closer. Do not silently substitute it for the approved closing asset.
+Use one visual idea per shot, large readable UI crops, two caption lines maximum, and a clean 3-second final hold. Keep illustrative footage clearly illustrative. Preserve meaningful example disclosures without stacking captions, tiny UI, footnotes and extra explanation on the same frame.
+
+DELIVERY
+Provide the revised script, storyboard, a short voice comparison, final caption timing derived from the selected audio, 1080p master and web export, transcript/caption file, source project, selected-audio manifest and a list of claims verified versus planned. Check the exact exported MP4, including the opening, every product claim, print timeline, final frame, intelligibility and mobile readability. Do not replace natural timing with synthetic precision or overwrite an approved version.
+
+AUDIENCE: CHURCHES AND NONPROFITS
+Purpose: help one ministry leader picture a specific person they want to honor and understand how to begin.
+Target 70-80 seconds, with natural breathing room. The current export is 62 seconds. Preserve the vocal personality; use appreciation and gentle optimism rather than a fundraising-announcer performance.
+
+STORYBOARD
+Begin with a familiar act of generosity, such as someone making room at a table, and the question of who taught them to do it. Move to one invitation from a church or nonprofit, then the storyteller and family. Spend less screen time on group-creation fields and verification mechanics.
+Make the gift tangible: original voice, four chapter films, a branded printable storybook, four postcards, and private family replies. Show how a leader can start with one person. Organizations do not automatically receive private family stories because they sent the invitation.
+Give the future question-request scene a clear Planned label until it works. Include a prompt such as “What kept you hopeful when life was difficult?” without presenting it as a real family message.
+Close on the verified organization invitation route/action. Confirm the current route before export; do not invent a working button or campaign dashboard.
+
+PROPOSED NARRATION
+The people who keep showing up for your mission learned generosity somewhere. Time Tapestry helps you honor them by inviting them to share those stories with their families.
+
+You send the invitation. In a guided conversation, they can share the kindness they've received, the faith that shaped them, and what they hope someone else will carry.
+
+They record their voice or video, then submit. Time Tapestry creates four films in their own recorded voice and a four-chapter storybook they can print.
+
+Four postcards go to one person they choose, every two weeks over six weeks. More family can join by email to watch, read, and reply privately.
+
+And the story can keep growing, with another memory, a prayer, or a question from someone they love.
+
+Start with one person who's helped your mission grow.
+
+Time Tapestry. Stories woven together.
+
+RELEASE VERSION RULE
+Until new stories and family questions are implemented, replace the continuing-story paragraph with:
+“Next, we're helping those conversations continue with new memories, prayers, and questions from family.”
+Display “Planned” during that scene. Do not claim increased donations, donor retention, stronger faith or family wellbeing as measured outcomes. The benefit is an invitation to preserve and share lived faith and generosity.
