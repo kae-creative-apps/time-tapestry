@@ -4,11 +4,28 @@ import { reserveMediaUpload } from "@/lib/collection/usage";
 import { finalizeCloudMedia } from "@/lib/collection/media";
 import { NextRequest, NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import { getCollection, getMedia, putMedia } from "@/lib/collection/store";
+import { getCollection, getMedia, mutateRecord } from "@/lib/collection/store";
 import { collectionAccessForRequest } from "@/lib/collection/request-access";
 import { recipientById, storedRecipientId } from "@/lib/collection/recipients";
 import { mediaTypes } from "@/lib/collection/media";
 import { isGeneratedFilmMedia } from "@/lib/collection/recording-validation";
+import { assertLivingStoryUpload } from "@/lib/collection/living-story";
+import type { Collection, StoredMedia } from "@/lib/collection/types";
+
+function uploadMomentId(c: Collection, role: string, value: unknown) {
+  if (role === "owner" && c.status === "approved") {
+    if (typeof value !== "string" || !value)
+      throw new Error("Choose a draft memory before uploading a recording.");
+    assertLivingStoryUpload(c, value);
+    return value;
+  }
+  if (value !== undefined)
+    throw new Error(
+      "Additional recordings require an approved gift and its owner.",
+    );
+  return undefined;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -27,42 +44,49 @@ export async function POST(
           !c ||
           !role ||
           role === "requester" ||
-          (role === "owner" && c.status === "approved") ||
           (role === "recipient" && c.status !== "approved")
         )
           throw new Error("Upload access denied");
         await guardRequest(req, { action: "upload", resourceId: id });
         const p = JSON.parse(payload || "{}");
+        const momentId = uploadMomentId(c, role, p.momentId);
         if (
           !/^[a-zA-Z0-9_-]{8,80}$/.test(p.mediaId) ||
           pathname !== `collections/${id}/${p.mediaId}` ||
           !mediaTypes.includes((p.mimeType || "").split(";")[0])
         )
           throw new Error("Invalid upload");
-        const existing = await getMedia(p.mediaId);
-        if (isGeneratedFilmMedia(existing ?? { id: p.mediaId }, c))
-          throw new Error(
-            "Completed films cannot be used for recording uploads.",
-          );
-        if (
-          existing &&
-          (existing.collectionId !== id ||
-            existing.role !== role ||
-            (role === "recipient" &&
-              storedRecipientId(existing) !== access?.recipientId))
-        )
-          throw new Error("Invalid recording");
+        const assertExisting = (existing: StoredMedia | null) => {
+          if (isGeneratedFilmMedia(existing ?? { id: p.mediaId }, c))
+            throw new Error(
+              "Completed films cannot be used for recording uploads.",
+            );
+          if (
+            existing &&
+            (existing.collectionId !== id ||
+              existing.role !== role ||
+              existing.livingStoryMomentId !== momentId ||
+              (role === "recipient" &&
+                storedRecipientId(existing) !== access?.recipientId))
+          )
+            throw new Error("Invalid recording");
+        };
+        assertExisting(await getMedia(p.mediaId));
         await reserveMediaUpload({
           collectionId: id,
           mediaId: p.mediaId,
           bytes: p.bytes,
         });
-        if (!existing)
-          await putMedia({
+        await mutateRecord<StoredMedia>(`media-${p.mediaId}`, (existing) => {
+          // A concurrent token request must never rebind an existing recording.
+          assertExisting(existing);
+          if (existing) return existing;
+          return {
             provenance: "uploaded_recording",
             id: p.mediaId,
             collectionId: id,
             role,
+            ...(momentId ? { livingStoryMomentId: momentId } : {}),
             ...(role === "recipient"
               ? { recipientId: access!.recipientId }
               : {}),
@@ -70,7 +94,8 @@ export async function POST(
             originalName: String(p.name || "recording").slice(0, 200),
             bytes: 0,
             createdAt: new Date().toISOString(),
-          });
+          };
+        });
         return {
           allowedContentTypes: mediaTypes,
           maximumSizeInBytes: p.bytes,
@@ -80,6 +105,7 @@ export async function POST(
           tokenPayload: JSON.stringify({
             id: p.mediaId,
             collectionId: id,
+            ...(momentId ? { momentId } : {}),
             ...(role === "recipient"
               ? { recipientId: access!.recipientId }
               : {}),
@@ -92,6 +118,8 @@ export async function POST(
         const c = m && (await getCollection(m.collectionId));
         if (
           !m ||
+          !c ||
+          m.collectionId !== id ||
           m.collectionId !== p.collectionId ||
           (m.role === "recipient" &&
             (!c ||
@@ -101,6 +129,9 @@ export async function POST(
           !blob.url.includes(".private.blob.vercel-storage.com/")
         )
           throw new Error("Invalid upload completion");
+        const momentId = uploadMomentId(c, m.role, p.momentId);
+        if (m.livingStoryMomentId !== momentId)
+          throw new Error("Invalid recording for this memory.");
         // handleUpload validates the provider callback. Do not require browser Origin here.
         await finalizeCloudMedia(m.id);
       },

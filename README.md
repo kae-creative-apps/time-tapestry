@@ -70,7 +70,6 @@ See [Storage readiness](docs/STORAGE_READINESS.md) before accepting lasting fami
 | `CRON_SECRET`                                                   | Private bearer secret protecting GET/POST `/api/collection/jobs`. The repository declares a five-minute Vercel cron; a compatible deployed scheduler still needs verification.                                                                               |
 | `LOB_API_KEY`, `LOB_FROM_ADDRESS_ID`, `LOB_WEBHOOK_SECRET`      | Postcard API, approved return-address ID and webhook signing secret. Test cards do not establish actual mailing.                                                                                                                                             |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                           | Email API and verified sending identity. Provider acceptance does not prove delivery or reading.                                                                                                                                                             |
-| `ADMIN_SECRET`                                                  | Private credential for existing admin tools. Leave blank to deny admin authentication. Never use a shared example password.                                                                                                                                  |
 
 ### Production storage and delivery
 
@@ -114,3 +113,5 @@ Keep changes coordinated with Kaelyn's current branch before merging. This docum
 ## License
 
 [MIT](LICENSE). Built for the Gloo AI Hackathon 2026 by [Kae Creative Apps](https://github.com/kae-creative-apps) and the Time Tapestry team.
+
+Admin access uses verified email sign-in for the fixed team allowlist. No shared admin password is accepted. See [the admin operations guide](docs/ADMIN_OPERATIONS.md).

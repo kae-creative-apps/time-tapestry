@@ -7,12 +7,12 @@ import {
 } from "@/lib/admin-collections";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
-  if (!adminAuthorized(req))
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: adminReadHeaders },
-    );
   try {
+    if (!(await adminAuthorized(req)))
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: adminReadHeaders },
+      );
     const rawOffset = Number(req.nextUrl.searchParams.get("offset") || 0),
       rawLimit = Number(req.nextUrl.searchParams.get("limit") || 50);
     if (

@@ -5,12 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import {
-  createAdminSession,
-  verifyAdminSecret,
-  verifyAdminToken,
-  getAdminTokenFromRequest,
-} from "../src/lib/admin-auth";
+import { isAdminEmail, adminReturnPath } from "../src/lib/admin-policy";
 let directory: string;
 let rate: typeof import("../src/lib/security/rate-limit");
 let usage: typeof import("../src/lib/collection/usage");
@@ -48,33 +43,29 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test("admin sessions expire and reject raw secrets, query tokens and tampering", () => {
-  const now = Date.now(),
-    token = createAdminSession(now);
-  assert.equal(verifyAdminSecret(process.env.ADMIN_SECRET), true);
-  assert.equal(verifyAdminSecret("incorrect"), false);
-  assert.equal(verifyAdminToken(token, now), true);
-  assert.equal(verifyAdminToken(process.env.ADMIN_SECRET), false);
-  assert.equal(verifyAdminToken(`${token.slice(0, -4)}xxxx`, now), false);
-  assert.equal(verifyAdminToken(token, now + 7 * 86400_000), false);
+test("admin allowlist is exact and redirects cannot carry capabilities", () => {
+  assert.equal(isAdminEmail("team@foronestudios.com"), true);
+  assert.equal(isAdminEmail("KBROOKS@gloo.us"), true);
+  for (const email of [
+    "attacker@gloo.us",
+    "team+alias@foronestudios.com",
+    "team@foronestudios.com.attacker.test",
+    null,
+  ])
+    assert.equal(isAdminEmail(email), false);
   assert.equal(
-    getAdminTokenFromRequest(
-      new NextRequest(`http://localhost/?admin_token=${token}`),
-    ),
-    undefined,
+    adminReturnPath("/admin/collections/collection123"),
+    "/admin/collections/collection123",
   );
-  assert.equal(
-    getAdminTokenFromRequest(
-      new NextRequest("http://localhost/", {
-        headers: { cookie: `admin_token=${token}` },
-      }),
-    ),
-    token,
-  );
-  delete process.env.ADMIN_SECRET;
-  assert.equal(verifyAdminToken(token), false);
-  assert.throws(() => createAdminSession());
-  process.env.ADMIN_SECRET = "fixture-admin-secret-not-for-deployment";
+  for (const route of [
+    "//outside.test",
+    "/admin/login",
+    "/admin/collections/collection123?key=secret",
+    "/admin/../account",
+    "/api/admin/collections",
+    "https://outside.test/admin",
+  ])
+    assert.equal(adminReturnPath(route), "/admin/collections");
 });
 
 test("local rate counter serializes concurrent calls and resets after its window", async () => {

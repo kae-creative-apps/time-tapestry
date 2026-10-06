@@ -10,33 +10,52 @@ export function InterviewProgress({
   faithFraming,
   variant = "live",
   paused = false,
+  compact = false,
 }: {
   activeChapterId?: ChapterId;
   answeredChapterIds?: readonly string[];
   faithFraming?: "faith" | "beliefs";
   variant?: "live" | "intro";
   paused?: boolean;
+  compact?: boolean;
 }) {
   const progress = getInterviewProgress(activeChapterId, answeredChapterIds);
   const intro = variant === "intro";
   const remaining = progress.otherAreasRemaining;
   const status =
     progress.answeredCount === 4
-      ? "You’ve shared an answer in all four areas."
+      ? "You’ve shared an answer in all four parts."
       : remaining > 0
-        ? `${remaining} other story ${remaining === 1 ? "area" : "areas"} to explore`
-        : "This is the last area to explore.";
+        ? `${remaining} more ${remaining === 1 ? "part" : "parts"} to explore`
+        : "This is the last part to explore.";
+
+  if (compact)
+    return (
+      <section
+        aria-label="Interview progress"
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-warmgray-200 bg-paper-100 px-5 py-3 text-base text-ink-700 sm:px-8"
+      >
+        <p className="font-medium">Part {progress.position} of 4</p>
+        <p role="status" className="text-ink-500">
+          {status}
+        </p>
+      </section>
+    );
 
   return (
     <section
       className="border-b border-warmgray-200 bg-paper-100 px-5 py-5 text-ink-700 sm:px-8"
-      aria-label={intro ? "The four story areas" : "Story area progress"}
+      aria-label={intro ? "The four parts of your story" : "Interview progress"}
     >
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="text-base font-medium">Your story, in four parts</h2>
         {!intro && (
-          <p className="text-base text-ink-500" role="status" aria-live="polite">
-            <span className="sr-only">Story area {progress.position} of 4. </span>
+          <p
+            className="text-base text-ink-500"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="sr-only">Part {progress.position} of 4. </span>
             {status}
           </p>
         )}
@@ -58,12 +77,20 @@ export function InterviewProgress({
                   {index + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className={`text-base leading-6 ${current ? "font-medium" : "text-ink-500"}`}>
+                  <p
+                    className={`text-base leading-6 ${current ? "font-medium" : "text-ink-500"}`}
+                  >
                     {interviewChapterTitle(area.id, faithFraming)}
                   </p>
                   {!intro && (
                     <p className="mt-1 text-sm leading-5 text-ink-500">
-                      {current ? (paused ? "Paused here" : "Here now") : area.answered ? "Answer shared" : "To explore"}
+                      {current
+                        ? paused
+                          ? "Paused here"
+                          : "Here now"
+                        : area.answered
+                          ? "Answer shared"
+                          : "To explore"}
                     </p>
                   )}
                 </div>

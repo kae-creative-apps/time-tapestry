@@ -320,6 +320,21 @@ export default function Review({
         </div>
         {approved ? (
           <>
+            <section className="mb-6 rounded-2xl border border-warmgray-200 bg-white p-6">
+              <h2 className="font-display text-2xl font-semibold">
+                Keep your story growing.
+              </h2>
+              <p className="mt-3 text-lg leading-8">
+                Your original gift is complete. Add a memory, answer a family
+                question, or revisit your stories.
+              </p>
+              <a
+                className={`${portalPrimary} mt-5`}
+                href={`/collection/${encodeURIComponent(id)}/stories?key=${encodeURIComponent(accessKey)}`}
+              >
+                Open my story library
+              </a>
+            </section>
             <CollectionSharing
               collection={c}
               busy={busy}

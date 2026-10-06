@@ -1,11 +1,32 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { test } from "node:test";
+import { after, before, test } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { NextRequest } from "next/server";
-import { POST as webhook } from "../src/app/api/collection/webhooks/lob/route";
-import { POST as legacyUpload } from "../src/app/api/video/upload/route";
-import { POST as legacyUploadToken } from "../src/app/api/video/upload-url/route";
-import { createAdminSession } from "../src/lib/admin-auth";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
+let webhook: typeof import("../src/app/api/collection/webhooks/lob/route").POST;
+let legacyUpload: typeof import("../src/app/api/video/upload/route").POST;
+let legacyUploadToken: typeof import("../src/app/api/video/upload-url/route").POST;
+let directory: string;
+before(async () => {
+  directory = await mkdtemp(path.join(os.tmpdir(), "webhook-admin-"));
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    SECURITY_LOCAL_BYPASS: "true",
+    COLLECTION_DATA_DIR: directory,
+  });
+  for (const name of ["VERCEL", "KV_REST_API_URL", "KV_REST_API_TOKEN"])
+    delete process.env[name];
+  webhook = (await import("../src/app/api/collection/webhooks/lob/route")).POST;
+  legacyUpload = (await import("../src/app/api/video/upload/route")).POST;
+  legacyUploadToken = (await import("../src/app/api/video/upload-url/route"))
+    .POST;
+});
+after(async () => {
+  await rm(directory, { recursive: true, force: true });
+});
 
 const secret = "synthetic-webhook-signing-key";
 function headers() {
@@ -135,11 +156,16 @@ test("both legacy upload routes remain admin protected and issue no upload token
   for (const handler of [legacyUpload, legacyUploadToken])
     for (const authenticated of [false, true]) {
       const request = streamingRequest(
-        authenticated ? { cookie: `admin_token=${createAdminSession()}` } : {},
+        authenticated
+          ? {
+              cookie: await verifiedRecipientCookie("team@foronestudios.com"),
+              origin: "http://localhost",
+            }
+          : {},
       );
       const response = await handler(request.req);
       assert.equal(response.status, authenticated ? 410 : 401);
-      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.match(response.headers.get("cache-control") || "", /no-store/);
       assert.equal(request.reads(), 0);
       const payload = await response.json();
       assert.deepEqual(Object.keys(payload), ["error"]);

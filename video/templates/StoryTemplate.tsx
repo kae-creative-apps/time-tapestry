@@ -96,9 +96,17 @@ type StoryIdentity = {
   title: string;
   storytellerName: string;
   attribution?: string;
+  chapterLabel?: string;
+  promptQuestion?: string;
 };
 
-function TemplateHeader({ chapterNumber }: { chapterNumber: number }) {
+function TemplateHeader({
+  chapterNumber,
+  chapterLabel,
+}: {
+  chapterNumber: number;
+  chapterLabel?: string;
+}) {
   return (
     <div
       style={{
@@ -124,7 +132,7 @@ function TemplateHeader({ chapterNumber }: { chapterNumber: number }) {
         }}
       >
         <div style={{ width: 42, height: 2, background: BRAND_COLORS.sage }} />
-        Story {chapterNumber} of 4
+        {chapterLabel || `Story ${chapterNumber} of 4`}
       </div>
     </div>
   );
@@ -135,6 +143,8 @@ export function TemplateTitle({
   title,
   storytellerName,
   attribution,
+  chapterLabel,
+  promptQuestion,
 }: StoryIdentity) {
   const frame = useCurrentFrame();
   const { theme } = storyFilmTemplate(chapterNumber);
@@ -144,7 +154,10 @@ export function TemplateTitle({
   return (
     <AbsoluteFill style={{ color: BRAND_COLORS.espresso, fontFamily: FONT }}>
       <TemplateBackground chapterNumber={chapterNumber} />
-      <TemplateHeader chapterNumber={chapterNumber} />
+      <TemplateHeader
+        chapterNumber={chapterNumber}
+        chapterLabel={chapterLabel}
+      />
       <div
         style={{
           position: "absolute",
@@ -165,11 +178,25 @@ export function TemplateTitle({
             color: BRAND_COLORS.taupe,
           }}
         >
-          {customTitle ? theme : "A story from " + storytellerName}
+          {promptQuestion
+            ? "A memory to pass down"
+            : customTitle
+              ? theme
+              : "A story from " + storytellerName}
         </div>
         <div
           style={{
-            fontSize: title.length > 115 ? 76 : title.length > 65 ? 88 : 108,
+            fontSize: promptQuestion
+              ? promptQuestion.length > 150
+                ? 66
+                : promptQuestion.length > 95
+                  ? 76
+                  : 88
+              : title.length > 115
+                ? 76
+                : title.length > 65
+                  ? 88
+                  : 108,
             fontWeight: 600,
             letterSpacing: -2.3,
             lineHeight: 1.15,
@@ -182,7 +209,7 @@ export function TemplateTitle({
             translate: `0 ${interpolate(frame, [0, 24], [18, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}px`,
           }}
         >
-          {title.trim() || theme}
+          {promptQuestion || title.trim() || theme}
         </div>
         {customTitle && (
           <div
@@ -326,6 +353,7 @@ export function TemplateOrbScene({
   title,
   storytellerName,
   attribution,
+  chapterLabel,
   caption,
   level = 0,
   motion = 0,
@@ -334,7 +362,10 @@ export function TemplateOrbScene({
   return (
     <AbsoluteFill style={{ color: BRAND_COLORS.espresso, fontFamily: FONT }}>
       <TemplateBackground chapterNumber={chapterNumber} />
-      <TemplateHeader chapterNumber={chapterNumber} />
+      <TemplateHeader
+        chapterNumber={chapterNumber}
+        chapterLabel={chapterLabel}
+      />
       <div
         style={{
           position: "absolute",

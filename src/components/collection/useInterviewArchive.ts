@@ -20,6 +20,12 @@ import {
   type ArchiveLocalTake,
 } from "@/lib/collection/archive-utils";
 import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock";
+import { hasUnconfirmedRecording } from "@/lib/collection/interview-save-status";
+import {
+  recordingBackupProgress,
+  recordingUploadProgress,
+  type RecordingUploadProgress,
+} from "@/lib/collection/recording-backup-progress";
 import type { InterviewSegment } from "@/lib/collection/types";
 import {
   interviewCaptureConstraints,
@@ -43,6 +49,7 @@ export type ArchiveRecording = {
   empty: boolean;
   recovered: boolean;
   error?: string;
+  uploadProgress?: RecordingUploadProgress;
 };
 
 type Props = {
@@ -144,6 +151,7 @@ export function useInterviewArchive({
   const durable = useRef(new Map<string, boolean>());
   const errors = useRef(new Map<string, string>());
   const uploads = useRef(new Map<string, Promise<void>>());
+  const uploadProgress = useRef(new Map<string, RecordingUploadProgress>());
   const finalizing = useRef(new Set<Promise<void>>());
   const rollover = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callback = useRef(onSegmentSaved);
@@ -181,6 +189,7 @@ export function useInterviewArchive({
           empty: emptyAttempts.current.has(take.id),
           recovered: take.archive.recovered === true,
           error: errors.current.get(take.id),
+          uploadProgress: uploadProgress.current.get(take.id),
         }))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     );
@@ -221,6 +230,13 @@ export function useInterviewArchive({
               "No recorded audio or video was saved for this segment.",
             );
           if (!take.mediaId) {
+            uploadProgress.current.set(
+              id,
+              directUpload
+                ? recordingUploadProgress(0, blob.size)
+                : { stage: "uploading" },
+            );
+            publish();
             const endpoint = `/api/collection/${encodeURIComponent(collectionId)}/media`;
             const query = `?key=${encodeURIComponent(accessKey)}`;
             const name = `interview-${take.id}.${recordingExtension(take.mimeType)}`;
@@ -239,7 +255,21 @@ export function useInterviewArchive({
                   mimeType: blob.type.split(";")[0],
                   name,
                 }),
+                onUploadProgress: ({ loaded, total }) => {
+                  if (
+                    !mounted.current ||
+                    stored.current.get(id)?.state === "backed_up"
+                  )
+                    return;
+                  uploadProgress.current.set(
+                    id,
+                    recordingUploadProgress(loaded, total),
+                  );
+                  publish();
+                },
               });
+              uploadProgress.current.set(id, { stage: "confirming" });
+              publish();
               const result = await responseData(
                 await fetch(`${endpoint}${query}`, {
                   method: "POST",
@@ -267,11 +297,14 @@ export function useInterviewArchive({
             await putLocalTake(take).catch(() => undefined);
           }
           if (!mounted.current) return;
+          uploadProgress.current.set(id, { stage: "confirming" });
+          publish();
           const sessionId = take.archive.sessionId;
           take = await acknowledgeArchive(take, (segment) =>
             callback.current(segment, sessionId),
           );
           stored.current.set(id, take);
+          uploadProgress.current.delete(id);
           await putLocalTake(take).catch(() => undefined);
           if (durable.current.get(id)) memory.current.delete(id);
           if (
@@ -649,11 +682,9 @@ export function useInterviewArchive({
           );
         deviceLockRelease.current ??=
           await claimRecordingDeviceLock(collectionId);
-        const persistent = await requestRecordingStorage();
-        if (!persistent)
-          setWarning(
-            "This browser may clear device storage. Wait for backup confirmation and download important recordings.",
-          );
+        // Persistence is an optional browser retention preference, not a save
+        // result. Actual IndexedDB failures still reject and stop capture.
+        await requestRecordingStorage();
         const recovered = [...stored.current.values()].find(
           (take) => take.archive.sessionId === sessionId,
         );
@@ -916,6 +947,12 @@ export function useInterviewArchive({
         active.current ||
         uploads.current.size ||
         finalizing.current.size ||
+        hasUnconfirmedRecording(
+          [...stored.current.values()].map((take) => ({
+            state: take.state,
+            empty: emptyAttempts.current.has(take.id),
+          })),
+        ) ||
         [...memory.current.keys()].some(
           (id) => stored.current.get(id)?.state !== "backed_up",
         )
@@ -939,6 +976,10 @@ export function useInterviewArchive({
     stream,
     status,
     recordings,
+    backupProgress: recordingBackupProgress(recordings, {
+      recording: status === "recording" || status === "starting",
+      saving: saving || status === "stopping",
+    }),
     error,
     warning,
     saving,

@@ -80,7 +80,9 @@ export async function POST(
         recipient.revokedAt ??= now;
         for (const notification of c.notifications)
           if (
-            notification.kind === "recipient_invitation" &&
+            ["recipient_invitation", "living_story_published"].includes(
+              notification.kind,
+            ) &&
             notification.recipientId === recipient.id &&
             ["pending", "failed"].includes(notification.status)
           ) {

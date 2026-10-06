@@ -3,6 +3,7 @@ import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
 import type { PrivateGenerosityNotes } from "./generosity-notes";
 import type { InterviewPreparationView } from "./interview-preparation-types";
+import type { LivingStory } from "./living-story-types";
 export type Contact = { name: string; email: string; phone?: string };
 export type AdditionalRecipient = {
   id: string;
@@ -139,6 +140,8 @@ export type Reply = {
   createdAt: string;
 };
 export type Notification = {
+  livingStoryMomentId?: string;
+  livingStoryBatchId?: string;
   /** Trusted recipient membership for recipient-specific delivery. */
   recipientId?: string;
   id: string;
@@ -154,6 +157,8 @@ export type Notification = {
     | "postcard_followup"
     | "reply_invitation"
     | "reply_received"
+    | "living_story_request"
+    | "living_story_published"
     | "address_request";
   to: string;
   subject: string;
@@ -169,6 +174,7 @@ export type Notification = {
 };
 export type PostcardCadence = "biweekly" | "quarterly";
 export type Collection = {
+  livingStory?: LivingStory;
   /** Owner-only requests to check generated wording against the saved recording. */
   storyIssues?: Array<{
     id: string;
@@ -280,6 +286,10 @@ export type CollectionView = Omit<
   };
 };
 export type StoredMedia = {
+  /** Original recording used by a server-generated living-story film. */
+  originalSourceMediaId?: string;
+  /** Server-validated upload scope for an addition to the frozen approved gift. */
+  livingStoryMomentId?: string;
   /** Untagged historical recipient uploads belong to the primary recipient. */
   recipientId?: string;
   /** Provider output written only by the authenticated server transcription route. */

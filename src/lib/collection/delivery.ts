@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { livingStoryNotificationSuppressionReason } from "./living-story-notifications";
 import { BRAND_COLORS } from "../brand-art";
 import { CHAPTERS } from "../interview-state";
 import {
@@ -164,6 +165,8 @@ export function notificationSuppressionReason(
   c: Collection,
   n: Notification,
 ): string | null {
+  const livingStoryReason = livingStoryNotificationSuppressionReason(c, n);
+  if (livingStoryReason) return livingStoryReason;
   if (
     ["preparation_attention", "postcard_ready", "postcard_attention"].includes(
       n.kind,
@@ -591,6 +594,8 @@ function notificationRequest(c: Collection, n: Notification) {
     postcard_followup: "Read the story",
     reply_invitation: "Send a reply",
     reply_received: "See their reply",
+    living_story_request: "See your questions",
+    living_story_published: "See the new story",
     address_request: "Add your mailing address",
     preparation_attention: "Check preparation",
     postcard_ready: "Review your postcards",
@@ -908,6 +913,25 @@ export async function currentNotificationSuppressionReason(
   n: Notification,
 ) {
   const reason = notificationSuppressionReason(c, n);
+  if (!reason && n.kind === "living_story_published") {
+    const moment = c.livingStory?.moments.find(
+      (item) => item.id === n.livingStoryMomentId,
+    );
+    const media = moment?.videoMediaId && (await getMedia(moment.videoMediaId));
+    if (
+      !moment ||
+      !media ||
+      media.collectionId !== c.id ||
+      media.role !== "owner" ||
+      media.provenance !== "generated_film" ||
+      media.livingStoryMomentId !== moment.id ||
+      media.originalSourceMediaId !== moment.sourceMediaId ||
+      media.mimeType !== "video/mp4" ||
+      media.bytes <= 0 ||
+      !(media.localPath || media.url)
+    )
+      return "This new story is waiting for verified private film storage.";
+  }
   if (!reason && n.kind === "preparation_attention") {
     const workId = n.id.slice(`${c.id}:preparation-attention:`.length);
     if (workId.startsWith("prep_")) {

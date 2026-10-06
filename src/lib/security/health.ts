@@ -1,4 +1,5 @@
 import { metadataLimitBytes } from "./storage";
+import { accountEmailAvailable } from "../accounts/mail";
 import path from "node:path";
 import { dataRoot } from "../collection/store";
 import { MAX_MEDIA_BYTES, collectionStorageLimit } from "../collection/usage";
@@ -41,7 +42,7 @@ export function getSecurityHealth() {
     mediaStoreConfigured,
     cloudStorageConfigured: durableMetadataConfigured && mediaStoreConfigured,
     protectionConfigured,
-    adminConfigured: Boolean(process.env.ADMIN_SECRET),
+    adminConfigured: accountEmailAvailable(),
     limits: {
       collectionBytes: storageLimitBytes,
       fileBytes: MAX_MEDIA_BYTES,

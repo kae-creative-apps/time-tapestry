@@ -44,6 +44,7 @@ export async function transcribeOriginal(
         startMs: Math.round((word.start ?? NaN) * 1000),
         endMs: Math.round((word.end ?? NaN) * 1000),
         speakerId: word.speakerId,
+        languageCode: result.languageCode,
       }));
     return validateSourceWords(words, durationMs, mediaId);
   } catch (error) {

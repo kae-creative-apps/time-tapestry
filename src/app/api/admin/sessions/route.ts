@@ -1,19 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { listSessions, Session } from '@/lib/session';
+import { NextRequest, NextResponse } from "next/server";
+import { listSessions, Session } from "@/lib/session";
+import { adminForRequest } from "@/lib/admin-auth";
 import {
-  getAdminTokenFromRequest,
-  verifyAdminToken
-} from '@/lib/admin-auth';
+  adminReadHeaders,
+  auditAdminRead,
+  redactAdminSecrets,
+} from "@/lib/admin-collections";
 
 function matchesName(session: Session, query: string): boolean {
   const q = query.toLowerCase();
-  const gp = session.grandparent?.name?.toLowerCase() ?? '';
-  const gc = session.grandchild?.name?.toLowerCase() ?? '';
-  const family = session.familyName?.toLowerCase() ?? '';
-  return gp.includes(q) || gc.includes(q) || family.includes(q) || session.id.toLowerCase().includes(q);
+  const gp = session.grandparent?.name?.toLowerCase() ?? "";
+  const gc = session.grandchild?.name?.toLowerCase() ?? "";
+  const family = session.familyName?.toLowerCase() ?? "";
+  return (
+    gp.includes(q) ||
+    gc.includes(q) ||
+    family.includes(q) ||
+    session.id.toLowerCase().includes(q)
+  );
 }
 
-function inDateRange(dateIso: string | undefined, from: string | null, to: string | null): boolean {
+function inDateRange(
+  dateIso: string | undefined,
+  from: string | null,
+  to: string | null,
+): boolean {
   if (!dateIso) return false;
   const date = new Date(dateIso);
   if (from && date < new Date(from)) return false;
@@ -22,17 +33,19 @@ function inDateRange(dateIso: string | undefined, from: string | null, to: strin
 }
 
 export async function GET(request: NextRequest) {
-  const token = getAdminTokenFromRequest(request);
-  if (!verifyAdminToken(token)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    if (!(await adminForRequest(request))) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: adminReadHeaders },
+      );
+    }
+    await auditAdminRead(request, "legacy_read");
     const { searchParams } = request.nextUrl;
-    const status = searchParams.get('status');
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    const name = searchParams.get('name') ?? '';
+    const status = searchParams.get("status");
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const name = searchParams.get("name") ?? "";
 
     const sessions = await listSessions();
 
@@ -51,18 +64,23 @@ export async function GET(request: NextRequest) {
       updatedAt: session.updatedAt,
       status: session.status,
       initiationPath: session.initiationPath,
-      grandparentName: session.grandparent?.name ?? '',
-      grandchildName: session.grandchild?.name ?? '',
-      familyName: session.familyName ?? '',
+      grandparentName: session.grandparent?.name ?? "",
+      grandchildName: session.grandchild?.name ?? "",
+      familyName: session.familyName ?? "",
       interviewStartedAt: session.interview?.startedAt,
       interviewCompletedAt: session.interview?.completedAt,
       storyApprovedAt: session.story?.approvedAt,
-      postcardsScheduledCount: session.postcardsScheduled?.length ?? 0
+      postcardsScheduledCount: session.postcardsScheduled?.length ?? 0,
     }));
 
-    return NextResponse.json({ sessions: summaries });
-  } catch (error) {
-    console.error('Error listing sessions:', error);
-    return NextResponse.json({ error: 'Failed to list sessions' }, { status: 500 });
+    return NextResponse.json(
+      { sessions: summaries },
+      { headers: adminReadHeaders },
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to list sessions" },
+      { status: 503, headers: adminReadHeaders },
+    );
   }
 }

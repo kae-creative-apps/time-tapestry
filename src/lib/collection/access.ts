@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { livingStoryView } from "./living-story-view";
 import type { Collection, CollectionView } from "./types";
 import {
   PRIMARY_RECIPIENT_ID,
@@ -67,6 +68,7 @@ export function publicView(
       authorEmail: author?.email || "",
     };
   });
+  view.livingStory = livingStoryView(c, role);
   if (role !== "owner") {
     view.storyIssues = undefined;
     view.interviewPreparation = undefined;

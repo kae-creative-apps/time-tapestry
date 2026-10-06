@@ -9,6 +9,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import type { Collection } from "./types";
+import { selectedAnswers } from "./content";
 import { BRAND_COLORS } from "../brand-art";
 
 export class StoryBookError extends Error {}
@@ -22,27 +23,49 @@ export type StoryBook = {
     id: string;
     title: string;
     content: string;
+    quote?: string;
+    question?: string;
     encouragement?: string;
     scripture?: string;
   }>;
 };
 
+/** Pull only a complete sentence actually spoken by the storyteller. */
+export function storyQuoteFromTranscript(text: string): string | undefined {
+  const sentences = text.match(/[^.!?\n]+[.!?]+(?:[”"’])?/gu) || [];
+  return sentences
+    .map((sentence) => sentence.trim())
+    .find((sentence) => {
+      const count = sentence.split(/\s+/u).length;
+      return (
+        count >= 8 &&
+        count <= 40 &&
+        sentence.length <= 260 &&
+        !sentence.endsWith("?")
+      );
+    });
+}
+
 export function storyBookSnapshot(
   c: Collection,
   recipientName: string,
-  options: { draft?: boolean } = {},
+  options: { draft?: boolean; originalOnly?: boolean; through?: string } = {},
 ): StoryBook {
-  const chapters = ["q1", "q2", "q3", "q4"].map((id) => {
+  const chapters: StoryBook["chapters"] = ["q1", "q2", "q3", "q4"].map((id) => {
     const chapter = c.chapters.find((item) => item.id === id);
     if (!chapter?.title.trim() || !chapter.content.trim())
       throw new StoryBookError(
         "All four approved stories are needed before the book can be downloaded.",
       );
     const blessing = c.chapterBlessings[id];
+    const quote = selectedAnswers(c, id)
+      .map((answer) => storyQuoteFromTranscript(answer.text))
+      .find(Boolean);
     return {
       id,
       title: chapter.title,
       content: chapter.content,
+      ...(quote ? { quote } : {}),
       ...(blessing?.encouragement
         ? { encouragement: blessing.encouragement }
         : {}),
@@ -64,6 +87,38 @@ export function storyBookSnapshot(
     throw new StoryBookError(
       "Your story book will be ready after the collection is approved.",
     );
+  if (
+    options.through &&
+    (!Number.isFinite(Date.parse(options.through)) ||
+      new Date(options.through).toISOString() !== options.through)
+  )
+    throw new StoryBookError(
+      "This book edition is unavailable. Choose a saved edition from your library.",
+    );
+  if (c.status === "approved" && !options.originalOnly && !options.draft) {
+    const moments = (c.livingStory?.moments || [])
+      .filter(
+        (moment) =>
+          moment.status === "published" &&
+          moment.publishedAt &&
+          moment.videoMediaId &&
+          moment.content?.trim() &&
+          (!options.through || moment.publishedAt <= options.through),
+      )
+      .sort(
+        (a, b) =>
+          a.publishedAt!.localeCompare(b.publishedAt!) ||
+          a.id.localeCompare(b.id),
+      );
+    for (const moment of moments)
+      chapters.push({
+        id: moment.id,
+        title: moment.title,
+        content: moment.content!,
+        question: moment.question,
+        ...(moment.sourceQuote ? { quote: moment.sourceQuote } : {}),
+      });
+  }
   return {
     storytellerName: c.storyteller.name,
     recipientName,
@@ -166,6 +221,8 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     ...book.chapters.flatMap((chapter) => [
       chapter.title,
       chapter.content,
+      chapter.quote || "",
+      chapter.question || "",
       chapter.encouragement || "",
       chapter.scripture || "",
     ]),
@@ -234,7 +291,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   doc.setSubject(
     book.draft
       ? "Private draft for storyteller review"
-      : "A personal collection of four approved stories",
+      : "A personal collection of stories in the storyteller’s own words",
   );
   doc.setLanguage("en-US");
 
@@ -273,7 +330,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     throw new StoryBookError(
       "The names are too long for the book cover. Please ask the Time Tapestry team to help format the complete names.",
     );
-  cover.drawText("Four stories to keep and return to.", {
+  cover.drawText("Stories to keep and return to.", {
     x: margin,
     y: 92,
     font,
@@ -281,8 +338,43 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     color: ink,
   });
 
+  // Reserve contents pages before chapter layout, then fill in actual page numbers.
+  const contents: Array<{
+    page: PDFPage;
+    y: number;
+    lines: string[];
+    chapterIndex: number;
+  }> = [];
+  let contentsPage: PDFPage;
+  let contentsY = 0;
+  const addContentsPage = () => {
+    contentsPage = doc.addPage(PageSizes.Letter);
+    contentsPage.drawRectangle({ x: 0, y: 0, width, height, color: paper });
+    draw(contentsPage, "The stories inside", margin, height - 85, 27);
+    draw(
+      contentsPage,
+      "A life, remembered in their own words.",
+      margin,
+      height - 117,
+      12,
+    );
+    contentsY = height - 166;
+  };
+  addContentsPage();
+  book.chapters.forEach((chapter, chapterIndex) => {
+    const lines = wrapBookText(chapter.title, textWidth - 68, (value) =>
+      measure(value, 14),
+    );
+    const entryHeight = lines.length * 22 + 20;
+    if (contentsY - entryHeight < 75) addContentsPage();
+    contents.push({ page: contentsPage, y: contentsY, lines, chapterIndex });
+    contentsY -= entryHeight;
+  });
+  const chapterPages: number[] = [];
+
   for (const [index, chapter] of book.chapters.entries()) {
     let page = doc.addPage(PageSizes.Letter);
+    chapterPages.push(doc.getPageCount() - 1);
     let y = height - 66;
     const runningHeader = () => {
       page.drawText(`TIME TAPESTRY  /  STORY ${index + 1}`, {
@@ -315,6 +407,16 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     };
     block(chapter.title, 27, 35);
     y -= 20;
+    if (chapter.question) {
+      block(chapter.question, 12, 20);
+      y -= 16;
+    }
+    if (chapter.quote) {
+      block(`“${chapter.quote}”`, 18, 28);
+      y -= 5;
+      block(`In ${book.storytellerName}’s own words`, 10, 17);
+      y -= 20;
+    }
     block(chapter.content);
     if (chapter.encouragement || chapter.scripture) {
       y -= 20;
@@ -326,6 +428,26 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
         block(chapter.scripture);
       }
     }
+  }
+  for (const entry of contents) {
+    draw(
+      entry.page,
+      String(entry.chapterIndex + 1).padStart(2, "0"),
+      margin,
+      entry.y,
+      11,
+    );
+    entry.lines.forEach((line, i) =>
+      draw(entry.page, line, margin + 30, entry.y - i * 22, 14),
+    );
+    const pageNumber = String(chapterPages[entry.chapterIndex]);
+    draw(
+      entry.page,
+      pageNumber,
+      width - margin - measure(pageNumber, 12),
+      entry.y,
+      12,
+    );
   }
   const pages = doc.getPages();
   for (const [index, page] of pages.entries()) {

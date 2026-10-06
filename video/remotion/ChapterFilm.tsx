@@ -19,7 +19,7 @@ import {
   type ChapterVideoPlan,
   type VideoClip,
   VIDEO_FPS,
-  VIDEO_INTRO_SECONDS,
+  chapterIntroSeconds,
   VIDEO_CLOSER_SECONDS,
   chapterDurationFrames,
   clipFrames,
@@ -88,6 +88,7 @@ function StoryClip({
         <TemplateOrbScene
           chapterNumber={plan.chapterNumber}
           title={plan.title}
+          chapterLabel={plan.promptQuestion ? "A story to keep" : undefined}
           storytellerName={plan.storytellerName}
           attribution="In their own voice"
           caption={caption?.text}
@@ -152,7 +153,7 @@ export function ChapterFilm({
     : hasText
       ? "Original recordings and written words"
       : "In their own voice";
-  let cursor = VIDEO_INTRO_SECONDS * VIDEO_FPS;
+  let cursor = chapterIntroSeconds(plan) * VIDEO_FPS;
   const clips = plan.clips.map((clip) => {
     const from = cursor;
     const frames = clipFrames(clip);
@@ -180,12 +181,14 @@ export function ChapterFilm({
       <Sequence
         name="Chapter title"
         from={0}
-        durationInFrames={VIDEO_INTRO_SECONDS * VIDEO_FPS}
+        durationInFrames={chapterIntroSeconds(plan) * VIDEO_FPS}
       >
         <TemplateTitle
           chapterNumber={plan.chapterNumber}
           title={plan.title}
+          chapterLabel={plan.promptQuestion ? "A story to keep" : undefined}
           storytellerName={plan.storytellerName}
+          promptQuestion={plan.promptQuestion}
           attribution={attribution}
         />
       </Sequence>

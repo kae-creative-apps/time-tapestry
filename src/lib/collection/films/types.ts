@@ -180,6 +180,9 @@ export type FilmJobView = Pick<
   | "nextAttemptAt"
   | "error"
 > & {
+  attempts: number;
+  retryAllowed: boolean;
+  retryBlockedReason?: string;
   chapters: Pick<
     FilmChapter,
     "chapterId" | "title" | "status" | "progress" | "error" | "artifact"

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock";
 import type { AnswerTake } from "@/lib/collection/types";
 import {
+  listenForCaptureInterruption,
   requireActiveCapture,
   requireInterviewAudioTrack,
 } from "@/lib/collection/interview-devices";
@@ -19,6 +20,12 @@ import {
   type LocalTake,
 } from "@/lib/collection/local-takes";
 
+import {
+  confirmSavedMediaSelection,
+  newestRecoverableTake,
+  latestMediaSelection,
+} from "@/lib/collection/saved-media-selection";
+
 const MAX_SECONDS = 10 * 60;
 const NOT_SAVED_WARNING =
   "Not saved yet. Keep this tab open and download your recording.";
@@ -32,6 +39,7 @@ export type SavedRecorderProps = {
   accessKey: string;
   kind: "video" | "voice";
   questionId: string;
+  momentId?: string;
   prompt: string;
   onSaved?: (take: AnswerTake) => void;
   onMediaSaved?: (media: {
@@ -39,8 +47,10 @@ export type SavedRecorderProps = {
     kind: "video" | "voice";
     durationSeconds?: number;
     localTakeId: string;
-  }) => void;
+  }) => void | Promise<void>;
   onBusyChange?: (busy: boolean) => void;
+  onPendingChange?: (pending: boolean) => void;
+  disabled?: boolean;
   directUpload?: boolean;
   autoRecoverBackup?: boolean;
   suggestedDuration?: string;
@@ -173,10 +183,13 @@ export default function SavedRecorder({
   accessKey,
   kind,
   questionId,
+  momentId,
   prompt,
   onSaved,
   onMediaSaved,
   onBusyChange,
+  onPendingChange,
+  disabled = false,
   directUpload = false,
   autoRecoverBackup = false,
   suggestedDuration = "Aim for 2 to 5 minutes. A short, specific memory is enough.",
@@ -185,6 +198,7 @@ export default function SavedRecorder({
   const limit = Math.min(MAX_SECONDS, Math.max(30, maxSeconds));
   const endpoint = `/api/collection/${encodeURIComponent(collectionId)}`;
   const query = `?key=${encodeURIComponent(accessKey)}`;
+  const [checkingLocal, setCheckingLocal] = useState(true);
   const [phase, setPhase] = useState<
     "idle" | "starting" | "recording" | "saving"
   >("idle");
@@ -207,19 +221,32 @@ export default function SavedRecorder({
   const mounted = useRef(true);
   const deviceLockRelease = useRef<(() => void) | null>(null);
   const capturePending = useRef(false);
+  const backupPending = useRef(false);
+  const mediaSelection = Boolean(onMediaSaved);
   const recoveryAttempted = useRef(new Set<string>());
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const onMediaSavedRef = useRef(onMediaSaved);
   onMediaSavedRef.current = onMediaSaved;
-  const busy = phase !== "idle" || uploading !== null;
+  const internallyBusy = phase !== "idle" || uploading !== null;
+  const busy = internallyBusy || disabled;
+  const memoryOnly = takes.some(
+    (take) =>
+      take.state !== "backed_up" &&
+      fallbacks[take.id] &&
+      localCopies[take.id] !== true,
+  );
 
   const refresh = useCallback(async () => {
     try {
       const stored = await listLocalTakes(collectionId, questionId);
       const checks = await Promise.all(
         stored
-          .filter((take) => take.kind === kind && take.state !== "backed_up")
+          .filter(
+            (take) =>
+              (mediaSelection || take.kind === kind) &&
+              take.state !== "backed_up",
+          )
           .map(
             async (take) => [take.id, await hasDurableLocalCopy(take)] as const,
           ),
@@ -235,14 +262,16 @@ export default function SavedRecorder({
             (item) => !stored.some((saved) => saved.id === item.id),
           );
           return [
-            ...stored.filter((item) => item.kind === kind),
+            ...stored.filter((item) => mediaSelection || item.kind === kind),
             ...memoryOnly,
           ];
         });
     } catch (error) {
       if (mounted.current) setStorageWarning(friendlyRecordingError(error));
+    } finally {
+      if (mounted.current) setCheckingLocal(false);
     }
-  }, [collectionId, questionId, kind]);
+  }, [collectionId, questionId, kind, mediaSelection]);
 
   useEffect(() => {
     mounted.current = true;
@@ -251,10 +280,18 @@ export default function SavedRecorder({
       mounted.current = false;
     };
   }, [refresh]);
+  const latestSelection = latestMediaSelection(takes);
+  const pendingSelection =
+    checkingLocal ||
+    (mediaSelection &&
+      Boolean(latestSelection && latestSelection.state !== "backed_up"));
   useEffect(() => {
-    onBusyChange?.(busy);
+    onPendingChange?.(pendingSelection);
+  }, [onPendingChange, pendingSelection]);
+  useEffect(() => {
+    onBusyChange?.(internallyBusy || memoryOnly);
     return () => onBusyChange?.(false);
-  }, [busy, onBusyChange]);
+  }, [internallyBusy, memoryOnly, onBusyChange]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       const memoryOnly = takes.some(
@@ -312,19 +349,21 @@ export default function SavedRecorder({
           mediaId,
           mimeType: blob.type.split(";")[0],
           name,
+          ...(momentId ? { momentId } : {}),
         }),
       });
       const result = await responseData(
         await fetch(`${endpoint}/media${query}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mediaId }),
+          body: JSON.stringify({ mediaId, ...(momentId ? { momentId } : {}) }),
         }),
       );
       return result.mediaId ?? mediaId;
     }
     const form = new FormData();
     form.append("file", blob, name);
+    if (momentId) form.append("momentId", momentId);
     const result = await responseData(
       await fetch(`${endpoint}/media${query}`, { method: "POST", body: form }),
     );
@@ -332,16 +371,18 @@ export default function SavedRecorder({
   }
 
   async function backup(take: LocalTake, blobOverride?: Blob) {
+    if (backupPending.current || disabled || !mounted.current) return;
+    backupPending.current = true;
     setUploading(take.id);
     setError("");
     let current = take;
     let recordingBlob = blobOverride;
     try {
-      const blob = blobOverride ?? (await getTakeBlob(take));
-      recordingBlob = blob;
-      if (!blob.size)
-        throw new Error("This take is empty. Please record another take.");
       if (!current.mediaId) {
+        const blob = blobOverride ?? (await getTakeBlob(take));
+        recordingBlob = blob;
+        if (!blob.size)
+          throw new Error("This take is empty. Please record another take.");
         current = {
           ...current,
           mediaId: await uploadMedia(blob, `${take.questionId}-${take.id}`),
@@ -357,22 +398,18 @@ export default function SavedRecorder({
         }
       }
       if (onMediaSavedRef.current && current.mediaId) {
-        const mediaId = current.mediaId;
-        current = {
-          ...current,
-          state: "backed_up",
-          updatedAt: new Date().toISOString(),
-        };
-        try {
-          await putLocalTake(current);
-        } catch {
-          /* The media upload is confirmed. */
-        }
-        onMediaSavedRef.current({
-          mediaId,
-          kind,
-          durationSeconds: current.durationSeconds,
-          localTakeId: current.id,
+        if (!mounted.current) return;
+        current = await confirmSavedMediaSelection(current, async (saved) => {
+          if (!mounted.current)
+            throw new Error(
+              "Reopen this story to finish saving your recording.",
+            );
+          await onMediaSavedRef.current!({
+            mediaId: saved.mediaId!,
+            kind: saved.kind as "video" | "voice",
+            durationSeconds: saved.durationSeconds,
+            localTakeId: saved.id,
+          });
         });
         if (mounted.current) {
           setTakes((previous) => [
@@ -383,7 +420,9 @@ export default function SavedRecorder({
             previous === NOT_SAVED_WARNING ? "" : previous,
           );
           setMessage(
-            "Your recording is backed up. Review it, then choose Send my message when you are ready.",
+            momentId
+              ? "Your recording is saved to this story. Listen, then submit when you are ready."
+              : "Your recording is backed up. Review it, then choose Send my message when you are ready.",
           );
         }
         return;
@@ -504,7 +543,9 @@ export default function SavedRecorder({
             ? `${friendlyRecordingError(error)} Your recording is saved on this device. You can retry the backup.`
             : recordingBlob?.size
               ? NOT_SAVED_WARNING
-              : "We could not find a saved recording for this take. Please record another take.",
+              : current.mediaId
+                ? `${friendlyRecordingError(error)} The uploaded recording is kept. Try saving it to this story again.`
+                : "We could not find a saved recording for this take. Please record another take.",
         );
         setTakes((previous) => [
           ...previous.filter((item) => item.id !== current.id),
@@ -512,18 +553,17 @@ export default function SavedRecorder({
         ]);
       }
     } finally {
+      backupPending.current = false;
       if (mounted.current) setUploading(null);
     }
   }
 
   useEffect(() => {
     if (!autoRecoverBackup || busy) return;
-    const take = takes.find(
-      (item) =>
-        item.state !== "backed_up" &&
-        item.state !== "recording" &&
-        localCopies[item.id] === true &&
-        !recoveryAttempted.current.has(item.id),
+    const take = newestRecoverableTake(
+      takes,
+      localCopies,
+      recoveryAttempted.current,
     );
     if (!take) return;
     recoveryAttempted.current.add(take.id);
@@ -560,12 +600,8 @@ export default function SavedRecorder({
         );
       deviceLockRelease.current ??=
         await claimRecordingDeviceLock(collectionId);
-      const persistent = await requestRecordingStorage();
+      await requestRecordingStorage();
       if (!mounted.current) throw new Error("Recording was cancelled.");
-      if (!persistent)
-        setStorageWarning(
-          "Your browser may clear device storage. Keep this tab open until the take says Backed up, and download a backup for important recordings.",
-        );
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
         video:
@@ -678,7 +714,16 @@ export default function SavedRecorder({
           );
         if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
       };
+      const stopObserving = listenForCaptureInterruption(mediaStream, () => {
+        if (mediaRecorder.state !== "recording") return;
+        if (mounted.current)
+          setError(
+            "Your microphone or camera stopped. We are saving the recorded portion. Check it before submitting.",
+          );
+        mediaRecorder.stop();
+      });
       mediaRecorder.onstop = async () => {
+        stopObserving();
         if (mounted.current) setPhase("saving");
         if (speechRecorder?.state === "recording") speechRecorder.stop();
         await speechStopped;
@@ -822,6 +867,11 @@ export default function SavedRecorder({
           </p>
         )}
       </div>
+      {(phase === "saving" || uploading) && (
+        <p role="status" className="text-base font-semibold">
+          Keep this page open and your computer awake until saving is confirmed.
+        </p>
+      )}
       {storageWarning && (
         <p className="text-sm text-ink-400" role="status">
           {storageWarning}
@@ -882,20 +932,12 @@ export default function SavedRecorder({
             type="button"
             className={secondary}
             disabled={busy}
-            onClick={() => {
-              if (take.state === "backed_up" && take.mediaId && onMediaSaved) {
-                onMediaSaved({
-                  mediaId: take.mediaId,
-                  kind,
-                  durationSeconds: take.durationSeconds,
-                  localTakeId: take.id,
-                });
-                setMessage(
-                  "This recording is selected. Choose Send my message when you are ready.",
-                );
-              } else
-                void backup({ ...take, state: "local" }, fallbacks[take.id]);
-            }}
+            onClick={() =>
+              void backup(
+                take.state === "recording" ? { ...take, state: "local" } : take,
+                fallbacks[take.id],
+              )
+            }
           >
             {uploading === take.id
               ? onMediaSaved

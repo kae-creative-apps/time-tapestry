@@ -13,6 +13,7 @@ import {
   recipientForEmail,
 } from "../collection/recipients";
 import { SecurityError } from "../security/policy";
+import { adminReturnPath, isAdminEmail } from "../admin-policy";
 import {
   accountEmailAvailable,
   accountOrigin,
@@ -63,15 +64,16 @@ export function normalizeRecipientLocator(
     ) ||
     typeof locator.collectionId !== "string" ||
     !/^[a-zA-Z0-9_-]{8,80}$/.test(locator.collectionId) ||
-    (locator.view !== undefined && locator.view !== "address") ||
+    (locator.view !== undefined &&
+      !["address", "stories"].includes(String(locator.view))) ||
     (locator.view !== undefined && locator.chapterId !== undefined) ||
     (locator.chapterId !== undefined &&
       (typeof locator.chapterId !== "string" ||
         !/^q[1-4]$/.test(locator.chapterId)))
   )
     throw new SecurityError("This story link is not valid.", 400);
-  if (locator.view === "address")
-    return { collectionId: locator.collectionId, view: "address" };
+  if (locator.view === "address" || locator.view === "stories")
+    return { collectionId: locator.collectionId, view: locator.view };
   return {
     collectionId: locator.collectionId,
     ...(locator.chapterId === undefined
@@ -81,7 +83,7 @@ export function normalizeRecipientLocator(
 }
 function recipientReturnPath(locator: RecipientLocator | undefined) {
   return locator
-    ? `/collection/${locator.collectionId}${locator.view === "address" ? "/address" : locator.chapterId ? `/chapter/${locator.chapterId}` : ""}`
+    ? `/collection/${locator.collectionId}${locator.view ? `/${locator.view}` : locator.chapterId ? `/chapter/${locator.chapterId}` : ""}`
     : "/account";
 }
 /** Dependencies may be injected by tests only. Public routes never expose the token or nonce. */
@@ -90,11 +92,20 @@ export async function beginAccountLogin(
   nonce: string,
   testOptions?: { sendMail?: AccountMailer; now?: number },
   recipientLocatorValue?: unknown,
+  adminDestination?: string,
 ) {
   if (testOptions && process.env.NODE_ENV !== "test")
     throw new Error("Account test overrides are disabled.");
   const email = normalizeAccountEmail(emailValue);
   const recipientLocator = normalizeRecipientLocator(recipientLocatorValue);
+  if (
+    adminDestination !== undefined &&
+    (!isAdminEmail(email) || recipientLocator)
+  )
+    throw new SecurityError(
+      "Use an approved team email to request admin access.",
+      403,
+    );
   if (!validCredential(nonce))
     throw new SecurityError("Please request a new sign-in link.", 400);
   if (!testOptions?.sendMail) {
@@ -115,6 +126,9 @@ export async function beginAccountLogin(
     createdAt: timestamp(now),
     expiresAt: timestamp(now + LOGIN_LIFETIME_SECONDS * 1000),
     ...(recipientLocator ? { recipientLocator } : {}),
+    ...(adminDestination !== undefined
+      ? { adminReturnPath: adminReturnPath(adminDestination) }
+      : {}),
   };
   await writeRecord(tokenKey(token), record);
   try {
@@ -210,6 +224,8 @@ export async function confirmAccountLogin(
     nextUrl = recipientReturnPath(
       normalizeRecipientLocator(record.recipientLocator),
     );
+    if (record.adminReturnPath && isAdminEmail(record.email))
+      nextUrl = adminReturnPath(record.adminReturnPath);
     const id = hash(record.email);
     verified = await mutateRecord<Account>(accountKey(id), (existing) => ({
       recordType: "verified-account",

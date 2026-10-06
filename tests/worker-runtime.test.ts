@@ -341,6 +341,11 @@ test("runner check-only mode exits without polling or creating a heartbeat", asy
   }
 });
 
+// Cold TSX startup loads the renderer and provider SDKs while the full suite
+// may be compiling many other modules. This allowance measures startup only;
+// the signal-to-exit deadline below remains two seconds.
+const workerStartupDeadlineMs = 60_000;
+
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   test(`idle worker handles ${signal} without waiting for another poll`, async () => {
     const directory = await mkdtemp(
@@ -367,8 +372,12 @@ for (const signal of ["SIGTERM", "SIGINT"] as const)
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
           () =>
-            reject(new Error("Synthetic local worker did not become ready.")),
-          15000,
+            reject(
+              new Error(
+                `Synthetic local worker did not become ready within ${workerStartupDeadlineMs}ms. stdout: ${output.slice(-2000)} stderr: ${errors.slice(-2000)}`,
+              ),
+            ),
+          workerStartupDeadlineMs,
         );
         child.once("error", (error) => {
           clearTimeout(timer);

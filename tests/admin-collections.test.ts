@@ -12,8 +12,9 @@ import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { createAdminSession } from "../src/lib/admin-auth";
+import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 import type { Collection } from "../src/lib/collection/types";
+let adminCookie: string;
 let directory: string,
   collection: Collection,
   other: Collection,
@@ -27,15 +28,19 @@ const params = (id: string, mediaId?: string) => ({
 });
 const req = (url: string, headers: Record<string, string> = {}) =>
   new NextRequest(`http://localhost${url}`, {
-    headers: { cookie: `admin_token=${createAdminSession()}`, ...headers },
+    headers: { cookie: adminCookie, ...headers },
   });
 before(async () => {
   for (const name of ["VERCEL", "KV_REST_API_URL", "KV_REST_API_TOKEN"])
     delete process.env[name];
-  process.env.ADMIN_SECRET = "fixture-admin-only";
+  Object.assign(process.env, {
+    NODE_ENV: "test",
+    ADMIN_SECRET: "fixture-admin-only",
+  });
   directory = await mkdtemp(path.join(os.tmpdir(), "tapestry-admin-"));
   process.env.COLLECTION_DATA_DIR = directory;
   store = await import("../src/lib/collection/store");
+  adminCookie = await verifiedRecipientCookie("team@foronestudios.com");
   const { prepareCollection } = await import("../src/lib/collection/create");
   const input = {
     initiationPath: "share",
@@ -94,12 +99,10 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test("admin endpoints require signed cookies before accessing content", async () => {
+test("admin endpoints require verified allowlisted account sessions before accessing content", async () => {
   for (const request of [
     new NextRequest("http://localhost/api/admin/collections"),
-    new NextRequest(
-      `http://localhost/api/admin/collections?admin_token=${createAdminSession()}`,
-    ),
+    new NextRequest(`http://localhost/api/admin/collections?${adminCookie}`),
     new NextRequest("http://localhost/api/admin/collections", {
       headers: { cookie: "admin_token=fixture-admin-only" },
     }),
@@ -191,7 +194,7 @@ test("admin media validates collection ownership and streams bounded/suffix rang
   assert.equal(invalid.status, 416);
 });
 
-test("admin audit records action/resource/session fingerprint without contact data or credentials", async () => {
+test("admin audit records action/resource/session fingerprint with verified team actor but without family contact data or credentials", async () => {
   const files = await readdir(path.join(directory, "audit"));
   const events = (
     await Promise.all(
@@ -202,6 +205,8 @@ test("admin audit records action/resource/session fingerprint without contact da
   ).join("");
   assert.ok(events.includes(collection.id));
   assert.ok(events.includes('"action":"export"'));
+  assert.ok(events.includes('"email":"team@foronestudios.com"'));
+  assert.equal(events.includes(adminCookie.split("=")[1]), false);
   for (const value of [
     "Private storyteller",
     "storyteller@example.test",

@@ -105,7 +105,7 @@ test("the printable book contains the cover and all four complete approved chapt
   const bytes = await renderStoryBook(snapshot);
   assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), "%PDF-");
   const { document, text } = await readPdf(bytes);
-  assert.equal(document.getPageCount(), 5);
+  assert.equal(document.getPageCount(), 6);
   assert.match(text, /From Élodie O’Connor/);
   assert.match(text, /For André Example/);
   for (const chapter of c.chapters) {
@@ -292,5 +292,86 @@ test("mixed Chinese, Japanese, Korean and Latin names and story text remain comp
     c.chapters[0].content,
   ])
     assert.ok(compact.includes(value.replace(/\s/g, "")), value);
-  assert.equal(document.getPageCount(), 5);
+  assert.equal(document.getPageCount(), 6);
+});
+
+test("new editions append only published stories, retain real quotes, and keep the original book available", async () => {
+  const c = syntheticFilmCollection();
+  c.status = "approved";
+  c.livingStory = {
+    batches: [],
+    moments: [
+      {
+        id: "later",
+        batchId: "batch",
+        promptId: "faith-01",
+        category: "faith",
+        title: "An evening prayer",
+        question: "What prayer has stayed with you?",
+        status: "published",
+        sourceMediaId: "source-2",
+        videoMediaId: "film-2",
+        content: "I remember the words we prayed together in the kitchen.",
+        sourceQuote:
+          "We prayed together in the kitchen every evening before supper.",
+        createdAt: "2026-10-07T12:00:00.000Z",
+        publishedAt: "2026-10-07T12:00:00.000Z",
+      },
+      {
+        id: "earlier",
+        batchId: "batch",
+        promptId: "character-01",
+        category: "character",
+        title: "Keeping my promise",
+        question: "When did a promise matter?",
+        status: "published",
+        sourceMediaId: "source-1",
+        videoMediaId: "film-1",
+        content: "A memory of keeping a promise to my neighbor.",
+        createdAt: "2026-10-06T12:00:00.000Z",
+        publishedAt: "2026-10-06T12:00:00.000Z",
+      },
+      {
+        id: "draft",
+        batchId: "batch",
+        promptId: "health-01",
+        category: "health",
+        title: "PRIVATE DRAFT TITLE",
+        question: "PRIVATE DRAFT QUESTION",
+        status: "processing",
+        content: "PRIVATE DRAFT WORDS",
+        createdAt: c.createdAt,
+      },
+    ],
+  };
+  const current = storyBookSnapshot(c, "Riley Example");
+  assert.deepEqual(
+    current.chapters.map((chapter) => chapter.id),
+    ["q1", "q2", "q3", "q4", "earlier", "later"],
+  );
+  assert.equal(
+    storyBookSnapshot(c, "Riley Example", { originalOnly: true }).chapters
+      .length,
+    4,
+  );
+  assert.equal(
+    storyBookSnapshot(c, "Riley Example", {
+      through: "2026-10-06T12:00:00.000Z",
+    }).chapters.length,
+    5,
+  );
+  assert.equal(
+    storyBookSnapshot(c, "Riley Example", { draft: true }).chapters.length,
+    4,
+  );
+  assert.throws(
+    () => storyBookSnapshot(c, "Riley Example", { through: "not-a-date" }),
+    /edition is unavailable/,
+  );
+  const { text, document } = await readPdf(await renderStoryBook(current));
+  assert.match(text, /The stories inside/);
+  assert.ok(text.includes(c.livingStory.moments[0].sourceQuote!));
+  assert.ok(text.includes(c.livingStory.moments[0].content!));
+  assert.equal(text.includes("PRIVATE DRAFT"), false);
+  assert.equal(document.getPageCount(), 8);
 });

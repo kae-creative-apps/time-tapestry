@@ -86,6 +86,7 @@ function fixture() {
         endMs: tick + 200,
         mediaId,
         speakerId: "speaker_0",
+        languageCode: "eng",
       };
       tick += 300;
       return word;
@@ -138,7 +139,9 @@ test("an untimed word in excluded speech stays in the original transcript withou
   assert.ok(
     result.chapters.every((chapter) =>
       chapter.sourceEdit!.clips.every((clip) =>
-        (clip.captions ?? []).every((caption) => caption.endMs > caption.startMs),
+        (clip.captions ?? []).every(
+          (caption) => caption.endMs > caption.startMs,
+        ),
       ),
     ),
   );
@@ -219,15 +222,14 @@ function classicFixture(
       index === 0
         ? sentence
         : "We remember these moments together with our family.";
-    const words = take.text
-      .split(" ")
-      .map((text, i) => ({
-        mediaId: take.mediaId!,
-        text,
-        startMs: 200 + i * 600,
-        endMs: 400 + i * 600,
-        speakerId: "storyteller",
-      }));
+    const words = take.text.split(" ").map((text, i) => ({
+      mediaId: take.mediaId!,
+      text,
+      startMs: 200 + i * 600,
+      endMs: 400 + i * 600,
+      speakerId: "storyteller",
+      languageCode: "eng",
+    }));
     wordsByMedia.set(take.mediaId, words);
     durations.set(take.mediaId, words.at(-1)!.endMs + 500);
   });
@@ -512,5 +514,9 @@ test("cached untimed alignment tokens are reused unchanged without a second tran
     words.map((word) => ({ ...word, mediaId: "second" })),
   );
   assert.throws(() => captionsForWords(reused), /positive duration/);
-  assert.equal(requests, 1, "selected timing failure must not re-spend on Scribe");
+  assert.equal(
+    requests,
+    1,
+    "selected timing failure must not re-spend on Scribe",
+  );
 });

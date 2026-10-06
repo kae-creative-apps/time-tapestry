@@ -86,7 +86,19 @@ export function mediaAllowed(
             chapter.videoMediaId === m.id &&
             chapter.film?.mediaId === m.id &&
             chapter.film.narrationKind === "original_recording",
-        ))
+        ) ||
+        (m.provenance === "generated_film" &&
+          m.mimeType === "video/mp4" &&
+          Boolean(
+            c.livingStory?.moments.some(
+              (moment) =>
+                moment.status === "published" &&
+                moment.videoMediaId === m.id &&
+                moment.sourceMediaId === m.originalSourceMediaId &&
+                Boolean(moment.content?.trim()) &&
+                moment.id === m.livingStoryMomentId,
+            ),
+          )))
     );
   return false;
 }
@@ -95,6 +107,7 @@ export async function saveLocalMedia(
   role: "owner" | "recipient",
   file: File,
   recipientId = PRIMARY_RECIPIENT_ID,
+  livingStoryMomentId?: string,
 ) {
   if (process.env.VERCEL)
     throw new Error("Use the private direct upload for cloud recordings.");
@@ -123,6 +136,7 @@ export async function saveLocalMedia(
     id,
     collectionId,
     role,
+    ...(livingStoryMomentId ? { livingStoryMomentId } : {}),
     ...(role === "recipient" ? { recipientId } : {}),
     mimeType: mime,
     originalName: file.name.slice(0, 200),

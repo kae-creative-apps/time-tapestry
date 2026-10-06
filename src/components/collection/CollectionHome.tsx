@@ -659,6 +659,12 @@ export default function CollectionHome({
           </a>
         </div>
       </header>
+      <a
+        className={`${primary} my-5 w-full sm:w-auto`}
+        href={`/collection/${encodeURIComponent(id)}/stories${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`}
+      >
+        More stories and family questions
+      </a>
       <nav
         aria-label="Choose a story"
         className="my-7 grid grid-cols-2 gap-3 lg:grid-cols-4"
