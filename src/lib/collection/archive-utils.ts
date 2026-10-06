@@ -64,3 +64,15 @@ export async function acknowledgeArchive(
   await acknowledge(archiveSegment(take));
   return { ...take, state: "backed_up", updatedAt: new Date().toISOString() };
 }
+
+/** A reload recovers durable bytes, never claims the interrupted tail was saved. */
+export function recoverInterruptedArchive(
+  take: ArchiveLocalTake,
+): ArchiveLocalTake {
+  if (take.state !== "recording") return take;
+  return {
+    ...take,
+    state: "local",
+    archive: { ...take.archive, recovered: true },
+  };
+}

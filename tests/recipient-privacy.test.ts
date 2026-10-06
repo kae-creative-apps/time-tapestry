@@ -4,7 +4,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { syntheticFilmCollection } from "./film-fixture";
+import {
+  syntheticFilmCollection,
+  syntheticOriginalFilmArtifact,
+} from "./film-fixture";
+import { pcmWavFixture } from "./pcm-wav-fixture";
 
 test("postcard locators require the intended verified recipient across stories, replies and every media route", async (t) => {
   const directory = await mkdtemp(
@@ -112,6 +116,11 @@ test("postcard locators require the intended verified recipient across stories, 
     c.takes[0].mediaId = original.id;
     c.chapters[0].videoMediaId = film.id;
     c.chapters[0].videoStatus = "ready";
+    c.chapters[0].film = syntheticOriginalFilmArtifact(
+      c,
+      c.chapters[0].id,
+      film.id,
+    );
     await store.putCollection(c);
     const intended = await login(` ${c.recipient.email.toUpperCase()} `);
     const wrong = await login("wrong-person@example.test");
@@ -289,16 +298,74 @@ test("postcard locators require the intended verified recipient across stories, 
     );
 
     await t.test(
+      "direct recipient playback rejects legacy AI and unverified films while owner archives stay available",
+      async () => {
+        const recorded = c.chapters[0].film!;
+        const unavailableVersions = [
+          undefined,
+          { ...recorded, mediaId: "different-finished-media" },
+          {
+            ...recorded,
+            narrationKind: "ai_interviewer" as const,
+            scriptSha256: "d".repeat(64),
+            audioSha256: "e".repeat(64),
+            voiceId: "synthetic-legacy-voice",
+            modelId: "synthetic-legacy-model",
+          },
+        ];
+        try {
+          for (const artifact of unavailableVersions) {
+            await store.mutateCollection(c.id, (current) => {
+              current.chapters[0].film = artifact;
+              return current;
+            });
+            const denied = await mediaGet(
+              request(`/api/collection/${c.id}/media/${film.id}`, {
+                session: intended.sessionToken,
+              }),
+              mediaParams,
+            );
+            assert.equal(denied.status, 404);
+            assert.equal(await denied.text(), "Recording not found");
+            const archived = await mediaGet(
+              request(`/api/collection/${c.id}/media/${film.id}`, {
+                key: c.ownerKey,
+              }),
+              mediaParams,
+            );
+            assert.equal(archived.status, 200);
+            assert.equal(await archived.text(), filmBytes);
+          }
+        } finally {
+          await store.mutateCollection(c.id, (current) => {
+            current.chapters[0].film = recorded;
+            return current;
+          });
+        }
+        const originalVoice = await mediaGet(
+          request(`/api/collection/${c.id}/media/${film.id}`, {
+            session: intended.sessionToken,
+          }),
+          mediaParams,
+        );
+        assert.equal(originalVoice.status, 200);
+        assert.equal(await originalVoice.text(), filmBytes);
+        assert.equal(externalCalls, 0);
+      },
+    );
+
+    await t.test(
       "authorized recipient can upload and save a reply using only the session",
       async () => {
         const access = { session: intended.sessionToken };
-        const replyBytes = "synthetic recipient reply recording";
+        const replyBytes = pcmWavFixture();
+        const form = new FormData();
+        form.set(
+          "file",
+          new File([replyBytes], "synthetic-reply.wav", { type: "audio/wav" }),
+        );
         const upload = await mediaPost(
-          request(
-            `/api/collection/${c.id}/media`,
-            access,
-            uploadForm(replyBytes),
-          ),
+          request(`/api/collection/${c.id}/media`, access, form),
           params,
         );
         assert.equal(upload.status, 200);
@@ -324,7 +391,10 @@ test("postcard locators require the intended verified recipient across stories, 
           { params: Promise.resolve({ id: c.id, mediaId }) },
         );
         assert.equal(playback.status, 200);
-        assert.equal(await playback.text(), replyBytes);
+        assert.deepEqual(
+          new Uint8Array(await playback.arrayBuffer()),
+          replyBytes,
+        );
         assert.equal(
           (await store.getCollection(c.id))!.notifications.at(-1)!.status,
           "pending",

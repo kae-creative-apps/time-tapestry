@@ -91,6 +91,40 @@ function readiness(enabled: boolean) {
   process.env.KV_REST_API_TOKEN = "test-only-no-provider-call";
 }
 before(() => readiness(false));
+test("newly confirmed address queues one current owner proof notice without sending or approving", async () => {
+  const c = fixture();
+  c.addressConfirmed = false;
+  c.postcardPublicConsent = undefined;
+  await prepareAutomaticPostcards(c, now, origin);
+  assert.equal(c.notifications.length, 0);
+  c.addressConfirmed = true;
+  await prepareAutomaticPostcards(c, now, origin);
+  await prepareAutomaticPostcards(c, now, origin);
+  assert.equal(c.notifications.length, 1);
+  assert.equal(c.notifications[0].kind, "postcard_ready");
+  assert.equal(c.notifications[0].to, c.storyteller.email);
+  assert.equal(c.postcardProof, undefined);
+  assert.equal(c.deliveries.length, 0);
+});
+test("a terminal provider failure stays held across recurring preparation and notifies the owner", async () => {
+  readiness(true);
+  const c = fixture();
+  await prepareAutomaticPostcards(c, now, origin);
+  c.deliveries[0].status = "failed";
+  c.deliveries[0].providerId = "psc_synthetic_terminal_failure";
+  const savedProof = structuredClone(c.postcardProof);
+  await prepareAutomaticPostcards(c, now, origin);
+  await prepareAutomaticPostcards(c, now, origin);
+  assert.equal(c.postcardPreparation?.status, "needs_attention");
+  assert.equal(
+    c.notifications.filter((notice) => notice.kind === "postcard_attention")
+      .length,
+    1,
+  );
+  assert.deepEqual(c.postcardProof, savedProof);
+  assert.equal(c.deliveries[0].providerId, "psc_synthetic_terminal_failure");
+  readiness(false);
+});
 test("actual artwork is self-contained, print-fit checked, and quarterly dates clamp month ends", async () => {
   const proof = await buildPostcardProof(fixture(), now, origin);
   assert.deepEqual(

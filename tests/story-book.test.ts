@@ -4,7 +4,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { PDFDocument, PDFRawStream, decodePDFRawStream } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFRawStream,
+  PDFDict,
+  PDFName,
+  PDFArray,
+  decodePDFRawStream,
+} from "pdf-lib";
 import {
   renderStoryBook,
   storyBookSnapshot,
@@ -13,40 +20,56 @@ import {
 } from "../src/lib/collection/story-book";
 import { syntheticFilmCollection } from "./film-fixture";
 
-/** Decode the embedded font's Unicode mapping, including ligatures. */
+/** Decode each font's own Unicode map; mixed scripts may reuse glyph numbers. */
 async function readPdf(bytes: Uint8Array) {
   const document = await PDFDocument.load(bytes);
-  const streams = document.context
-    .enumerateIndirectObjects()
-    .flatMap(([, object]) =>
-      object instanceof PDFRawStream
-        ? [Buffer.from(decodePDFRawStream(object).decode()).toString("utf8")]
-        : [],
-    );
-  const mapping = new Map<string, string>();
-  for (const stream of streams.filter((value) => value.includes("begincmap"))) {
-    for (const block of stream.matchAll(
-      /beginbfchar\s+([\s\S]*?)\s+endbfchar/g,
-    )) {
-      for (const pair of block[1].matchAll(/<([0-9a-f]+)>\s*<([0-9a-f]+)>/gi)) {
-        mapping.set(
-          pair[1].toUpperCase(),
-          pair[2]
-            .match(/.{4}/g)!
-            .map((unit) => String.fromCharCode(parseInt(unit, 16)))
-            .join(""),
-        );
-      }
+  const lines: string[] = [];
+  const decode = (stream: PDFRawStream) =>
+    Buffer.from(decodePDFRawStream(stream).decode()).toString("utf8");
+  for (const page of document.getPages()) {
+    const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
+    const maps = new Map<string, Map<string, string>>();
+    for (const [name, ref] of fonts.entries()) {
+      const font = document.context.lookup(ref, PDFDict);
+      const cmap = decode(font.lookup(PDFName.of("ToUnicode")) as PDFRawStream);
+      const mapping = new Map<string, string>();
+      for (const block of cmap.matchAll(
+        /beginbfchar\s+([\s\S]*?)\s+endbfchar/g,
+      ))
+        for (const pair of block[1].matchAll(/<([0-9a-f]+)>\s*<([0-9a-f]+)>/gi))
+          mapping.set(
+            pair[1].toUpperCase(),
+            pair[2]
+              .match(/.{4}/g)!
+              .map((unit) => String.fromCharCode(parseInt(unit, 16)))
+              .join(""),
+          );
+      maps.set(name.asString().slice(1), mapping);
     }
+    const contents = page.node.Contents();
+    const streams =
+      contents instanceof PDFArray
+        ? contents
+            .asArray()
+            .map((ref) => document.context.lookup(ref) as PDFRawStream)
+        : contents
+          ? [contents as PDFRawStream]
+          : [];
+    let current = new Map<string, string>();
+    for (const stream of streams)
+      for (const token of decode(stream).matchAll(
+        /\/([^\s]+)\s+[\d.]+\s+Tf|<([0-9a-f]+)>\s+Tj/gi,
+      )) {
+        if (token[1]) current = maps.get(token[1])!;
+        else
+          lines.push(
+            token[2]
+              .match(/.{4}/g)!
+              .map((code) => current.get(code.toUpperCase()) ?? "")
+              .join(""),
+          );
+      }
   }
-  const lines = streams.flatMap((stream) =>
-    [...stream.matchAll(/<([0-9a-f]+)>\s+Tj/gi)].map((match) =>
-      match[1]
-        .match(/.{4}/g)!
-        .map((code) => mapping.get(code.toUpperCase()) ?? "")
-        .join(""),
-    ),
-  );
   return {
     document,
     text: lines
@@ -187,10 +210,10 @@ test("book downloads require approved owner or verified recipient access and per
     });
     return (await accounts.confirmAccountLogin(token, nonce)).sessionToken;
   };
-  const get = (key = "", token = "") =>
+  const get = (key = "", token = "", draft = false) =>
     GET(
       new NextRequest(
-        `https://book.example.test/api/collection/${c.id}/book${key ? `?key=${key}` : ""}`,
+        `https://book.example.test/api/collection/${c.id}/book?${new URLSearchParams({ ...(key ? { key } : {}), ...(draft ? { draft: "1" } : {}) })}`,
         {
           headers: token ? { cookie: `tt_account_session=${token}` } : {},
         },
@@ -232,11 +255,42 @@ test("book downloads require approved owner or verified recipient access and per
     c.status = "draft";
     await store.putCollection(c);
     assert.equal((await get(c.ownerKey)).status, 403);
-    assert.equal((await get("", await login(c.recipient.email))).status, 403);
+    const primaryToken = await login(c.recipient.email);
+    assert.equal((await get("", primaryToken)).status, 403);
+    assert.equal((await get("", primaryToken, true)).status, 403);
+    assert.equal((await get(c.requesterKey, "", true)).status, 403);
+    assert.equal((await get("", "", true)).status, 403);
+    const draft = await get(c.ownerKey, "", true);
+    assert.equal(draft.status, 200);
+    assert.equal(draft.headers.get("Cache-Control"), "private, no-store");
+    assert.match(
+      (await readPdf(new Uint8Array(await draft.arrayBuffer()))).text,
+      /Private draft for your review/,
+    );
   } finally {
     for (const key of Object.keys(process.env))
       if (!(key in prior)) delete process.env[key];
     Object.assign(process.env, prior);
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("mixed Chinese, Japanese, Korean and Latin names and story text remain complete in the PDF", async () => {
+  const c = syntheticFilmCollection();
+  c.status = "approved";
+  c.storyteller.name = "王明 Élodie";
+  c.recipient.name = "田中あかり 민준";
+  c.chapters[0].content =
+    "祖母教我善良。家族の思い出。할머니의 사랑. A memory to keep.";
+  const { text, document } = await readPdf(
+    await renderStoryBook(storyBookSnapshot(c, c.recipient.name)),
+  );
+  const compact = text.replace(/\s/g, "");
+  for (const value of [
+    c.storyteller.name,
+    c.recipient.name,
+    c.chapters[0].content,
+  ])
+    assert.ok(compact.includes(value.replace(/\s/g, "")), value);
+  assert.equal(document.getPageCount(), 5);
 });

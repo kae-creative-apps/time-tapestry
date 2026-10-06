@@ -22,17 +22,20 @@ If a provider request has already begun, its body, address, idempotency key and 
 
 ## Email transitions
 
-| Trigger                               | Recipient        | Behavior                                                                                                                         |
-| ------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Invitation explicitly requested       | Storyteller      | Send the invitation link; suppress if the interview has already started.                                                         |
-| Draft generation complete             | Storyteller      | Send the review link while that draft still awaits review.                                                                       |
-| Address explicitly requested          | Recipient        | Send the keyless address locator; require the intended recipient's verified email and suppress after confirmation.               |
-| Final approval, postcard journey      | Storyteller only | Queue an owner confirmation. The first postcard introduces the gift to the recipient, with no immediate recipient spoiler email. |
-| Explicit digital sharing approval     | Chosen recipient | Send the keyless collection locator. The notification must match the exact recipient; opening requires their verified email.     |
-| Automatic films finish                | Storyteller      | Send one review notification for that completed render job, while the collection remains a draft.                                |
-| Carrier mailing confirmed             | Storyteller      | Confirm which postcard entered the mailstream. No immediate recipient spoiler email.                                             |
-| Fourteen days after confirmed mailing | Recipient        | If not viewed, offer the story link in case the card did not arrive. If viewed, invite an optional video or written reply.       |
-| Reply explicitly submitted            | Storyteller      | Send a private link to the reply.                                                                                                |
+| Trigger                                | Recipient        | Behavior                                                                                                                         |
+| -------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Invitation explicitly requested        | Storyteller      | Send the invitation link; suppress if the interview has already started.                                                         |
+| Draft generation complete              | Storyteller      | Send the review link while that draft still awaits review.                                                                       |
+| Address explicitly requested           | Recipient        | Send the keyless address locator; require the intended recipient's verified email and suppress after confirmation.               |
+| Final approval, postcard journey       | Storyteller only | Queue an owner confirmation. The first postcard introduces the gift to the recipient, with no immediate recipient spoiler email. |
+| Explicit digital sharing approval      | Chosen recipient | Send the keyless collection locator. The notification must match the exact recipient; opening requires their verified email.     |
+| Automatic films finish                 | Storyteller      | Send one review notification for that completed render job, while the collection remains a draft.                                |
+| Preparation or film work stops         | Storyteller      | Send an attention link while the current job still needs action; completed media and original recordings stay saved.             |
+| Address confirmed, proof review needed | Storyteller      | Send the review link for public messages and exact print consent; no mailing is authorized by the notice.                        |
+| Mailing or changed address needs help  | Storyteller      | Send an explicit contact-team notice and hold the remaining postcards.                                                           |
+| Carrier mailing confirmed              | Storyteller      | Confirm which postcard entered the mailstream. No immediate recipient spoiler email.                                             |
+| Fourteen days after confirmed mailing  | Recipient        | If not viewed, offer the story link in case the card did not arrive. If viewed, invite an optional video or written reply.       |
+| Reply explicitly submitted             | Storyteller      | Send a private link to the reply.                                                                                                |
 
 A recipient who has already replied to that chapter receives no follow-up for it. Turning off follow-up emails suppresses both fallback and reply invitations. Returned or rerouted mail stops the follow-up and further postcards until the address issue is reviewed. Repeated provider events do not queue duplicate notifications.
 
@@ -93,7 +96,7 @@ POST /api/collection/jobs
 Authorization: Bearer <CRON_SECRET>
 ```
 
-GET is also supported for a scheduler that requires it. Authentication is required for both methods. The endpoint refuses work unless collection delivery or collection email is enabled. Email can run with `COLLECTION_EMAIL_ENABLED=true` without Lob credentials or postcard readiness. This does not change the first-postcard-first suppression for postal gifts. An invocation performs at most three provider requests, leaving further jobs for the next run. `vercel.json` now declares a five-minute recurring invocation for production deployments. This file change is not evidence that a deployed scheduler is running.
+GET is also supported for a scheduler that requires it. Authentication is required for both methods. The endpoint refuses work unless collection delivery or collection email is enabled. Email can run with `COLLECTION_EMAIL_ENABLED=true` without Lob credentials or postcard readiness. This does not change the first-postcard-first suppression for postal gifts. An invocation performs at most three provider requests, leaving further jobs for the next run. The Railway worker runs this same bounded processing once at startup and every 60 seconds, independently of long renders. It skips overlapping passes. `vercel.json` retains a daily protected invocation as a fallback. A daily invocation alone cannot satisfy the 23-hour retry window. These code paths do not establish that a deployed worker is running or that its enable flags and credentials are configured.
 
 The code makes a real POST to Lob's postcard endpoint and Resend's email endpoint when enabled and correctly configured. New Lob requests upload the complete approved front and back as HTML files using multipart form data. Inline HTML has a 10,000-character limit and rejects our embedded fonts and artwork. The versioned saved request determines the multipart boundary and bytes so retries remain identical. Internal transport metadata is not sent to Lob. Previously frozen JSON requests are held for reconciliation rather than silently converted. Resend continues to receive JSON. Do not invoke an enabled worker with real recipient records as a diagnostic.
 
@@ -129,7 +132,7 @@ Do not clear the stored request, change its key or mark a timed-out request unse
 
 Changing an address after a provider request has begun cannot change that existing request. Keep the previous address in its saved request for audit. Resolve an uncertain print job before issuing a replacement.
 
-An address change after submission or mailing safely holds the remaining cards and preserves the original proof and provider payload. The address form explains that team review is required. There is currently no self-service or admin resume operation for this case; operator reconciliation remains necessary. Do not claim that a saved new address has automatically resumed the quarterly series.
+An address change after submission or mailing safely holds the remaining cards and preserves the original proof and provider payload. The address form explains that team review is required, and a durable owner notification links to the held collection and asks them to contact the team. There is currently no self-service or admin resume operation for this case; operator reconciliation remains necessary. Do not claim that a saved new address has automatically resumed the quarterly series.
 
 The request snapshots contain private delivery information. Legacy snapshots may also retain old access URLs and private print text. Keep them server-side and do not rewrite them to hide history. UI views need status, schedule and the safe error summary, not the serialized provider request.
 
@@ -141,30 +144,30 @@ The request snapshots contain private delivery information. Legacy snapshots may
 4. Scan each QR while signed out and verify that no collection identity or content appears. Verify that a wrong email and an old recipient key still cannot open stories or films. Then sign in with the intended recipient email and check the correct chapter, all approved content, film playback, replies and the address return flow.
 5. Confirm the Resend sending domain and sending address in the provider, then deliberately verify a real sign-in email reaches the intended test inbox. Ensure mailing stays held if email verification setup is absent.
 6. Configure the live signing secret and independently verify incoming signed events. Unit fixtures and debugger events are not evidence of actual mailing.
-7. Enable delivery only after reviewing recipients, approved content and provider configuration. Confirm that the recurring protected job is registered and running in the deployment. A local preview does not run deployment cron jobs.
+7. Enable delivery only after reviewing recipients, approved content and provider configuration. Confirm that Railway is processing the shared delivery queue every minute and that its existing email settings are configured. The protected daily job is a fallback, not the primary retry mechanism. A local preview does not establish hosted worker activity.
 
 Lob requires bleed and address clear zones for 4x6 artwork and recommends checking the final PDF rendered by its test environment. The implementation follows its reference layout, but final provider-rendered proofs have not been checked in this session. [Lob 4x6 HTML reference](https://github.com/lob/examples/blob/master/postcards/4x6-back.html), [Lob API artwork guidance](https://docs.lob.com/)
 
 ## Scheduler plan and deployment
 
-Vercel's current documentation limits Hobby cron jobs to once per day. The five-minute schedule in this repository requires a plan that supports frequent cron jobs, such as Pro or Enterprise. It will fail deployment on Hobby. If using Hobby, either configure a separately hosted scheduler to call the protected endpoint every five minutes, or explicitly change the schedule to once daily and accept delayed, low-throughput email and print processing. Do not claim prompt automatic delivery with only one daily invocation and a three-request batch. [Vercel cron usage limits](https://vercel.com/docs/cron-jobs/usage-and-pricing)
+The existing Railway worker is the primary scheduler. It checks delivery every 60 seconds alongside preparation and rendering, honors the existing email and physical-delivery enable flags, and waits for any in-flight delivery pass during shutdown. It makes no delivery calls in `--check` or `--preflight` mode. The repository retains Vercel’s daily schedule as a fallback; no more frequent Vercel schedule or plan upgrade is required by this implementation. Verify the running worker and delivery configuration before relying on prompt notifications or automatic retries.
 
 Vercel sends the configured `CRON_SECRET` in the Authorization bearer header. Cron runs on production deployments, not preview deployments. The code does not create a cloud project, purchase a plan, enable environment flags or verify a real schedule. [Vercel cron management](https://vercel.com/docs/cron-jobs/manage-cron-jobs), [Vercel cron quickstart](https://vercel.com/docs/cron-jobs/quickstart)
 
-At the current three-provider-request batch cap and a five-minute schedule, the theoretical ceiling is 36 attempts per hour. Provider latency, retries and failed readiness lower real throughput. This is a bounded pilot queue, not a high-volume mail system. Monitor pending items and oldest due times. Before broader scale, use an indexed durable job queue with independent workers and provider rate controls.
+At the current three-provider-request batch cap and a one-minute interval, the theoretical ceiling is 180 attempts per hour. A persisted collection cursor rotates each pass and allows at most one notification per collection per pass, preventing a busy early collection from monopolizing the queue. Provider latency, retries and failed readiness lower real throughput. This is a bounded pilot queue, not a high-volume mail system. Monitor pending items and oldest due times. Before broader scale, use an indexed durable job queue with independent workers and provider rate controls.
 
-Automatic film rendering is a separate long-running worker. Deploy that worker against the same persistent store and private media storage; the cron endpoint does not render video. The film worker queues a durable owner review email only after all films attach successfully. The family still approves the finished collection before recipient sharing or postcard production. A failed film render never sends a ready message.
+Deploy the long-running worker against the same persistent store and private media storage as the website. Its independent delivery loop keeps retries moving during long renders; the cron endpoint does not render video. The film worker queues a durable owner review email only after all films attach successfully. The family still approves the finished collection before recipient sharing or postcard production. A failed film render never sends a ready message.
 
 ## Focused tests
 
 From the repository root:
 
 ```sh
-node --import tsx --test tests/delivery.test.ts tests/delivery-automation.test.ts tests/postcard-proofs.test.ts tests/postcard-public-consent.test.ts tests/postcard-public-message.test.ts tests/postcard-design.test.ts tests/account-auth.test.ts tests/account-navigation.test.ts tests/account-recipient-return.test.ts tests/recipient-privacy.test.ts
+node --import tsx --test tests/delivery.test.ts tests/delivery-automation.test.ts tests/delivery-recovery.test.ts tests/address-change-delivery.test.ts tests/postcard-proofs.test.ts tests/postcard-public-consent.test.ts tests/postcard-public-message.test.ts tests/postcard-design.test.ts tests/account-auth.test.ts tests/account-navigation.test.ts tests/account-recipient-return.test.ts tests/recipient-privacy.test.ts
 ```
 
 Tests cover calendar scheduling, delay handling, no batch catch-up, carrier-time anchoring, duplicate events, created-versus-mailed distinction, return handling, reminder suppression, signature verification, invalid event rejection, text escaping, first-name/public-only artwork, the 240-character message limit and keyless QR generation. They verify explicit consent on the exact four-card proof, invalidation after public-message edits, policy-1 holds, unchanged started requests and a hold when recipient email setup disappears.
 
-Automation fixtures additionally cover scheduler authentication, email processing without Lob, approved digital sharing through a keyless locator, safe handling of previously queued legacy recipient locators, one ready email per film job, exact immutable print bytes and saved-request mismatch rejection. Account and media tests verify that old recipient keys and unauthorized accounts cannot bypass email verification. Providers are replaced by local mocks.
+Automation fixtures additionally cover scheduler authentication, email processing without Lob, approved digital sharing through a keyless locator, safe handling of previously queued legacy recipient locators, one ready email per film job, exact immutable print bytes and saved-request mismatch rejection. Account and media tests verify that old recipient keys and unauthorized accounts cannot bypass email verification. Recovery fixtures verify fair bounded queue passes, same-key email retry within the idempotency window, a single address-ready owner notice, and changed-address holds that preserve started provider requests. Providers are replaced by local mocks.
 
 These checks do not establish deployed scheduling, provider credentials, postal delivery, email deliverability or printed QR readability. No real messages or postcards were sent during implementation.

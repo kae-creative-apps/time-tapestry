@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { AppIcon } from "@/components/icons";
 import type { CollectionView } from "@/lib/collection/types";
-import { isNarratedFilm, mediaPath, portalSecondary } from "./PortalUI";
+import { mediaPath, portalSecondary } from "./PortalUI";
+import { hasRecordedVoiceFilm } from "./recorded-films";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
 
 /** The owner can watch the approved gift without switching to a recipient link. */
@@ -18,9 +19,7 @@ export function ApprovedStories({
   const heading = useRef<HTMLHeadingElement>(null);
   const chapter = collection.chapters[selected] || collection.chapters[0];
   if (!chapter) return null;
-  const filmCount = collection.chapters.filter(
-    (item) => item.videoMediaId,
-  ).length;
+  const filmCount = collection.chapters.filter(hasRecordedVoiceFilm).length;
   function choose(index: number, focus = false) {
     setSelected(index);
     if (focus) heading.current?.focus();
@@ -46,7 +45,7 @@ export function ApprovedStories({
       </div>
       <nav
         aria-label="Choose an approved story"
-        className="my-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        className="my-4 grid grid-cols-4 gap-2"
       >
         {collection.chapters.map((item, index) => (
           <button
@@ -54,20 +53,17 @@ export function ApprovedStories({
             type="button"
             aria-current={selected === index ? "page" : undefined}
             onClick={() => choose(index)}
-            className={`min-h-24 rounded-xl border p-4 text-left ${selected === index ? "border-espresso bg-espresso text-white" : "border-taupe/30 bg-paper text-espresso hover:bg-sage-100"}`}
+            className={`min-h-12 rounded-xl border p-2 text-left ${selected === index ? "border-espresso bg-espresso text-white" : "border-taupe/30 bg-paper text-espresso hover:bg-sage-100"}`}
           >
-            <span className="block text-sm">
-              Story {index + 1} ·{" "}
-              {item.videoMediaId ? "Video and words" : "Written story"}
-            </span>
-            <span className="mt-2 block text-lg font-semibold leading-6">
+            <span className="block text-sm">Chapter {index + 1}</span>
+            <span className="mt-1 hidden text-sm font-semibold leading-6 sm:block">
               {item.title}
             </span>
           </button>
         ))}
       </nav>
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        {chapter.videoMediaId ? (
+        {hasRecordedVoiceFilm(chapter) ? (
           <div>
             <StoryMediaPlayer
               key={chapter.videoMediaId}
@@ -76,9 +72,8 @@ export function ApprovedStories({
               preload="metadata"
             />
             <p className="mt-3 text-base leading-7 text-ink-600">
-              {isNarratedFilm(chapter)
-                ? "An AI voice reads your approved words. Your original recordings are kept separately below."
-                : "Your approved story film. Your original recordings are kept separately below."}
+              Your own recorded voice. Your original recordings are kept
+              separately below.
             </p>
           </div>
         ) : (
@@ -88,9 +83,8 @@ export function ApprovedStories({
               Saved in your own words.
             </h3>
             <p className="mt-3 text-base leading-7 text-paper">
-              This story was approved without a finished video. Any original
-              recordings are still available in your private recording archive
-              below.
+              A version using your original recording is needed. Your original
+              recordings are still saved in your private archive.
             </p>
           </div>
         )}

@@ -3,7 +3,33 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CHAPTERS } from "../src/lib/interview-state";
 import type { Collection } from "../src/lib/collection/types";
-import type { FilmVoice } from "../src/lib/collection/films/types";
+import type {
+  FilmVoice,
+  StoryFilmArtifact,
+} from "../src/lib/collection/films/types";
+
+/** Explicit provenance for private-media access tests; no real film is rendered. */
+export function syntheticOriginalFilmArtifact(
+  collection: Collection,
+  chapterId: string,
+  mediaId: string,
+): StoryFilmArtifact {
+  return {
+    jobId: "synthetic-original-job",
+    chapterId,
+    mediaId,
+    narrationKind: "original_recording",
+    presentation: "video",
+    sourceTakeIds: [],
+    sourceSha256: "a".repeat(64),
+    outputSha256: "b".repeat(64),
+    planSha256: "c".repeat(64),
+    durationSeconds: 1,
+    createdAt: collection.createdAt,
+    sourceRanges: [],
+    sourceAssets: [],
+  };
+}
 
 export const testVoice: FilmVoice = {
   agentId: "synthetic-agent",

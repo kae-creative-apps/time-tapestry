@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock";
 import type { AnswerTake } from "@/lib/collection/types";
 import { requireInterviewAudioTrack } from "@/lib/collection/interview-devices";
 import {
@@ -38,6 +39,7 @@ export type SavedRecorderProps = {
   }) => void;
   onBusyChange?: (busy: boolean) => void;
   directUpload?: boolean;
+  autoRecoverBackup?: boolean;
   suggestedDuration?: string;
   maxSeconds?: number;
 };
@@ -173,6 +175,7 @@ export default function SavedRecorder({
   onMediaSaved,
   onBusyChange,
   directUpload = false,
+  autoRecoverBackup = false,
   suggestedDuration = "Aim for 2 to 5 minutes. A short, specific memory is enough.",
   maxSeconds = MAX_SECONDS,
 }: SavedRecorderProps) {
@@ -199,6 +202,8 @@ export default function SavedRecorder({
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const startedAt = useRef(0);
   const mounted = useRef(true);
+  const deviceLockRelease = useRef<(() => void) | null>(null);
+  const recoveryAttempted = useRef(new Set<string>());
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const onMediaSavedRef = useRef(onMediaSaved);
@@ -268,6 +273,8 @@ export default function SavedRecorder({
       if (audioRecorder.current?.state === "recording")
         audioRecorder.current.stop();
       stream.current?.getTracks().forEach((track) => track.stop());
+      deviceLockRelease.current?.();
+      deviceLockRelease.current = null;
     },
     [],
   );
@@ -505,6 +512,31 @@ export default function SavedRecorder({
     }
   }
 
+  useEffect(() => {
+    if (!autoRecoverBackup || busy) return;
+    const take = takes.find(
+      (item) =>
+        item.state !== "backed_up" &&
+        localCopies[item.id] === true &&
+        !recoveryAttempted.current.has(item.id),
+    );
+    if (!take) return;
+    recoveryAttempted.current.add(take.id);
+    void (async () => {
+      const release = await claimRecordingDeviceLock(collectionId);
+      try {
+        await backup(take);
+      } finally {
+        release();
+      }
+    })().catch((cause) => {
+      if (mounted.current) setError(friendlyRecordingError(cause));
+    });
+    // Recovery runs once for each device copy. A failed backup remains available
+    // with its explicit retry button; ordinary recording completion saves itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRecoverBackup, busy, takes, localCopies, collectionId]);
+
   async function start() {
     setError("");
     setMessage("");
@@ -519,6 +551,8 @@ export default function SavedRecorder({
         throw new Error(
           "This browser does not support recording. Open your interview link in an updated browser to record your answer.",
         );
+      deviceLockRelease.current ??=
+        await claimRecordingDeviceLock(collectionId);
       const persistent = await requestRecordingStorage();
       if (!persistent)
         setStorageWarning(
@@ -539,6 +573,8 @@ export default function SavedRecorder({
       requireInterviewAudioTrack(mediaStream);
       if (!mounted.current) {
         mediaStream.getTracks().forEach((track) => track.stop());
+        deviceLockRelease.current?.();
+        deviceLockRelease.current = null;
         return;
       }
       if (video.current) video.current.srcObject = mediaStream;
@@ -678,6 +714,8 @@ export default function SavedRecorder({
         active.current = null;
         // Keep the original chunks on this device even after a successful backup.
         if (blob.size && mounted.current) await backup(complete, blob);
+        deviceLockRelease.current?.();
+        deviceLockRelease.current = null;
       };
       startedAt.current = Date.now();
       speechRecorder?.start(1000);
@@ -687,6 +725,8 @@ export default function SavedRecorder({
       if (audioRecorder.current?.state === "recording")
         audioRecorder.current.stop();
       stream.current?.getTracks().forEach((track) => track.stop());
+      deviceLockRelease.current?.();
+      deviceLockRelease.current = null;
       if (mounted.current) {
         setError(friendlyRecordingError(error));
         setPhase("idle");

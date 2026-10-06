@@ -1,6 +1,6 @@
 # Railway film worker setup
 
-The Next.js website stays on Vercel. One private Railway worker first processes the durable interview-preparation queue, then the original-film queue. It recovers authenticated saved conversation turns, verifies original sources for all four areas, saves four written stories and postcard note drafts, and produces four chapter films for owner review. Missing source areas stop for attention. It does not mail postcards or bypass final sharing approval. Deploying this container is separate from proving a complete hosted interview.
+The Next.js website stays on Vercel. One private Railway worker first processes the durable interview-preparation queue, then the original-film queue. It recovers authenticated saved conversation turns, verifies original sources for all four areas, saves four written stories and postcard note drafts, and produces four chapter films for owner review. Missing source areas stop for attention. The same process checks the durable delivery queue every 60 seconds, independently of long renders, when the existing email or delivery flags are enabled. Owner sharing approval and postcard print consent remain required. Deploying this container is separate from proving a complete hosted interview.
 
 ## Deploy the service
 
@@ -14,22 +14,22 @@ The image runs as the default root user because Railway volumes mount as root. D
 
 ## Variables
 
-| Variable | Value or source |
-| --- | --- |
-| `KV_REST_API_URL` | The website's existing Redis REST URL |
-| `KV_REST_API_TOKEN` | The matching Redis token |
-| `BLOB_READ_WRITE_TOKEN` | The same private Vercel Blob store used by the website |
-| `ELEVENLABS_API_KEY` | The existing account that owns the Time Tapestry interviewer and has Scribe access |
-| `ELEVENLABS_AGENT_ID` | The same existing agent ID as the website, required to verify saved interview transcripts |
-| `SECURITY_HASH_SECRET` | Exactly the website's current secret, so shared provider budgets use the same buckets |
-| `NEXT_PUBLIC_APP_URL` | The website's canonical public HTTPS origin, with no route, query, or fragment |
-| `COLLECTION_DATA_DIR` | `/data`, already set in the image |
-| `STORY_FILM_WORKER_HOSTED` | `true`, already set in the image; Railway is also detected automatically |
-| `SECURITY_PROVIDER_DAILY_LIMIT` | Match the website's intended budget, default 500 actions per day, not dollars |
-| `COLLECTION_STORAGE_LIMIT_BYTES` | Match any website override; default 2 GiB per collection |
-| `STORY_FILM_MIN_FREE_BYTES` | Default `1073741824`, a 1 GiB free-space safety floor |
+| Variable                         | Value or source                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `KV_REST_API_URL`                | The website's existing Redis REST URL                                                     |
+| `KV_REST_API_TOKEN`              | The matching Redis token                                                                  |
+| `BLOB_READ_WRITE_TOKEN`          | The same private Vercel Blob store used by the website                                    |
+| `ELEVENLABS_API_KEY`             | The existing account that owns the Time Tapestry interviewer and has Scribe access        |
+| `ELEVENLABS_AGENT_ID`            | The same existing agent ID as the website, required to verify saved interview transcripts |
+| `SECURITY_HASH_SECRET`           | Exactly the website's current secret, so shared provider budgets use the same buckets     |
+| `NEXT_PUBLIC_APP_URL`            | The website's canonical public HTTPS origin, with no route, query, or fragment            |
+| `COLLECTION_DATA_DIR`            | `/data`, already set in the image                                                         |
+| `STORY_FILM_WORKER_HOSTED`       | `true`, already set in the image; Railway is also detected automatically                  |
+| `SECURITY_PROVIDER_DAILY_LIMIT`  | Match the website's intended budget, default 500 actions per day, not dollars             |
+| `COLLECTION_STORAGE_LIMIT_BYTES` | Match any website override; default 2 GiB per collection                                  |
+| `STORY_FILM_MIN_FREE_BYTES`      | Default `1073741824`, a 1 GiB free-space safety floor                                     |
 
-The worker uses ElevenLabs to read and verify already recorded conversation transcripts and to transcribe original media where needed. It creates no new voice sessions and does not change the agent or voice. Synthetic narration jobs are retired. `GLOO_API_KEY` is optional for written-story editing; without it, complete source-text drafts are saved. Film enqueue limits remain durable per collection. Resend, Lob, `ADMIN_SECRET`, `CRON_SECRET`, and OpenAI are not required by this worker and should not be copied to it unnecessarily. Only the successful four-film attachment queues the owner review-ready notification; the separate protected delivery service sends it. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
+The worker uses ElevenLabs to read and verify already recorded conversation transcripts and to transcribe original media where needed. It creates no new voice sessions and does not change the agent or voice. Synthetic narration jobs are retired. `GLOO_API_KEY` is optional for written-story editing; without it, complete source-text drafts are saved. Film enqueue limits remain durable per collection. Film preparation does not require Resend, Lob, `ADMIN_SECRET`, `CRON_SECRET`, or OpenAI. To process queued owner emails from Railway, configure the existing `COLLECTION_EMAIL_ENABLED`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL` settings there, with the same public origin and shared store as the website. Leave physical delivery disabled until its separate release checks pass. Do not copy or enable live Lob settings as part of film setup. Successful four-film attachment queues the owner review-ready notification; stopped preparation queues an attention notice. The independent delivery loop sends eligible notices and retries temporary failures inside the saved idempotency window. See [delivery setup](DELIVERY_SETUP.md) for the full enable flags and release requirements. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
 
 Set restart policy Always on a plan that supports it. Configure a bounded termination grace period, for example 60 seconds, and avoid overlapping replicas. A long render may exceed the grace period. Persisted leases and original-job retries provide recovery, not a promise that every deployment finishes the current render. Unfinished AI narration jobs cannot be retried under the current policy; their retirement preserves completed artifacts.
 
@@ -39,13 +39,13 @@ Start with enough capacity for the test cohort and measure actual footage. Two v
 
 Hosted startup always sets `TMPDIR`, `TMP`, and `TEMP` to `COLLECTION_DATA_DIR/tmp`, creates it privately, and rejects symlinked or separately mounted scratch. External temporary-directory settings are ignored so render scratch uses the guarded volume. Data is stored in these places:
 
-| Data | Location |
-| --- | --- |
-| Collection records, approvals, job state and leases | Shared Redis |
-| Uploaded originals and attached finished films | Private Vercel Blob |
-| Staged originals, render progress and reusable derivatives | `/data/film-work/JOB_ID` |
-| Reusable source-word transcripts | `/data/film-transcripts/COLLECTION_ID` |
-| Temporary browser, bundler and encoding files | `/data/tmp` |
+| Data                                                       | Location                               |
+| ---------------------------------------------------------- | -------------------------------------- |
+| Collection records, approvals, job state and leases        | Shared Redis                           |
+| Uploaded originals and attached finished films             | Private Vercel Blob                    |
+| Staged originals, render progress and reusable derivatives | `/data/film-work/JOB_ID`               |
+| Reusable source-word transcripts                           | `/data/film-transcripts/COLLECTION_ID` |
+| Temporary browser, bundler and encoding files              | `/data/tmp`                            |
 
 Do not confuse the volume with a backup of Redis or Blob. Enable appropriate backups for each durable service separately and follow [the backup runbook](BACKUP_RUNBOOK.md). Do not erase the volume to fix a failed job. Transcripts and intermediates can save time and paid work on retry.
 

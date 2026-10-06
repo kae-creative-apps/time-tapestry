@@ -213,10 +213,23 @@ test("legacy postcards retain calendar-quarter dispatch through authenticated jo
     assert.equal(approved.postcardPreparation?.status, "needs_attention");
     assert.equal(
       (await run()).providerAttempts,
+      1,
+      "The owner receives a proof-review notice while printing remains held",
+    );
+    assert.equal(
+      postcards.length,
       0,
       "Story approval cannot bypass public-print consent",
     );
-    assert.equal(postcards.length, 0);
+    assert.equal(emails.length, 1);
+    assert.deepEqual(emails[0].to, [approved.storyteller.email]);
+    assert.equal(
+      (await read()).notifications.filter(
+        (notice) =>
+          notice.kind === "postcard_ready" && notice.status === "sent",
+      ).length,
+      1,
+    );
     await mutateCollection(approved.id, async (collection) => {
       collection.postcardPublicConsent = {
         version: 2,
@@ -422,7 +435,11 @@ test("legacy postcards retain calendar-quarter dispatch through authenticated jo
       completed.deliveries.every((delivery) => delivery.status === "mailed"),
     );
     assert.equal(JSON.stringify(completed.postcardProof), frozenProof);
-    assert.equal(emails.length, 4);
+    assert.equal(
+      emails.length,
+      5,
+      "One owner proof-review notice and four confirmed-mailing notices",
+    );
   } finally {
     globalThis.fetch = priorFetch;
     t.mock.timers.reset();

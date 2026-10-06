@@ -17,6 +17,10 @@ import type {
   InterviewTurn,
   InterviewChapterId,
 } from "@/lib/collection/types";
+import {
+  interviewResumeState,
+  recordedInterviewChapterIds,
+} from "@/lib/collection/interview-resume";
 import { CHAPTERS } from "@/lib/interview-state";
 import {
   detectInterviewThemeFromQuestion,
@@ -161,6 +165,9 @@ export default function LiveInterview({
   const [journalChecking, setJournalChecking] = useState(true);
   const submitting = useRef(false);
   const lastMessageAt = useRef(0);
+  const restoredPosition = useRef(false);
+  const choseKind = useRef(false);
+  const [missingAreas, setMissingAreas] = useState<InterviewChapterId[]>([]);
 
   useEffect(() => {
     setConnectionTakingLong(false);
@@ -177,6 +184,21 @@ export default function LiveInterview({
       sessionRef.current =
         c.interviews?.find((s) => s.id === id) ?? sessionRef.current;
   }, []);
+
+  useEffect(() => {
+    if (
+      collection?.role === "owner" &&
+      collection.status !== "approved" &&
+      collection.interviewPreparation &&
+      !collection.draftOutdated &&
+      !collection.interviewPreparation.missingAreas?.length &&
+      phase === "ready"
+    ) {
+      router.replace(
+        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
+      );
+    }
+  }, [collection, collectionId, phase, query, router]);
 
   useEffect(() => {
     // Download code while the person reads the introduction. This neither opens
@@ -298,6 +320,7 @@ export default function LiveInterview({
     collectionId,
     accessKey,
     directUpload: collection?.capabilities.directUpload ?? false,
+    recoveryEnabled: collection?.role === "owner",
     onSegmentSaved: async (segment, savedSessionId) => {
       await request("/interview", {
         action: "attach_segment",
@@ -306,6 +329,25 @@ export default function LiveInterview({
       });
     },
   });
+  useEffect(() => {
+    if (!collection || collection.role !== "owner" || restoredPosition.current)
+      return;
+    const saved = interviewResumeState(collection);
+    restoredPosition.current = true;
+    theme.current = saved.chapterId;
+    setActiveChapterId(saved.chapterId);
+    setQuestion(saved.question);
+    setKind(saved.kind);
+  }, [collection]);
+
+  useEffect(() => {
+    if (phase !== "ready" || choseKind.current) return;
+    const recovered = archive.recordings
+      .filter((record) => record.recovered)
+      .at(-1);
+    if (recovered) setKind(recovered.kind);
+  }, [archive.recordings, phase]);
+
   const archiveRef = useRef(archive);
   archiveRef.current = archive;
 
@@ -348,8 +390,22 @@ export default function LiveInterview({
       void flush().catch((e) => setError(friendly(e)));
     };
     const silenceCue = () => connectionCue.current?.dispose();
+    const suspend = () => {
+      silenceCue();
+      intentionalStop.current = true;
+      connectionAttempt.current += 1;
+      connectionInFlight.current = false;
+      interviewerPlayback.current?.dispose();
+      void client.current?.endSession().catch(() => {});
+      client.current = null;
+      void archiveRef.current.stop().catch(() => {});
+      if (mounted.current) {
+        setPhase("paused");
+        setWorking(false);
+      }
+    };
     window.addEventListener("online", retry);
-    window.addEventListener("pagehide", silenceCue);
+    window.addEventListener("pagehide", suspend);
     return () => {
       mounted.current = false;
       connectionAttempt.current += 1;
@@ -358,7 +414,7 @@ export default function LiveInterview({
       interviewerPlayback.current?.dispose();
       void client.current?.endSession();
       window.removeEventListener("online", retry);
-      window.removeEventListener("pagehide", silenceCue);
+      window.removeEventListener("pagehide", suspend);
     };
   }, [collectionId, flush, openJournal, request]);
 
@@ -526,7 +582,13 @@ export default function LiveInterview({
   async function connect(
     connectionType: InterviewConnection = connectionTypeRef.current,
   ) {
-    if (connectionInFlight.current || !journalReady) return;
+    if (
+      connectionInFlight.current ||
+      !journalReady ||
+      archive.recovering ||
+      archive.status === "stopping"
+    )
+      return;
     connectionInFlight.current = true;
     const attempt = ++connectionAttempt.current;
     const isCurrent = () =>
@@ -881,6 +943,20 @@ export default function LiveInterview({
         throw new Error(
           "Your interview has not been submitted yet. Back up your remaining recordings and words before finishing.",
         );
+      const saved = collectionRef.current;
+      if (saved) {
+        const answered = recordedInterviewChapterIds(saved);
+        const missing = CHAPTERS.filter(
+          (chapter) => !answered.includes(chapter.id),
+        ).map((chapter) => chapter.id);
+        if (missing.length) {
+          setMissingAreas(missing);
+          throw new Error(
+            "Your recording is saved. We still need a recorded answer for the story areas below before preparing all four chapters. You can take a break and return through My stories.",
+          );
+        }
+      }
+      setMissingAreas([]);
       for (const savedSession of collectionRef.current?.interviews ?? []) {
         if (savedSession.status !== "completed")
           await request("/interview", {
@@ -1067,6 +1143,52 @@ export default function LiveInterview({
           hope {collection.recipient.name} carries forward.
         </p>
       </div>
+      {interviewResumeState(collection).hasSavedProgress &&
+        phase === "ready" && (
+          <p
+            role="status"
+            className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7"
+          >
+            Welcome back. Your saved answers are here. Continue when you are
+            ready; your camera and microphone stay off until you choose to
+            start.
+          </p>
+        )}
+      <p className="mb-5 text-sm leading-6 text-ink-500">
+        Recordings marked Backed up are linked to {collection.storyteller.email}
+        . Sign in to{" "}
+        <Link href="/account" className="underline underline-offset-4">
+          My stories
+        </Link>{" "}
+        with that email to return on another device.
+      </p>
+      {archive.recordings.some((recording) => recording.recovered) && (
+        <p role="status" className="mb-5 text-sm leading-6 text-ink-500">
+          An earlier recording was interrupted. Check its saved portion and
+          backup status below. The last moments before the browser closed may be
+          missing.
+        </p>
+      )}
+      {missingAreas.length > 0 && (
+        <div className="mb-5 rounded-xl border border-warmgray-200 bg-white p-5">
+          <p className="font-medium">Still to record</p>
+          <p className="mt-2 text-sm leading-6">
+            Faith questions are optional. You can share a decision and what you
+            learned instead.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {missingAreas.map((id) => (
+              <Link
+                key={id}
+                className={secondary}
+                href={`/record/${collectionId}${query}&classic=1&chapter=${id}`}
+              >
+                {interviewChapterTitle(id, collection.faithFraming)}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
       {!journalReady && (
         <div
           className="mb-6 rounded-xl border border-clay-300 bg-clay-50 p-5 text-base leading-7"
@@ -1310,7 +1432,10 @@ export default function LiveInterview({
                         name="record-kind"
                         value={value}
                         checked={kind === value}
-                        onChange={() => setKind(value)}
+                        onChange={() => {
+                          choseKind.current = true;
+                          setKind(value);
+                        }}
                       />
                       {value === "video" ? "Video with sound" : "Audio only"}
                     </label>
@@ -1340,13 +1465,17 @@ export default function LiveInterview({
                     disabled={
                       working ||
                       !journalReady ||
+                      archive.recovering ||
+                      archive.status === "stopping" ||
                       !collection.capabilities.liveInterview
                     }
                     onClick={() => void connect()}
                     onPointerEnter={warmConversation}
                     onFocus={warmConversation}
                   >
-                    Start conversation
+                    {interviewResumeState(collection).hasSavedProgress
+                      ? "Continue conversation"
+                      : "Start conversation"}
                   </button>
                 )}
                 {hasExistingRecordings && !sessionRef.current && (

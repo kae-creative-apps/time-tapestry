@@ -15,8 +15,10 @@ import {
   archiveDurationMs,
   archiveTimelineOffset,
   isArchiveTake,
+  recoverInterruptedArchive,
   type ArchiveLocalTake,
 } from "@/lib/collection/archive-utils";
+import { claimRecordingDeviceLock } from "@/lib/collection/recording-device-lock";
 import type { InterviewSegment } from "@/lib/collection/types";
 import {
   interviewCaptureConstraints,
@@ -44,6 +46,7 @@ type Props = {
   collectionId: string;
   accessKey: string;
   directUpload?: boolean;
+  recoveryEnabled?: boolean;
   onSegmentSaved: (
     segment: InterviewSegment,
     sessionId: string,
@@ -104,6 +107,7 @@ export function useInterviewArchive({
   collectionId,
   accessKey,
   directUpload = false,
+  recoveryEnabled = false,
   onSegmentSaved,
 }: Props) {
   const [status, setStatus] = useState<
@@ -114,7 +118,10 @@ export function useInterviewArchive({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const recoveryAttempts = useRef(new Set<string>());
   const mounted = useRef(true);
+  const deviceLockRelease = useRef<(() => void) | null>(null);
   const transitioning = useRef(false);
   const transitionDone = useRef(Promise.resolve());
   const releaseTransition = useRef<(() => void) | null>(null);
@@ -629,6 +636,8 @@ export function useInterviewArchive({
           throw new Error(
             "This browser cannot record. Try an updated browser.",
           );
+        deviceLockRelease.current ??=
+          await claimRecordingDeviceLock(collectionId);
         const persistent = await requestRecordingStorage();
         if (!persistent)
           setWarning(
@@ -665,6 +674,8 @@ export function useInterviewArchive({
           ?.getTracks()
           .forEach((track) => track.stop());
         removeTrackListeners.current?.();
+        deviceLockRelease.current?.();
+        deviceLockRelease.current = null;
         media.current = null;
         if (mounted.current) {
           setStream(null);
@@ -679,6 +690,7 @@ export function useInterviewArchive({
     [
       acquireTransition,
       beginSegment,
+      collectionId,
       completeTransition,
       installStream,
       scheduleRollover,
@@ -778,9 +790,12 @@ export function useInterviewArchive({
     try {
       await stopSegment(item);
       await Promise.all([...finalizing.current]);
+      await Promise.allSettled([...uploads.current.values()]);
     } finally {
       media.current?.getTracks().forEach((track) => track.stop());
       removeTrackListeners.current?.();
+      deviceLockRelease.current?.();
+      deviceLockRelease.current = null;
       media.current = null;
       if (mounted.current) {
         setStream(null);
@@ -794,37 +809,41 @@ export function useInterviewArchive({
     mounted.current = true;
     let cancelled = false;
     void (async () => {
-      const takes = (await listLocalTakes(collectionId)).filter(isArchiveTake);
-      for (const take of takes) {
-        if (cancelled) return;
-        // Do not overwrite a segment created while recovery was loading.
-        if (stored.current.has(take.id)) continue;
-        const recovered: ArchiveLocalTake =
-          take.state === "recording"
-            ? {
-                ...take,
-                state: "local",
-                archive: { ...take.archive, recovered: true },
-              }
-            : take;
-        try {
-          durable.current.set(take.id, (await getTakeBlob(take)).size > 0);
-        } catch {
-          durable.current.set(take.id, false);
+      const release = await claimRecordingDeviceLock(collectionId);
+      try {
+        const takes = (await listLocalTakes(collectionId)).filter(
+          isArchiveTake,
+        );
+        for (const take of takes) {
+          if (cancelled) return;
+          // Do not overwrite a segment created while recovery was loading.
+          if (stored.current.has(take.id)) continue;
+          const recovered = recoverInterruptedArchive(take);
+          try {
+            durable.current.set(take.id, (await getTakeBlob(take)).size > 0);
+          } catch {
+            durable.current.set(take.id, false);
+          }
+          if (recovered.archive.recovered && !durable.current.get(take.id)) {
+            errors.current.set(
+              take.id,
+              "This interrupted recording has no saved content.",
+            );
+          }
+          stored.current.set(take.id, recovered);
+          if (take.state === "recording")
+            await putLocalTake(recovered).catch(() => undefined);
         }
-        if (recovered.archive.recovered && !durable.current.get(take.id)) {
-          errors.current.set(
-            take.id,
-            "This interrupted recording has no saved content.",
-          );
-        }
-        stored.current.set(take.id, recovered);
-        if (take.state === "recording")
-          await putLocalTake(recovered).catch(() => undefined);
+        publish();
+        if (!cancelled) setRecoveryReady(true);
+      } finally {
+        release();
       }
-      publish();
     })().catch((cause) => {
-      if (!cancelled) setWarning(friendlyError(cause));
+      if (!cancelled) {
+        setWarning(friendlyError(cause));
+        setRecoveryReady(true);
+      }
     });
     return () => {
       cancelled = true;
@@ -838,9 +857,41 @@ export function useInterviewArchive({
       }
       media.current?.getTracks().forEach((track) => track.stop());
       removeTrackListeners.current?.();
+      deviceLockRelease.current?.();
+      deviceLockRelease.current = null;
       media.current = null;
     };
   }, [clearRollover, collectionId, publish]);
+
+  useEffect(() => {
+    if (!recoveryEnabled || !recoveryReady) return;
+    let cancelled = false;
+    const recover = async () => {
+      for (const take of stored.current.values()) {
+        if (cancelled) return;
+        if (
+          take.state !== "local" ||
+          !durable.current.get(take.id) ||
+          recoveryAttempts.current.has(take.id)
+        )
+          continue;
+        recoveryAttempts.current.add(take.id);
+        // Upload only after the server has authorized this owner. Capture never
+        // restarts automatically, and failed backups keep their local chunks.
+        await backup(take.id).catch(() => {});
+      }
+    };
+    const retryOnline = () => {
+      recoveryAttempts.current.clear();
+      void recover();
+    };
+    void recover();
+    window.addEventListener("online", retryOnline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", retryOnline);
+    };
+  }, [backup, recoveryEnabled, recoveryReady]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -862,6 +913,7 @@ export function useInterviewArchive({
 
   return {
     start,
+    recovering: !recoveryReady,
     pause,
     resume,
     stop,

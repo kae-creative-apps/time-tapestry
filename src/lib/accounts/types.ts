@@ -39,5 +39,6 @@ export type LibraryItem = {
   storyCount: number;
   recordingCount: number;
   postcards: { scheduled: number; mailed: number; needsAttention: number };
+  interviewState?: "recording" | "preparing" | "review" | "approved";
   openUrl: string;
 };

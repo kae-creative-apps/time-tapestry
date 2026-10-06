@@ -145,6 +145,9 @@ export type Notification = {
   kind:
     | "invitation"
     | "review_ready"
+    | "preparation_attention"
+    | "postcard_ready"
+    | "postcard_attention"
     | "collection_ready"
     | "recipient_invitation"
     | "postcard_mailed"
@@ -166,6 +169,17 @@ export type Notification = {
 };
 export type PostcardCadence = "biweekly" | "quarterly";
 export type Collection = {
+  /** Owner-only requests to check generated wording against the saved recording. */
+  storyIssues?: Array<{
+    id: string;
+    chapterId: string;
+    category: "name" | "detail" | "missing_context" | "other";
+    createdAt: string;
+    chapterHash: string;
+    status: "open" | "resolved" | "withdrawn";
+    resolvedAt?: string;
+    resolution?: string;
+  }>;
   /** Owner-only durable preparation status. Private job inputs live separately. */
   interviewPreparation?: InterviewPreparationView;
   /** Digital access only. The primary recipient still owns all physical postcards. */

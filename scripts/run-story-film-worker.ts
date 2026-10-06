@@ -10,9 +10,13 @@ async function main() {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let heartbeatWrite = Promise.resolve();
   let wakePoll: (() => void) | undefined;
+  let deliveryTimer: ReturnType<typeof setInterval> | undefined;
+  let deliveryWrite = Promise.resolve();
+  let deliveryRunning = false;
   const stop = () => {
     stopping = true;
     clearInterval(heartbeat);
+    clearInterval(deliveryTimer);
     wakePoll?.();
   };
   const handleSignal = () => {
@@ -42,6 +46,8 @@ async function main() {
       await import("../src/lib/collection/films/jobstore");
     const { runInterviewPreparationOnce } =
       await import("../src/lib/collection/interview-preparation");
+    const { processDeliveryJobs, emailDeliveryEnabled, postalDeliveryEnabled } =
+      await import("../src/lib/collection/delivery");
     const workerId = `${config.hosted ? "hosted" : "local"}-${process.pid}`;
     if (stopping) return;
     await writeWorkerHeartbeat(workerId);
@@ -59,6 +65,30 @@ async function main() {
           stop();
         });
     }, 20000);
+    // Run alongside long renders. A render must not postpone an email retry
+    // beyond the provider's idempotency window. Existing enable flags still apply.
+    const deliveryTick = () => {
+      if (
+        stopping ||
+        deliveryRunning ||
+        (!emailDeliveryEnabled() && !postalDeliveryEnabled())
+      )
+        return;
+      deliveryRunning = true;
+      deliveryWrite = processDeliveryJobs()
+        .then(() => {})
+        .catch(() => {
+          console.error(
+            "Delivery processing could not finish. Saved requests will be checked on the next pass.",
+          );
+        })
+        .finally(() => {
+          deliveryRunning = false;
+        });
+    };
+    deliveryTick();
+    if (!process.argv.includes("--once"))
+      deliveryTimer = setInterval(deliveryTick, 60000);
     console.log(
       "Story film worker is ready. Consented interview preparation and original-recording film jobs are processed.",
     );
@@ -92,6 +122,7 @@ async function main() {
   } finally {
     stop();
     await heartbeatWrite;
+    await deliveryWrite;
     process.off("SIGTERM", handleSignal);
     process.off("SIGINT", handleSignal);
   }

@@ -14,6 +14,8 @@ export type InterviewPreparationView = {
   error?: string;
   /** Derived from all four current original-film attachments, never worker availability. */
   ready?: boolean;
+  canRetry?: boolean;
+  retryAfter?: string;
 };
 
 export type InterviewPreparationJob = {

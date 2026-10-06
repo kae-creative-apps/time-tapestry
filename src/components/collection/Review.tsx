@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
 import { useCollection } from "./useCollection";
 import { CollectionSharing } from "./CollectionSharing";
@@ -9,16 +8,23 @@ import { OwnerReplies } from "./OwnerReplies";
 import { FilmGenerationPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
 import { ApprovedStories } from "./ApprovedStories";
+import { PostcardProof } from "./PostcardProof";
 import { storyOriginals } from "./story-originals";
+import { collectionRequest } from "@/lib/collection/client-request";
 import {
   ContactSummary,
   PortalError,
   PortalShell,
-  PrivateLink,
   SourceArchive,
   portalPrimary,
   portalSecondary,
 } from "./PortalUI";
+
+const steps = [
+  "Review your gift",
+  "Personalize postcards",
+  "Approve and share",
+];
 
 export default function Review({
   id,
@@ -35,24 +41,21 @@ export default function Review({
     load,
   } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState("q1");
+  const [step, setStep] = useState(0);
   const [working, setWorking] = useState(false);
   const [generatingFilms, setGeneratingFilms] = useState(false);
   const [approvedPlayback, setApprovedPlayback] = useState(false);
+  const [postcardPending, setPostcardPending] = useState(false);
+  const [issuesPending, setIssuesPending] = useState(false);
+  const [issueCheckFailed, setIssueCheckFailed] = useState(false);
+  const [issueRevision, setIssueRevision] = useState(0);
+  const [chapterHashes, setChapterHashes] = useState<Record<string, string>>(
+    {},
+  );
   const [localError, setLocalError] = useState("");
   const [notice, setNotice] = useState("");
-  const playbackTop = useRef<HTMLDivElement>(null);
-  const originalsSection = useRef<HTMLDivElement>(null);
-  const approvalHeading = useRef<HTMLHeadingElement>(null);
+  const flowTop = useRef<HTMLDivElement>(null);
   const recordPath = `/record/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`;
-  const hasOriginals = Boolean(
-    c &&
-    (c.chapters.length
-      ? c.chapters.some((chapter) => storyOriginals(c, chapter).length > 0)
-      : c.takes.some((take) => take.kind !== "text" && take.mediaId) ||
-        c.interviews?.some((interview) =>
-          interview.segments.some((segment) => segment.mediaId),
-        )),
-  );
   const filmSignature = JSON.stringify(
     c?.chapters.map((chapter) => [
       chapter.id,
@@ -64,16 +67,54 @@ export default function Review({
     () => setApprovedPlayback(false),
     [filmSignature, c?.draftOutdated],
   );
+  useEffect(() => {
+    if (c?.role !== "owner" || c.status === "approved") return;
+    const controller = new AbortController();
+    void collectionRequest<{
+      issues: Array<{ status?: string; resolvedAt?: string }>;
+      chapters?: Array<{ id: string; hash: string }>;
+    }>(
+      `/api/collection/${encodeURIComponent(id)}/story-issues?key=${encodeURIComponent(accessKey)}`,
+      { signal: controller.signal },
+    )
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setIssuesPending(
+            data.issues.some((issue) => issue.status === "open"),
+          );
+          setIssueCheckFailed(false);
+          setChapterHashes(
+            Object.fromEntries(
+              (data.chapters || []).map((chapter) => [
+                chapter.id,
+                chapter.hash,
+              ]),
+            ),
+          );
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setIssueCheckFailed(true);
+      });
+    return () => controller.abort();
+  }, [id, accessKey, c?.role, c?.status, filmSignature, issueRevision]);
   const blocked = busy || working;
+  const hasOriginals = Boolean(
+    c &&
+    (c.chapters.some((chapter) => storyOriginals(c, chapter).length > 0) ||
+      c.takes.some((take) => take.kind !== "text" && take.mediaId) ||
+      c.interviews?.some((interview) =>
+        interview.segments.some((segment) => segment.mediaId),
+      )),
+  );
 
+  function changeStep(next: number) {
+    setStep(next);
+    flowTop.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    setLocalError("");
+  }
   async function prepare(regenerate = false) {
-    if (blocked || generatingFilms) return;
-    if (!hasOriginals) {
-      setLocalError(
-        "Record your answers before submitting your interview. Earlier saved material is kept.",
-      );
-      return;
-    }
+    if (blocked || generatingFilms || !hasOriginals) return;
     setWorking(true);
     setLocalError("");
     const result = await act({
@@ -86,24 +127,22 @@ export default function Review({
       setActiveChapter("q1");
       setApprovedPlayback(false);
       setNotice(
-        "Your recordings are submitted. We’ll prepare your four films using your own voice. Nothing is shared until you approve.",
+        "Your recordings are saved. We’re preparing your four films. Nothing is shared until you approve.",
       );
     }
     setWorking(false);
   }
-
-  async function recordAnother(chapterId: string) {
-    if (blocked || !c) return;
-    const index = c.chapters.findIndex((chapter) => chapter.id === chapterId);
-    const result = await act({
-      action: "progress",
-      currentQuestion: Math.max(0, index),
-    });
-    if (result) window.location.assign(`${recordPath}&classic=1`);
-  }
-
   async function approve() {
-    if (blocked || !approvedPlayback || !c || c.draftOutdated) return;
+    if (
+      blocked ||
+      !approvedPlayback ||
+      !c ||
+      c.draftOutdated ||
+      issuesPending ||
+      postcardPending ||
+      issueCheckFailed
+    )
+      return;
     setWorking(true);
     setLocalError("");
     const result = await act({
@@ -115,40 +154,23 @@ export default function Review({
         c.chapters.map((chapter) => [chapter.id, chapter.film?.outputSha256]),
       ),
     });
-    if (result)
-      setNotice(
-        "Your approved collection is ready. Your postcard encouragement is the next step.",
-      );
-    else
+    if (result) {
+      setNotice("");
+      flowTop.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    } else
       setLocalError(
         "We could not confirm your approval. Your recordings are saved. Check your connection and try again.",
       );
     setWorking(false);
   }
-
-  function chooseStory(index: number) {
-    if (!c || blocked) return;
-    if (index >= c.chapters.length) {
-      approvalHeading.current?.focus();
-      approvalHeading.current?.scrollIntoView({
-        behavior: "auto",
-        block: "start",
-      });
-      return;
-    }
-    if (index < 0) return;
-    setActiveChapter(c.chapters[index].id);
-    playbackTop.current?.scrollIntoView({ behavior: "auto", block: "start" });
-  }
-
   if (!c)
     return (
       <PortalShell>
-        <h1 className="mt-10 text-3xl font-medium">Your recordings</h1>
+        <h1 className="text-3xl font-medium">Your saved gift</h1>
         <PortalError message={error} />
         {!error ? (
-          <p role="status" className="mt-5 text-lg text-ink-600">
-            Opening your saved recordings…
+          <p role="status" className="mt-5 text-lg">
+            Opening your recordings…
           </p>
         ) : (
           <button className={portalSecondary} onClick={() => void load()}>
@@ -163,14 +185,11 @@ export default function Review({
         <h1 className="text-3xl font-medium">
           This is the storyteller’s workspace.
         </h1>
-        <p className="mt-5 text-lg leading-8 text-ink-600">
-          Open your private collection link to see the stories shared with you.
-        </p>
         <a
           className={`${portalPrimary} mt-6`}
           href={`/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`}
         >
-          Open the collection
+          Open your collection
         </a>
       </PortalShell>
     );
@@ -193,98 +212,84 @@ export default function Review({
     !generatingFilms &&
     !c.draftOutdated &&
     filmsReady &&
-    approvedPlayback;
+    approvedPlayback &&
+    !postcardPending &&
+    !issuesPending &&
+    !issueCheckFailed;
 
   return (
     <div
-      onPlayCapture={(event) => {
+      onPlayCapture={(event) =>
         event.currentTarget
           .querySelectorAll<HTMLMediaElement>("video,audio")
           .forEach((media) => {
             if (media !== event.target) media.pause();
-          });
-      }}
+          })
+      }
     >
       <PortalShell
         collectionPath={`/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`}
       >
-        <header className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] p-6 text-white sm:p-9">
-          <BrandPattern
-            variant="ribbon"
-            className="absolute -right-40 -top-20 -z-10 w-[600px] max-w-none text-white opacity-[0.06]"
-          />
-          <p className="brand-eyebrow text-paper">
-            {approved
-              ? "Stories woven together"
-              : "Your own voice, kept for someone you love"}
-          </p>
-          <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight text-white sm:text-5xl">
-            {approved
-              ? `Your stories are ready for ${c.recipient.name}.`
-              : filmsReady
-                ? "Listen, then approve when you’re ready."
-                : "Your recordings are saved."}
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-paper">
-            {approved
-              ? "Your collection and postcard options are below. Your original recordings stay saved."
-              : "You don’t need to edit a transcript or write your story again. We prepare the films from your recordings. You choose when they are ready to share."}
-          </p>
-          {!approved && (
-            <a
-              href={recordPath}
-              className="mt-6 inline-flex min-h-12 items-center gap-3 rounded-xl border border-white/35 px-5 py-3 text-base font-medium text-white hover:bg-white/10"
+        <div ref={flowTop} className="scroll-mt-5">
+          <header className="mb-5">
+            <p className="brand-eyebrow text-taupe-600">
+              {approved ? "Your gift is approved" : "Your recordings are saved"}
+            </p>
+            <h1 className="mt-2 font-display text-3xl font-medium sm:text-4xl">
+              {approved ? `For ${c.recipient.name}, from you.` : steps[step]}
+            </h1>
+            <p className="mt-2 max-w-3xl text-base leading-7 text-ink-600">
+              {approved
+                ? "Your own voice, preserved for someone you love."
+                : "Your original recordings stay saved. Nothing is shared until your final approval."}
+            </p>
+          </header>
+          {!approved && c.chapters.length > 0 && (
+            <nav
+              aria-label="Finish your gift"
+              className="mb-5 grid grid-cols-3 gap-2"
             >
-              Return to my interview <AppIcon name="arrowRight" size={18} />
-            </a>
+              {steps.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => changeStep(index)}
+                  disabled={blocked}
+                  aria-current={step === index ? "step" : undefined}
+                  className={`min-h-12 rounded-xl border px-2 py-2 text-sm font-medium sm:text-base ${step === index ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white"}`}
+                >
+                  <span className="block sm:inline">{index + 1}. </span>
+                  {label}
+                </button>
+              ))}
+            </nav>
           )}
-        </header>
-        <nav
-          aria-label="Jump to a section on this page"
-          className="my-5 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-warmgray-200 bg-white px-5 py-3"
-        >
-          <a
-            href={approved ? "#saved-stories" : "#story-review"}
-            className="inline-flex min-h-12 items-center gap-2 text-base font-medium underline underline-offset-4"
-          >
-            <span aria-hidden="true">↓</span>{" "}
-            {approved ? "My stories" : "Listen to my recordings"}
-          </a>
-          <a
-            href="#original-recordings"
-            className="inline-flex min-h-12 items-center gap-2 text-base font-medium underline underline-offset-4"
-            onClick={() => {
-              const archive =
-                originalsSection.current?.querySelector("details");
-              if (archive) archive.open = true;
-            }}
-          >
-            <span aria-hidden="true">↓</span> All original recordings
-          </a>
-          <a
-            href={approved ? "#sharing-and-postcards" : "#film-preparation"}
-            className="inline-flex min-h-12 items-center gap-2 text-base font-medium underline underline-offset-4"
-          >
-            <span aria-hidden="true">↓</span>{" "}
-            {approved ? "Postcards and sharing" : "Film progress"}
-          </a>
-        </nav>
-        <PortalError message={localError || error} />
-        {notice && (
-          <p
-            role="status"
-            className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7 text-ink-700"
-          >
-            {notice}
-          </p>
-        )}
-
+          <PortalError message={localError || error} />
+          {notice && (
+            <p
+              role="status"
+              className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7"
+            >
+              {notice}
+            </p>
+          )}
+        </div>
         {approved ? (
           <>
-            <ApprovedStories collection={c} accessKey={accessKey} />
-            <div id="sharing-and-postcards" className="scroll-mt-6">
-              <CollectionSharing collection={c} busy={busy} act={act} />
-            </div>
+            <CollectionSharing
+              collection={c}
+              busy={busy}
+              act={act}
+              onRefresh={load}
+            />
+            <details className="mt-6 rounded-2xl border border-warmgray-200 bg-white p-5">
+              <summary className="min-h-12 cursor-pointer text-lg font-semibold">
+                Watch your approved stories
+              </summary>
+              <div className="mt-4">
+                <ApprovedStories collection={c} accessKey={accessKey} />
+              </div>
+            </details>
             <OwnerReplies
               collection={c}
               accessKey={accessKey}
@@ -293,72 +298,52 @@ export default function Review({
             />
           </>
         ) : !c.chapters.length ? (
-          <section
-            id="story-review"
-            className="rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8"
-          >
+          <section className="rounded-2xl border border-warmgray-200 bg-white p-6">
             <h2 className="text-2xl font-semibold">
-              Ready to submit your recordings?
+              Your recordings are saved.
             </h2>
-            <p className="mt-4 max-w-2xl text-lg leading-8 text-ink-600">
-              Listen to your saved recordings below. If you want to say
-              something differently, return to the interview before submitting.
-            </p>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-ink-600">
-              Submitting allows us to transcribe and prepare four films from
-              your recordings. Your own voice is preserved. You’ll see the
-              finished films before anything is shared.
+            <p className="mt-3 max-w-2xl text-lg leading-8">
+              We’ll prepare four films and a written story from your own
+              recordings. You’ll review them before sharing.
             </p>
             {hasOriginals ? (
               <button
-                className={`${portalPrimary} mt-6`}
+                className={`${portalPrimary} mt-5`}
                 disabled={blocked}
                 onClick={() => void prepare()}
               >
-                {working
-                  ? "Submitting your recordings…"
-                  : "Submit my recordings"}
-                <AppIcon name="arrowRight" size={18} />
+                {working ? "Submitting recordings…" : "Prepare my gift"}
               </button>
             ) : (
-              <a className={`${portalPrimary} mt-6`} href={recordPath}>
-                Record my answers <AppIcon name="arrowRight" size={18} />
+              <a className={`${portalPrimary} mt-5`} href={recordPath}>
+                Continue my interview
               </a>
             )}
           </section>
         ) : (
           <>
             {c.draftOutdated && (
-              <section className="mb-6 rounded-2xl border border-clay-300 bg-clay-50 p-5">
+              <section className="mb-5 rounded-xl bg-clay-50 p-5">
                 <h2 className="text-xl font-semibold">
-                  You have new recordings.
+                  Updated recordings are ready to prepare.
                 </h2>
-                <p className="mt-3 text-base leading-7 text-ink-600">
-                  Submit your updated recordings to prepare a new collection.
-                  Your earlier recordings stay saved.
+                <p className="mt-2 text-base leading-7">
+                  Your earlier recordings stay saved. Prepare the updated gift
+                  before approval.
                 </p>
                 <button
                   className={`${portalPrimary} mt-4`}
                   disabled={blocked || generatingFilms}
                   onClick={() => void prepare(true)}
                 >
-                  {working ? "Submitting…" : "Submit updated recordings"}
+                  Prepare updated gift
                 </button>
               </section>
             )}
-            {!filmsReady && (
-              <p className="mb-5 rounded-xl bg-sage-50 p-4 text-base leading-7">
-                Your films are not ready yet. You can listen to the originals
-                now and return here for your finished collection.
-              </p>
-            )}
-            <div id="story-review" ref={playbackTop} className="scroll-mt-6">
-              <h2 className="mb-5 text-2xl font-semibold">
-                {filmsReady ? "Your four films" : "Your saved stories"}
-              </h2>
+            <div hidden={step !== 0}>
               <nav
-                aria-label="Choose a recording or film"
-                className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                aria-label="Choose a chapter"
+                className="mb-3 grid grid-cols-4 gap-2"
               >
                 {c.chapters.map((chapter, index) => (
                   <button
@@ -367,146 +352,243 @@ export default function Review({
                     disabled={blocked}
                     onClick={() => setActiveChapter(chapter.id)}
                     aria-current={
-                      activeChapter === chapter.id ? "page" : undefined
+                      activeChapter === chapter.id ? "true" : undefined
                     }
-                    className={`min-h-24 rounded-2xl border p-4 text-left ${activeChapter === chapter.id ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white hover:border-taupe"}`}
+                    aria-label={`Chapter ${index + 1}: ${chapter.title}`}
+                    className={`min-h-12 rounded-xl border px-2 py-2 text-sm font-medium ${activeChapter === chapter.id ? "border-espresso bg-espresso text-white" : "border-warmgray-200 bg-white"}`}
                   >
-                    <span className="text-sm">Story {index + 1}</span>
-                    <span className="mt-2 block text-lg font-semibold leading-6">
+                    <span>Chapter {index + 1}</span>
+                    <span className="mt-1 hidden text-sm font-normal lg:block">
                       {chapter.title}
-                    </span>
-                    <span className="mt-2 block text-sm">
-                      {chapter.videoMediaId
-                        ? "Film ready"
-                        : "Original recording"}
                     </span>
                   </button>
                 ))}
               </nav>
+              {c.chapters.map((chapter) => (
+                <StoryReviewPanel
+                  key={`${chapter.id}:${chapter.sourceTakeIds.join(",")}`}
+                  chapter={chapter}
+                  collection={c}
+                  accessKey={accessKey}
+                  expectedChapterHash={chapterHashes[chapter.id]}
+                  active={activeChapter === chapter.id && step === 0}
+                  onIssueReported={() => {
+                    setIssuesPending(true);
+                    setIssueRevision((value) => value + 1);
+                    void load();
+                  }}
+                />
+              ))}
+              <nav
+                aria-label="Move between chapters"
+                className="my-4 flex items-center justify-between gap-2"
+              >
+                <button
+                  type="button"
+                  className={portalSecondary}
+                  disabled={blocked || activeIndex === 0}
+                  onClick={() =>
+                    setActiveChapter(c.chapters[activeIndex - 1].id)
+                  }
+                >
+                  Previous
+                </button>
+                <span className="text-sm">{activeIndex + 1} of 4</span>
+                <button
+                  type="button"
+                  className={portalSecondary}
+                  disabled={blocked}
+                  onClick={() =>
+                    activeIndex < c.chapters.length - 1
+                      ? setActiveChapter(c.chapters[activeIndex + 1].id)
+                      : changeStep(1)
+                  }
+                >
+                  {activeIndex < c.chapters.length - 1
+                    ? "Next chapter"
+                    : "Continue"}
+                </button>
+              </nav>
+              <a
+                className="inline-flex min-h-12 items-center gap-2 text-base font-medium underline underline-offset-4"
+                href={`/api/collection/${encodeURIComponent(id)}/book?key=${encodeURIComponent(accessKey)}&draft=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <AppIcon name="download" size={18} /> Preview the complete story
+                book (PDF)
+              </a>
+              {!filmsReady && (
+                <div className="mt-5">
+                  <FilmGenerationPanel
+                    collection={c}
+                    accessKey={accessKey}
+                    disabled={blocked || Boolean(c.draftOutdated)}
+                    onActiveChange={setGeneratingFilms}
+                    onComplete={load}
+                  />
+                </div>
+              )}
+              <div className="mt-5">
+                <button
+                  type="button"
+                  className={portalPrimary}
+                  disabled={blocked}
+                  onClick={() => changeStep(1)}
+                >
+                  Continue to postcards <AppIcon name="arrowRight" size={18} />
+                </button>
+              </div>
             </div>
-            {c.chapters.map((chapter) => (
-              <StoryReviewPanel
-                key={`${chapter.id}:${chapter.sourceTakeIds.join(",")}`}
-                chapter={chapter}
+            <div hidden={step !== 1}>
+              <PostcardProof
                 collection={c}
                 accessKey={accessKey}
-                active={activeChapter === chapter.id}
-                busy={blocked || generatingFilms}
-                onRecord={() => void recordAnother(chapter.id)}
-              />
-            ))}
-            <nav
-              aria-label="Move between your stories"
-              className="my-5 flex flex-wrap items-center justify-between gap-3"
-            >
-              <button
-                type="button"
-                className={portalSecondary}
-                disabled={blocked || activeIndex === 0}
-                onClick={() => chooseStory(activeIndex - 1)}
-              >
-                Previous story
-              </button>
-              <span className="text-base font-medium">
-                {activeIndex + 1} of {c.chapters.length}
-              </span>
-              <button
-                type="button"
-                className={portalSecondary}
                 disabled={blocked}
-                onClick={() => chooseStory(activeIndex + 1)}
-              >
-                {activeIndex === c.chapters.length - 1
-                  ? "Go to approval"
-                  : "Next story"}
-              </button>
-            </nav>
-            <div id="film-preparation" className="mt-8 scroll-mt-6">
-              <FilmGenerationPanel
-                collection={c}
-                accessKey={accessKey}
-                disabled={blocked || Boolean(c.draftOutdated)}
-                onActiveChange={setGeneratingFilms}
-                onComplete={load}
+                draftOnly
+                onPendingChange={setPostcardPending}
               />
+              <div className="mt-5 flex flex-wrap justify-between gap-3">
+                <button
+                  type="button"
+                  className={portalSecondary}
+                  onClick={() => changeStep(0)}
+                >
+                  Back to my gift
+                </button>
+                <button
+                  type="button"
+                  className={portalPrimary}
+                  disabled={blocked || postcardPending}
+                  onClick={() => changeStep(2)}
+                >
+                  Continue to approval <AppIcon name="arrowRight" size={18} />
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ink-600">
+                You can keep the suggested encouragement. A mailing address is
+                not needed to share your digital gift.
+              </p>
             </div>
             <section
-              className="mt-7 rounded-2xl border border-sage-200 bg-sage-50 p-6 sm:p-8"
+              hidden={step !== 2}
+              className="rounded-2xl border border-sage-200 bg-white p-5 sm:p-8"
               aria-labelledby="approval-heading"
             >
-              <h2
-                ref={approvalHeading}
-                tabIndex={-1}
-                id="approval-heading"
-                className="scroll-mt-5 text-2xl font-semibold"
-              >
+              <h2 id="approval-heading" className="text-2xl font-semibold">
                 Ready to share with {c.recipient.name}?
               </h2>
-              <p className="mt-4 max-w-3xl text-lg leading-8 text-ink-600">
-                Once you have watched or listened to all four films, approve the
-                collection here. Your original recordings stay saved. Next, you
-                can choose the encouragement printed on your postcards.
+              <p className="mt-3 text-base leading-7 text-ink-600">
+                Your gift includes four films in your own recorded voice, four
+                written chapters and a printable story book.
               </p>
+              <div className="mt-5 rounded-xl bg-sage-50 p-4">
+                <p className="font-semibold">Digital invitation</p>
+                <p className="mt-1 break-words text-base">
+                  {c.recipient.name} · {c.recipient.email}
+                </p>
+                <p className="mt-2 text-sm leading-6">
+                  {c.capabilities.email
+                    ? "After approval, their email invitation is queued. They verify this email address to open your gift."
+                    : "Email delivery is not connected yet. Approval saves your gift, and you can share its secure link while delivery is being connected."}
+                </p>
+              </div>
+              <div className="mt-3 rounded-xl bg-paper p-4">
+                <p className="font-semibold">Physical postcards</p>
+                <p className="mt-2 text-sm leading-6">
+                  Only {c.recipient.name} receives postcards. Mailing needs a
+                  confirmed address, your separate approval of the print designs
+                  and connected delivery. It does not hold up your digital gift.
+                </p>
+              </div>
+              {issuesPending && (
+                <p
+                  role="status"
+                  className="mt-4 rounded-xl bg-clay-50 p-4 text-base leading-7"
+                >
+                  A chapter you flagged needs checking before this gift can be
+                  shared. Your recordings and postcard words remain saved.
+                </p>
+              )}
+              {issueCheckFailed && (
+                <div role="alert" className="mt-4 rounded-xl bg-clay-50 p-4">
+                  <p>
+                    We could not check whether a chapter needs attention. Your
+                    recordings are saved.
+                  </p>
+                  <button
+                    className={`${portalSecondary} mt-3`}
+                    onClick={() => setIssueRevision((value) => value + 1)}
+                  >
+                    Check again
+                  </button>
+                </div>
+              )}
               <label className="mt-5 flex items-start gap-3 text-base leading-7">
                 <input
                   type="checkbox"
                   className="mt-1 h-5 w-5 shrink-0"
-                  disabled={
-                    blocked ||
-                    generatingFilms ||
-                    !filmsReady ||
-                    Boolean(c.draftOutdated)
-                  }
+                  disabled={blocked || !filmsReady || Boolean(c.draftOutdated)}
                   checked={approvedPlayback}
                   onChange={(event) =>
                     setApprovedPlayback(event.target.checked)
                   }
                 />
                 <span>
-                  I have listened to all four films and want to share this
-                  collection.
+                  I have reviewed all four films and the written story. I
+                  approve this gift for {c.recipient.name}.
                 </span>
               </label>
               {!filmsReady && (
                 <p className="mt-3 text-base leading-7 text-ink-600">
-                  Approval will be available when all four films are ready.
+                  Approval opens when all four films are ready. You can leave
+                  and return to your saved gift.
                 </p>
               )}
-              <button
-                type="button"
-                disabled={!canApprove}
-                className={`${portalPrimary} mt-5`}
-                onClick={() => void approve()}
-              >
-                {working ? "Saving your approval…" : "Approve my collection"}
-                <AppIcon name="arrowRight" size={18} />
-              </button>
-              <p className="mt-4 text-base leading-7 text-ink-600">
-                Your private stories are not printed automatically. Only the
-                public encouragement you approve appears on a postcard.
-              </p>
+              {postcardPending && (
+                <p role="status" className="mt-3 text-base leading-7">
+                  Your postcard words still need saving. Return to postcards to
+                  finish saving them.
+                </p>
+              )}
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className={portalSecondary}
+                  disabled={blocked}
+                  onClick={() => changeStep(1)}
+                >
+                  Back to postcards
+                </button>
+                <button
+                  type="button"
+                  className={portalPrimary}
+                  disabled={!canApprove}
+                  onClick={() => void approve()}
+                >
+                  {working
+                    ? "Saving approval…"
+                    : `Approve and share with ${c.recipient.name}`}
+                  <AppIcon name="arrowRight" size={18} />
+                </button>
+              </div>
             </section>
           </>
         )}
-        <div className="mt-8 space-y-5">
-          <div
-            id="original-recordings"
-            ref={originalsSection}
-            className="scroll-mt-6"
-          >
-            <SourceArchive collection={c} accessKey={accessKey} />
-          </div>
-          <details className="rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-6">
-            <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-              Your people and private return link
+        <div className="mt-8 space-y-4">
+          <SourceArchive collection={c} accessKey={accessKey} />
+          <details className="rounded-2xl border border-warmgray-200 bg-white p-5">
+            <summary className="min-h-12 cursor-pointer text-base font-semibold">
+              Your people and saved account
             </summary>
-            <div className="mt-3 space-y-5">
+            <div className="mt-3">
               <ContactSummary collection={c} />
-              <PrivateLink
-                path={`/collection/${encodeURIComponent(id)}/review?key=${encodeURIComponent(accessKey)}`}
-                label="Save your private workspace link"
-                description="Use this link to return. Anyone with it can access your workspace, so keep it for yourself."
-              />
+              <a
+                href="/account"
+                className="mt-3 inline-flex min-h-12 items-center text-base font-medium underline underline-offset-4"
+              >
+                Return through My stories
+              </a>
             </div>
           </details>
         </div>

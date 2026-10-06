@@ -297,6 +297,15 @@ export default function InterviewComplete({
           {needsAttention && (
             <div className="mb-6 rounded-xl bg-paper-100 p-5 text-base leading-7">
               <p>{preparation.error || "Please check preparation again."}</p>
+              {preparation.canRetry === false &&
+                !preparation.missingAreas?.length && (
+                  <p className="mt-3">
+                    Automatic attempts have stopped. Contact the Time Tapestry
+                    team with your private collection link so they can check
+                    preparation. Your saved recordings do not need to be
+                    submitted again.
+                  </p>
+                )}
               {canUseFullInterview ? (
                 <div className="mt-4 border-t border-warmgray-200 pt-4">
                   <p>
@@ -356,6 +365,7 @@ export default function InterviewComplete({
                 <AppIcon name="arrowRight" size={20} />
               </Link>
             ) : needsAttention &&
+              preparation.canRetry !== false &&
               !canUseFullInterview &&
               !preparation.missingAreas?.length ? (
               <button
@@ -370,7 +380,7 @@ export default function InterviewComplete({
             {(!accepted || needsAttention) && !loading && (
               <Link
                 className={secondary}
-                href={`/record/${encodeURIComponent(collectionId)}${query}`}
+                href={`/record/${encodeURIComponent(collectionId)}${query}${preparation?.missingAreas?.[0] ? `&classic=1&chapter=${encodeURIComponent(preparation.missingAreas[0].id)}` : ""}`}
               >
                 Continue conversation
               </Link>

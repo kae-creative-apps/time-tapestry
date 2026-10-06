@@ -1,4 +1,5 @@
 import { queueFilmsReady } from "../notifications";
+import { queuePreparationAttention } from "../recovery-notifications";
 import { randomUUID } from "node:crypto";
 import {
   getCollection,
@@ -376,7 +377,7 @@ export async function claimNextFilmJob(
     )
       continue;
     let claimed: StoryFilmJob | null = null;
-    await mutateRecord<StoryFilmJob>(id, async (job) => {
+    const updated = await mutateRecord<StoryFilmJob>(id, async (job) => {
       if (!job) throw new Error("Film job not found.");
       if (job.mode !== "original") {
         return { ...retiredNarrationJob(job), updatedAt: nowIso() };
@@ -425,7 +426,7 @@ export async function claimNextFilmJob(
           lease: undefined,
           updatedAt: nowIso(),
           error:
-            "The worker stopped before finishing. Completed files are preserved. Retry after checking the worker; an unfinished narration request may already have been processed.",
+            "Film preparation stopped after repeated interruptions. Completed files and original recordings are preserved. Contact the team before starting another attempt.",
         };
       }
       if (
@@ -466,6 +467,7 @@ export async function claimNextFilmJob(
       };
       return claimed;
     });
+    if (updated.status === "failed") await publishFilmAttention(updated);
     if (claimed) return claimed as StoryFilmJob;
   }
   return null;
@@ -581,7 +583,7 @@ export async function failFilmJob(
   stale: boolean,
   retryable = false,
 ) {
-  return mutateRecord<StoryFilmJob>(id, (job) => {
+  const failed = await mutateRecord<StoryFilmJob>(id, (job) => {
     if (!job || job.lease?.token !== token)
       throw new Error("Another worker owns this job.");
     const retry =
@@ -611,5 +613,23 @@ export async function failFilmJob(
           : chapter,
       ),
     };
+  });
+  if (failed.status === "failed") await publishFilmAttention(failed);
+  return failed;
+}
+
+async function publishFilmAttention(job: StoryFilmJob) {
+  if (!(await getCollection(job.collectionId))) return;
+  await mutateCollection(job.collectionId, async (c) => {
+    if (
+      (await latestFilmJob(c.id))?.id === job.id &&
+      (await filmJobInputsCurrent(job, c))
+    )
+      queuePreparationAttention(
+        c,
+        job.id,
+        "Film preparation stopped before all four films were ready. Your original recordings, written stories and any completed films are saved.",
+      );
+    return c;
   });
 }

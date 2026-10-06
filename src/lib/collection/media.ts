@@ -81,8 +81,12 @@ export function mediaAllowed(
       Boolean(recipientById(c, recipientId)) &&
       c.status === "approved" &&
       ((m.role === "recipient" && storedRecipientId(m) === recipientId) ||
-        (c.status === "approved" &&
-          c.chapters.some((ch) => ch.videoMediaId === m.id)))
+        c.chapters.some(
+          (chapter) =>
+            chapter.videoMediaId === m.id &&
+            chapter.film?.mediaId === m.id &&
+            chapter.film.narrationKind === "original_recording",
+        ))
     );
   return false;
 }

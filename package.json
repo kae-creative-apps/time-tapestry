@@ -44,7 +44,8 @@
     "react-dom": "^19.3.0",
     "remotion": "4.0.532",
     "resend": "^6.31.0",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "mediabunny": "1.56.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

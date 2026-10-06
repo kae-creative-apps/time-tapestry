@@ -269,6 +269,25 @@ export function accountRole(c: Collection, email: string): AccountRole | null {
   if (matches(c.requester.email)) return "requester";
   return null;
 }
+function ownerInterviewState(
+  c: Collection,
+): NonNullable<LibraryItem["interviewState"]> {
+  if (c.status === "approved") return "approved";
+  const prepared =
+    !c.draftOutdated &&
+    c.chapters.length === 4 &&
+    c.chapters.every(
+      (chapter) =>
+        chapter.videoStatus === "ready" &&
+        chapter.videoMediaId &&
+        chapter.film?.narrationKind === "original_recording" &&
+        (!c.interviewPreparation?.filmJobId ||
+          chapter.film.jobId === c.interviewPreparation.filmJobId),
+    );
+  if (c.interviewPreparation && !prepared) return "preparing";
+  return c.chapters.length || c.status === "draft" ? "review" : "recording";
+}
+
 function libraryItem(
   c: Collection,
   role: AccountRole,
@@ -310,6 +329,7 @@ function libraryItem(
             .length
         : 0,
     },
+    ...(owner ? { interviewState: ownerInterviewState(c) } : {}),
     openUrl: `/api/account/library/${c.id}/open`,
   };
 }
@@ -329,10 +349,17 @@ export async function accountCollectionPath(account: Account, id: string) {
     role = c && accountRole(c, account.email);
   if (!c || !role)
     throw new SecurityError("Story not found in your account.", 404);
-  if (role === "owner")
-    return c.status === "invited" || c.status === "recording"
-      ? `/record/${c.id}?key=${c.ownerKey}`
-      : `/collection/${c.id}/review?key=${c.ownerKey}`;
+  if (role === "owner") {
+    const key = `?key=${c.ownerKey}`;
+    if (c.status === "approved") return `/collection/${c.id}/review${key}`;
+    if (ownerInterviewState(c) === "preparing")
+      return `/collection/${c.id}/complete${key}`;
+    if (c.chapters.length || c.status === "draft")
+      return `/collection/${c.id}/review${key}`;
+    const classic =
+      !c.interviews?.length && c.takes.some((take) => take.kind !== "text");
+    return `/record/${c.id}${key}${classic ? "&classic=1" : ""}`;
+  }
   return role === "recipient"
     ? `/collection/${c.id}`
     : `/collection/${c.id}?key=${c.requesterKey}`;

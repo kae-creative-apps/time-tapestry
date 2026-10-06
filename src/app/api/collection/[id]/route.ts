@@ -47,6 +47,7 @@ import {
   InterviewPreparationError,
 } from "@/lib/collection/interview-preparation";
 import { restoreCompletedInterview } from "@/lib/collection/interview-restoration";
+import { validateReplyRecording } from "@/lib/collection/reply-media";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -454,6 +455,7 @@ export async function POST(
               throw new Error("Choose a new reply identifier.");
             return c;
           }
+          if (media) await validateReplyRecording(media);
           const reply: Reply = {
             recipientId: recipient.id,
             id: clean(b.replyId, 80) || randomUUID(),

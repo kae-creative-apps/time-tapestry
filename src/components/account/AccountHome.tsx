@@ -325,9 +325,11 @@ export function AccountHome() {
                   const label = mine
                     ? approved
                       ? "Open my collection"
-                      : item.storyCount
-                        ? "Continue reviewing"
-                        : "Continue my story"
+                      : item.interviewState === "preparing"
+                        ? "Check preparation"
+                        : item.storyCount
+                          ? "Review my gift"
+                          : "Continue my interview"
                     : item.role === "recipient" && approved
                       ? "Open this gift"
                       : "View progress";
@@ -369,9 +371,11 @@ export function AccountHome() {
                           />
                           {approved
                             ? "Approved and ready to share"
-                            : item.status === "draft"
-                              ? "Story drafts to review"
-                              : "Stories in the making"}
+                            : item.interviewState === "preparing"
+                              ? "Recordings saved, preparing your gift"
+                              : item.status === "draft"
+                                ? "Your gift is ready to review"
+                                : "Your interview is saved here"}
                         </p>
                         {mine && (
                           <>

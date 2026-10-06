@@ -23,16 +23,19 @@ export function useCollection(id: string, accessKey: string) {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       // A background status poll must not outrank an in-flight save with an older snapshot.
-      if (pending.current > 0) return current.current;
+      if (pending.current > 0) return null;
       const version = ++latest.current;
       if (!current.current) setError("");
       try {
         const b = await collectionRequest(endpoint, { signal });
         if (mounted.current && version === latest.current) {
+          current.current = b.collection;
           setCollection(b.collection);
           setError("");
+          return b.collection as CollectionView;
         }
-        return b.collection as CollectionView;
+        // An ignored snapshot is not a successful refresh acknowledgement.
+        return null;
       } catch (e) {
         if (!signal?.aborted && mounted.current && version === latest.current)
           setError(
@@ -48,6 +51,7 @@ export function useCollection(id: string, accessKey: string) {
 
   useEffect(() => {
     const controller = new AbortController();
+    current.current = null;
     setCollection(null);
     void load(controller.signal);
     return () => controller.abort();
@@ -65,8 +69,10 @@ export function useCollection(id: string, accessKey: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (mounted.current && version === latest.current)
+        if (mounted.current && version === latest.current) {
+          current.current = b.collection;
           setCollection(b.collection);
+        }
         return b.collection as CollectionView;
       } catch (e) {
         if (mounted.current && version === latest.current)

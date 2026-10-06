@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CHAPTERS,
   NEUTRAL_DECISION_QUESTION,
@@ -13,6 +13,10 @@ import type { AnswerTake, CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 import { getTakeBlob, listLocalTakes } from "@/lib/collection/local-takes";
 import SavedRecorder from "./SavedRecorder";
+import {
+  interviewResumeState,
+  recordedInterviewChapterIds,
+} from "@/lib/collection/interview-resume";
 
 const primary =
   "min-h-12 rounded-md bg-oxblood px-5 py-3 font-medium text-white disabled:opacity-50";
@@ -232,6 +236,8 @@ export default function Interview({
   accessKey: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedChapter = searchParams.get("chapter");
   const endpoint = `/api/collection/${encodeURIComponent(collectionId)}`;
   const query = `?key=${encodeURIComponent(accessKey)}`;
   const [collection, setCollection] = useState<CollectionView | null>(null);
@@ -275,27 +281,10 @@ export default function Interview({
     collection?.takes
       .filter((take) => take.questionId === questionId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt)) ?? [];
-  const completed = CHAPTERS.filter(
-    (item) =>
-      collection?.takes.some(
-        (take) =>
-          take.id === collection.selectedTakeIds[item.id] &&
-          take.kind !== "text" &&
-          Boolean(take.mediaId) &&
-          Boolean(take.text.trim()),
-      ) ||
-      collection?.interviews?.some(
-        (session) =>
-          session.segments.length > 0 &&
-          session.turns.some(
-            (turn) =>
-              turn.role === "user" &&
-              turn.chapterId === item.id &&
-              turn.text.trim() &&
-              !session.excludedTurnIds.includes(turn.id),
-          ),
-      ),
-  ).length;
+  const answeredChapterIds = collection
+    ? recordedInterviewChapterIds(collection)
+    : [];
+  const completed = answeredChapterIds.length;
   const progress = Math.min(
     100,
     Math.max(0, (completed / CHAPTERS.length) * 100),
@@ -309,15 +298,47 @@ export default function Interview({
     setCollection(data.collection);
     if (!initialLoaded.current) {
       initialLoaded.current = true;
+      const saved = interviewResumeState(data.collection);
+      const requestedIndex = CHAPTERS.findIndex(
+        (chapter) => chapter.id === requestedChapter,
+      );
       setChapterIndex(
-        Math.min(
-          CHAPTERS.length - 1,
-          Math.max(0, data.collection.currentQuestion || 0),
-        ),
+        requestedIndex >= 0
+          ? requestedIndex
+          : Math.max(0, Math.min(3, data.collection.currentQuestion || 0)),
+      );
+      const local =
+        data.collection.role === "owner"
+          ? await listLocalTakes(collectionId).catch(() => [])
+          : [];
+      const interrupted = local
+        .filter(
+          (take) =>
+            /^q[1-4](?:-f\d+)?$/.test(take.questionId) &&
+            take.state !== "backed_up" &&
+            take.kind !== "text",
+        )
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .at(-1);
+      if (interrupted && requestedIndex < 0) {
+        setChapterIndex(
+          CHAPTERS.findIndex(
+            (chapter) => chapter.id === interrupted.questionId.slice(0, 2),
+          ),
+        );
+        const followUp = /-f(\d+)$/.exec(interrupted.questionId);
+        setFollowUpIndex(followUp ? Number(followUp[1]) - 1 : null);
+      }
+      setMode(
+        interrupted?.kind === "voice"
+          ? "voice"
+          : interrupted?.kind === "video"
+            ? "video"
+            : saved.kind,
       );
     }
     return data.collection as CollectionView;
-  }, [endpoint, query]);
+  }, [collectionId, endpoint, query, requestedChapter]);
 
   useEffect(() => {
     let alive = true;
@@ -337,6 +358,20 @@ export default function Interview({
       alive = false;
     };
   }, [load]);
+  useEffect(() => {
+    if (
+      collection?.role === "owner" &&
+      collection.status !== "approved" &&
+      collection.interviewPreparation &&
+      !collection.draftOutdated &&
+      !collection.interviewPreparation.missingAreas?.length
+    ) {
+      router.replace(
+        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
+      );
+    }
+  }, [collection, collectionId, query, router]);
+
   const cancelSpeech = useCallback(() => {
     // Invalidate asynchronous work before pausing so its callbacks cannot restart audio.
     speechRequest.current += 1;
@@ -545,6 +580,14 @@ export default function Interview({
           `You have ${pending.length} recording${pending.length === 1 ? "" : "s"} saved only on this device (${places}). Open those answers and back them up before preparing your story.`,
         );
       }
+      const latest = await load();
+      const missing = interviewResumeState(latest).missingChapterIds;
+      if (missing.length) {
+        await goTo(CHAPTERS.findIndex((chapter) => chapter.id === missing[0]));
+        throw new Error(
+          "Your recordings are saved. This story area still needs an answer before we prepare your four chapters. Faith questions are optional; you can share a decision and what you learned instead.",
+        );
+      }
       const result = await act({
         action: "submit_interview",
         processingApproved: true,
@@ -670,13 +713,7 @@ export default function Interview({
         className="mt-7 grid grid-cols-2 gap-2 sm:grid-cols-4"
       >
         {CHAPTERS.map((item, index) => {
-          const answered = collection.takes.some(
-            (take) =>
-              take.id === collection.selectedTakeIds[item.id] &&
-              take.kind !== "text" &&
-              take.mediaId &&
-              take.text.trim(),
-          );
+          const answered = answeredChapterIds.includes(item.id);
           return (
             <button
               key={item.id}
@@ -806,6 +843,7 @@ export default function Interview({
         </div>
         <div ref={recorderArea} tabIndex={-1} className="mt-5">
           <SavedRecorder
+            autoRecoverBackup
             key={`${questionId}-${mode}`}
             collectionId={collectionId}
             accessKey={accessKey}
@@ -932,9 +970,11 @@ export default function Interview({
           </p>
         )}
         <p className="mt-6 text-sm leading-6 text-ink-400">
-          Need a break? Finish saving your take, then return using this same
-          link. Device drafts stay in this browser. Recordings marked Backed up
-          are saved with your interview.
+          Need a break? Finish saving your take, then sign in to My stories with{" "}
+          {collection.storyteller.email} to continue. Recordings marked Backed
+          up are available on another device. Interrupted device drafts stay in
+          this browser, and the last moments before a sudden closure may be
+          missing.
         </p>
       </section>
     </main>
