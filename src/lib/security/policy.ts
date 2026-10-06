@@ -14,6 +14,7 @@ export type SecurityAction =
   | "create_organization"
   | "claim_gift"
   | "issue_gift"
+  | "verify_address"
   | "ai_session"
   | "transcribe"
   | "speak"
@@ -34,6 +35,7 @@ export const paidActions = new Set<SecurityAction>([
   "generate",
   "followup",
   "render_film",
+  "verify_address",
 ]);
 export const limits: Record<
   SecurityAction,
@@ -43,6 +45,7 @@ export const limits: Record<
   create_organization: { count: 5, seconds: 3600 },
   claim_gift: { count: 20, seconds: 600 },
   issue_gift: { count: 150, seconds: 600 },
+  verify_address: { count: 30, seconds: 600 },
   ai_session: { count: 10, seconds: 300 },
   transcribe: { count: 60, seconds: 3600 },
   speak: { count: 120, seconds: 3600 },

@@ -11,6 +11,7 @@ import { publicPostcardMessage } from "./postcard-public-message";
 import { accountEmailAvailable } from "../accounts/mail";
 import { hostedSecurityConfigured } from "../security/policy";
 import { CHAPTERS } from "../interview-state";
+import { addressVerificationIsCurrent } from "../lob/address-verification";
 
 export type PostcardProofSnapshot = {
   version: 1 | 2;
@@ -394,6 +395,11 @@ export function releasePostcardProof(
       "Review and approve the current print proof before releasing postcards.",
       409,
     );
+  if (!addressVerificationIsCurrent(c, true))
+    throw new PostcardProofError(
+      "Check and confirm this address with the postal service before releasing postcards. Test address checks cannot release real mail.",
+      409,
+    );
   const readiness = postcardDeliveryReadiness(origin);
   if (!readiness.ready)
     throw new PostcardProofError(
@@ -470,6 +476,11 @@ export async function prepareAutomaticPostcards(
     postcardProofIsCurrent(c, c.postcardProof, origin) &&
     postcardPublicConsentIsCurrent(c)
   ) {
+    if (!addressVerificationIsCurrent(c, true))
+      return state(
+        "waiting_for_address",
+        "The saved address needs a postal delivery check before mailing. Open the address page to check and confirm it. Test results cannot release real mail.",
+      );
     if (!postcardDeliveryReadiness(origin).ready)
       return state(
         "waiting_for_setup",
@@ -519,6 +530,11 @@ export async function prepareAutomaticPostcards(
       return state(
         "waiting_for_setup",
         "The print version is saved. Mailing will begin automatically when delivery setup is ready.",
+      );
+    if (!addressVerificationIsCurrent(c, true))
+      return state(
+        "waiting_for_address",
+        "The print version is saved. Check and confirm this address with the postal service before mailing. Test results cannot release real mail.",
       );
     releasePostcardProof(c, proof.hash, now, origin);
     return state(

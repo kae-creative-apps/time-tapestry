@@ -84,30 +84,38 @@ export default function AddressPage({
               {mailingStarted
                 ? "Address changes after printing begins pause future postcards until the Time Tapestry team reviews them. A postcard already sent for printing may still go to the previous address."
                 : automaticPostcards
-                  ? "Postcards are prepared automatically after the storyteller approves the stories. You do not need to arrange the mailing."
+                  ? "Check and confirm the address below before mailing. Postcards also need the storyteller’s approval of the printed cards."
                   : "You can update this address here. Postcards will only be prepared if the storyteller chooses postcard delivery."}
             </p>
-            <details className="mt-6">
+            <details open className="mt-6">
               <summary className="min-h-12 cursor-pointer text-base font-medium">
-                Update my address
+                Check or update my address
               </summary>
               <AddressForm
+                collectionId={id}
+                accessKey={accessKey}
                 initial={c.address}
                 busy={busy}
                 automaticPostcards={automaticPostcards}
                 mailingStarted={mailingStarted}
-                onSave={(address) => act({ action: "address", address })}
+                onSave={(address, verificationId) =>
+                  act({ action: "address", address, verificationId })
+                }
               />
             </details>
           </div>
         ) : (
           c && (
             <AddressForm
+              collectionId={id}
+              accessKey={accessKey}
               initial={c.address}
               busy={busy}
               automaticPostcards={automaticPostcards}
               mailingStarted={mailingStarted}
-              onSave={(address) => act({ action: "address", address })}
+              onSave={(address, verificationId) =>
+                act({ action: "address", address, verificationId })
+              }
             />
           )
         )}

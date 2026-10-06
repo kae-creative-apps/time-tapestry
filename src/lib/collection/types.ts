@@ -1,3 +1,5 @@
+import type { StoryPlaybackArtifact } from "../audio/playback-types";
+import type { AddressVerificationReceipt } from "../lob/address-verification-types";
 import type { PostcardProofSnapshot } from "./postcard-proofs";
 import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
@@ -82,6 +84,9 @@ export type InterviewSegment = {
   createdAt: string;
 };
 export type InterviewSession = {
+  /** A scoped replacement preserves earlier originals until its backup is verified. */
+  replacesChapterId?: InterviewChapterId;
+  replacementCommittedAt?: string;
   id: string;
   provider: "elevenlabs" | "guided";
   providerConversationId?: string;
@@ -94,6 +99,7 @@ export type InterviewSession = {
   excludedTurnIds: string[];
 };
 export type ChapterPackage = {
+  playback?: StoryPlaybackArtifact;
   id: string;
   title: string;
   content: string;
@@ -103,6 +109,7 @@ export type ChapterPackage = {
   videoStatus: "not_requested" | "awaiting_edit" | "ready";
   film?: StoryFilmArtifact;
   reviewedFilmSha256?: string;
+  reviewedPlaybackSha256?: string;
   captions?: string;
   editorialReviewed: boolean;
   generatedWith: "source_text" | "gloo";
@@ -174,6 +181,9 @@ export type Notification = {
 };
 export type PostcardCadence = "biweekly" | "quarterly";
 export type Collection = {
+  sponsorship?: { organizationId: string; giftId: string };
+  addressVerification?: AddressVerificationReceipt;
+  pendingAddressVerification?: AddressVerificationReceipt;
   livingStory?: LivingStory;
   /** Owner-only requests to check generated wording against the saved recording. */
   storyIssues?: Array<{
@@ -300,7 +310,7 @@ export type StoredMedia = {
     completedAt: string;
   };
   /** Assigned by server upload/render paths. Omitted on older saved media. */
-  provenance?: "uploaded_recording" | "generated_film";
+  provenance?: "uploaded_recording" | "generated_film" | "chapter_playback";
   id: string;
   collectionId: string;
   role: "owner" | "recipient";

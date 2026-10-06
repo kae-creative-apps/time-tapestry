@@ -1,0 +1,54 @@
+{
+  "source_filename": "Time Tapestry postcards.pdf",
+  "source_sha256": "c7a6ce910a53345e1042323d2aee6c9483b29b1c187eabc65ccaa12b55b005e5",
+  "page_count": 8,
+  "trim_box_points": [
+    27,
+    27,
+    459,
+    315
+  ],
+  "trim_dimensions_inches": [
+    6,
+    4
+  ],
+  "export_dimensions_pixels": [
+    1500,
+    1000
+  ],
+  "public_scope": "Fronts only. Private source PDF contains example recipient addresses and QR destinations. Never use those example backs as live mailing artwork.",
+  "fronts": [
+    {
+      "card": 1,
+      "theme": "kindness",
+      "source_page": 1,
+      "public_path": "/brand/postcards/designer-2026-10-06-v2/postcard-01-kindness-front.webp",
+      "sha256": "53e8c477d2197329a115c4d7756002f647eecc3d1d3352af8d7e43126886c2d7",
+      "bytes": 34274
+    },
+    {
+      "card": 2,
+      "theme": "faith",
+      "source_page": 3,
+      "public_path": "/brand/postcards/designer-2026-10-06-v2/postcard-02-faith-front.webp",
+      "sha256": "3b0f444f3efd4720288524e950d313444bd8db76468dd97b5963c5114c2b1251",
+      "bytes": 30610
+    },
+    {
+      "card": 3,
+      "theme": "generosity",
+      "source_page": 5,
+      "public_path": "/brand/postcards/designer-2026-10-06-v2/postcard-03-generosity-front.webp",
+      "sha256": "3a90dd181a41349952ec465bc027e7877b888d671b4a96805832273078b02549",
+      "bytes": 32132
+    },
+    {
+      "card": 4,
+      "theme": "encouragement",
+      "source_page": 7,
+      "public_path": "/brand/postcards/designer-2026-10-06-v2/postcard-04-encouragement-front.webp",
+      "sha256": "d6fa01a90d60be3d82d9108ddb47b26dead0b842001c32ce87cc267a780a1fc2",
+      "bytes": 38102
+    }
+  ]
+}

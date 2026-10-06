@@ -10,6 +10,7 @@ import { prepareCollection } from "../src/lib/collection/create";
 import type { Collection, StoredMedia } from "../src/lib/collection/types";
 import { pcmWavFixture } from "./pcm-wav-fixture";
 import { verifiedRecipientCookie } from "./verified-recipient-fixture";
+import { storyTraceId } from "../src/lib/observability/pipeline-logger";
 
 let store: typeof import("../src/lib/collection/store");
 let mediaRoute: typeof import("../src/app/api/collection/[id]/media/route");
@@ -394,6 +395,10 @@ test("signed provider callbacks reject mismatched bindings and memories locked a
   const { c, momentId } = await fixture();
   const original = await placeholder(c);
   const bound = await placeholder(c, momentId);
+  const diagnostics: string[] = [];
+  t.mock.method(console, "error", (line: unknown) => {
+    diagnostics.push(String(line));
+  });
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => {
     calls++;
@@ -402,14 +407,16 @@ test("signed provider callbacks reject mismatched bindings and memories locked a
   for (const [mediaId, tokenMoment, expected] of [
     [original.id, momentId, /Invalid recording for this memory/],
     [bound.id, undefined, /Choose a draft memory/],
-    [bound.id, randomUUID(), /story question could not be found/],
+    [bound.id, randomUUID(), /recording could not finish uploading/],
   ] as const) {
     const response = await uploadRoute.POST(
       completion(c, mediaId, tokenMoment),
       params(c),
     );
     assert.equal(response.status, 400);
-    assert.match((await response.json()).error, expected);
+    const body = (await response.json()) as { error: string; traceId: string };
+    assert.match(body.error, expected);
+    assert.equal(body.traceId, storyTraceId(c.id));
   }
   c.livingStory!.moments[0].status = "published";
   await store.putCollection(c);
@@ -418,7 +425,44 @@ test("signed provider callbacks reject mismatched bindings and memories locked a
     params(c),
   );
   assert.equal(publishedCallback.status, 400);
-  assert.match((await publishedCallback.json()).error, /no longer open/);
+  const callbackBody = (await publishedCallback.json()) as {
+    error: string;
+    traceId: string;
+  };
+  assert.match(callbackBody.error, /recording could not finish uploading/);
+  assert.equal(callbackBody.traceId, storyTraceId(c.id));
+  const events = diagnostics.map(
+    (line) =>
+      JSON.parse(line) as {
+        stage: string;
+        status: string;
+        traceId: string;
+        error: { stack: string };
+      },
+  );
+  assert.ok(events.length >= 4);
+  assert.ok(
+    events.every(
+      (event) =>
+        event.stage === "RECORDING_UPLOAD" &&
+        event.status === "failed" &&
+        event.traceId === callbackBody.traceId,
+    ),
+  );
+  assert.ok(
+    events.some((event) =>
+      /assertLivingStoryUpload|momentFor/.test(event.error.stack),
+    ),
+    "redacted diagnostics retain the validation call site",
+  );
+  assert.ok(
+    diagnostics.every(
+      (line) =>
+        !line.includes(blobToken) &&
+        !line.includes(c.ownerKey) &&
+        !line.includes(c.storyteller.email),
+    ),
+  );
   assert.equal(
     (
       await mediaRoute.POST(

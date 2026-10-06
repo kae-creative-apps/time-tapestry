@@ -199,6 +199,56 @@ test("a claimed low-disk job is safely deferred, retaining files and retry budge
   assert.equal(await readFile(saved, "utf8"), "original bytes");
 });
 
+test("a disk pause preserves completed interactive chapter status for the next attempt", async () => {
+  const queued = await originalJob();
+  const readyChapter = {
+    ...queued.chapters[0],
+    status: "ready" as const,
+    progress: 1,
+    playback: {
+      schemaVersion: 1 as const,
+      jobId: queued.id,
+      chapterId: "q1",
+      mediaId: "playbackmedia_fixture",
+      sourceTakeIds: queued.chapters[0].sourceTakeIds,
+      sourceSha256: queued.chapters[0].sourceSha256,
+      planSha256: "a".repeat(64),
+      outputSha256: "b".repeat(64),
+      durationMs: 1000,
+      words: [{ text: "Saved", startMs: 0, endMs: 900 }],
+      createdAt: queued.createdAt,
+    },
+  };
+  await store.mutateRecord(queued.id, () => ({
+    ...queued,
+    outputMode: "interactive",
+    chapters: [readyChapter, ...queued.chapters.slice(1)],
+  }));
+  const claimed = (await jobs.claimNextFilmJob(
+    "playback-disk-worker",
+    Date.now(),
+    queued.id,
+  ))!;
+  process.env.STORY_FILM_MIN_FREE_BYTES = String(
+    Math.floor(Number.MAX_SAFE_INTEGER / 2),
+  );
+  const paused = await worker.processFilmJob(claimed);
+  assert.equal(paused?.status, "queued");
+  assert.equal(paused?.attempts, 0);
+  assert.deepEqual(paused?.chapters[0], readyChapter);
+  assert.equal(paused?.chapters[1].status, "queued");
+  process.env.STORY_FILM_MIN_FREE_BYTES = "1";
+  const resumed = await jobs.claimNextFilmJob(
+    "playback-resumed-worker",
+    Date.parse(paused!.nextAttemptAt!) + 1,
+    queued.id,
+  );
+  assert.ok(resumed);
+  assert.equal(resumed.chapters[0].status, "ready");
+  assert.deepEqual(resumed.chapters[0].playback, readyChapter.playback);
+  assert.equal(resumed.attempts, 1);
+});
+
 test("an old worker cannot release or refund a replacement worker's lease", async () => {
   const queued = await originalJob();
   const claimed = (await jobs.claimNextFilmJob(

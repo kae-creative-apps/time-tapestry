@@ -1,7 +1,11 @@
+import {
+  isMeaningfulInterviewSpeech,
+  interviewSessionNeedsTranscriptRecovery,
+} from "./interview-speech";
 import { CHAPTERS } from "../interview-state";
 import { interviewChapterTitle } from "./interview-progress";
 import { recordedInterviewChapterIds } from "./interview-resume";
-import type { CollectionView } from "./types";
+import type { Collection, CollectionView } from "./types";
 
 export type InterviewReviewRecording = {
   mediaId: string;
@@ -13,28 +17,11 @@ export type InterviewReviewRecording = {
 
 /** Original-only sessions can use the existing authenticated transcript recovery worker. */
 export function unassignedInterviewRecordings(
-  collection: CollectionView,
+  collection: Pick<Collection, "interviews">,
 ): InterviewReviewRecording[] {
   const recordings = new Map<string, InterviewReviewRecording>();
   for (const session of collection.interviews ?? []) {
-    if (session.provider !== "elevenlabs") continue;
-    const superseded = new Set(
-      session.turns.map((turn) => turn.supersedesTurnId).filter(Boolean),
-    );
-    const answers = session.turns.filter(
-      (turn) =>
-        turn.role === "user" &&
-        turn.text.trim() &&
-        !session.excludedTurnIds.includes(turn.id) &&
-        !superseded.has(turn.id),
-    );
-    if (answers.length && answers.every((turn) => turn.chapterId)) continue;
-    // Entirely excluded answers are intentional history, not missing transcription.
-    if (
-      !answers.length &&
-      session.turns.some((turn) => turn.role === "user" && turn.text.trim())
-    )
-      continue;
+    if (!interviewSessionNeedsTranscriptRecovery(session)) continue;
     for (const segment of session.segments)
       if (segment.mediaId)
         recordings.set(segment.mediaId, {
@@ -53,6 +40,21 @@ export function interviewRecordingReview(collection: CollectionView) {
   return CHAPTERS.map((chapter) => {
     const recordings = new Map<string, InterviewReviewRecording>();
     const transcript: string[] = [];
+    const pendingReplacement = [...(collection.interviews ?? [])]
+      .reverse()
+      .find(
+        (session) =>
+          session.replacesChapterId === chapter.id &&
+          !session.replacementCommittedAt &&
+          session.segments.length > 0,
+      );
+    if (pendingReplacement)
+      for (const segment of pendingReplacement.segments)
+        recordings.set(segment.mediaId, {
+          mediaId: segment.mediaId,
+          kind: segment.kind,
+          fromInterview: true,
+        });
     for (const take of collection.takes) {
       if (
         take.kind === "text" ||
@@ -70,7 +72,7 @@ export function interviewRecordingReview(collection: CollectionView) {
         kind: take.kind,
         fromInterview: false,
       });
-      if (take.text.trim()) transcript.push(take.text);
+      if (isMeaningfulInterviewSpeech(take.text)) transcript.push(take.text);
     }
     for (const session of collection.interviews ?? []) {
       const superseded = new Set(
@@ -82,7 +84,7 @@ export function interviewRecordingReview(collection: CollectionView) {
           (turn) =>
             turn.role === "user" &&
             turn.chapterId === chapter.id &&
-            turn.text.trim() &&
+            isMeaningfulInterviewSpeech(turn.text) &&
             !session.excludedTurnIds.includes(turn.id) &&
             !superseded.has(turn.id),
         );
@@ -130,14 +132,21 @@ export function interviewRecordingReview(collection: CollectionView) {
         }
       }
     }
-    const awaitingChapterMatch = recordings.size === 0 && unassigned.length > 0;
+    const awaitingChapterMatch =
+      Boolean(pendingReplacement) ||
+      (recordings.size === 0 && unassigned.length > 0);
     return {
       id: chapter.id,
       title: interviewChapterTitle(chapter.id, collection.faithFraming),
       ready: ready.includes(chapter.id),
-      recordings: awaitingChapterMatch ? unassigned : [...recordings.values()],
+      recordings: recordings.size
+        ? [...recordings.values()]
+        : awaitingChapterMatch
+          ? unassigned
+          : [],
       awaitingChapterMatch,
-      transcript: transcript.join("\n\n"),
+      replacementPending: Boolean(pendingReplacement),
+      transcript: pendingReplacement ? "" : transcript.join("\n\n"),
     };
   });
 }
@@ -159,5 +168,5 @@ export function interviewRerecordPath(
   accessKey: string,
   chapterId: string,
 ) {
-  return `/record/${encodeURIComponent(collectionId)}?key=${encodeURIComponent(accessKey)}&classic=1&chapter=${encodeURIComponent(chapterId)}&returnToReview=1`;
+  return `/record/${encodeURIComponent(collectionId)}?key=${encodeURIComponent(accessKey)}&rerecord=${encodeURIComponent(chapterId)}`;
 }

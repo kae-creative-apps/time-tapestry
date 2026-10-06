@@ -5,21 +5,28 @@ import { AppIcon } from "@/components/icons";
 import type { CollectionView } from "@/lib/collection/types";
 import { mediaPath, portalSecondary } from "./PortalUI";
 import { hasRecordedVoiceFilm } from "./recorded-films";
+import { hasChapterPlayback } from "@/lib/audio/playback-types";
+import { StoryFilmPlayer } from "./StoryFilmPlayer";
+import { StoryExportPanel } from "./FilmGenerationPanel";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
 
 /** The owner can watch the approved gift without switching to a recipient link. */
 export function ApprovedStories({
   collection,
   accessKey,
+  onRefresh,
 }: {
   collection: CollectionView;
   accessKey: string;
+  onRefresh: () => Promise<unknown>;
 }) {
   const [selected, setSelected] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const chapter = collection.chapters[selected] || collection.chapters[0];
   if (!chapter) return null;
-  const filmCount = collection.chapters.filter(hasRecordedVoiceFilm).length;
+  const filmCount = collection.chapters.filter(
+    (item) => hasChapterPlayback(item) || hasRecordedVoiceFilm(item),
+  ).length;
   function choose(index: number, focus = false) {
     setSelected(index);
     if (focus) heading.current?.focus();
@@ -35,12 +42,12 @@ export function ApprovedStories({
             Your finished collection
           </p>
           <h2 className="mt-3 text-3xl font-semibold">
-            Your stories and videos
+            Your stories in your own voice
           </h2>
         </div>
         <p className="rounded-full bg-sage-100 px-4 py-2 text-base font-medium text-espresso">
-          {filmCount} {filmCount === 1 ? "video" : "videos"} ·{" "}
-          {collection.chapters.length} written stories
+          {filmCount} {filmCount === 1 ? "recorded story" : "recorded stories"}{" "}
+          · {collection.chapters.length} written stories
         </p>
       </div>
       <nav
@@ -63,7 +70,24 @@ export function ApprovedStories({
         ))}
       </nav>
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        {hasRecordedVoiceFilm(chapter) ? (
+        {hasChapterPlayback(chapter) ? (
+          <StoryFilmPlayer
+            key={chapter.playback!.mediaId}
+            title={chapter.title}
+            storytellerName={collection.storyteller.name}
+            src={mediaPath(collection.id, chapter.playback!.mediaId, accessKey)}
+            playback={chapter.playback!}
+            downloadUrl={
+              chapter.playback!.exportMediaId
+                ? mediaPath(
+                    collection.id,
+                    chapter.playback!.exportMediaId!,
+                    accessKey,
+                  )
+                : undefined
+            }
+          />
+        ) : hasRecordedVoiceFilm(chapter) ? (
           <div>
             <StoryMediaPlayer
               key={chapter.videoMediaId}
@@ -97,6 +121,16 @@ export function ApprovedStories({
           </p>
         </div>
       </div>
+      {collection.chapters.length === 4 &&
+        collection.chapters.every(hasChapterPlayback) && (
+          <div className="mt-7">
+            <StoryExportPanel
+              collection={collection}
+              accessKey={accessKey}
+              onComplete={onRefresh}
+            />
+          </div>
+        )}
       <nav
         aria-label="Move between approved stories"
         className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-warmgray-200 pt-5"

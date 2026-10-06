@@ -14,15 +14,9 @@ import {
   primaryClass,
   requestJson,
   secondaryClass,
-  type OrganizationGift,
 } from "./shared";
 
-type GiftView = {
-  organizationName: string;
-  name: string;
-  email: string;
-  status: OrganizationGift["status"];
-};
+import type { GiftView } from "@/lib/organizations/types";
 
 export function GiftClaim({
   organizationId,
@@ -120,6 +114,8 @@ export function GiftClaim({
     const phone = text("recipientPhone");
     await redeem({
       initiationPath: "share",
+      designatedRecipientConfirmed:
+        form.get("designatedRecipientConfirmed") === "on",
       storyteller,
       recipient: {
         name: text("recipientName"),
@@ -198,8 +194,8 @@ export function GiftClaim({
               />
               <p className="text-sm leading-7 text-ink-500">
                 You choose who receives your stories. Your organizer can see
-                when you start, but your stories and recordings are not shown on
-                their dashboard.
+                chapter and mailing progress. Your stories and recordings are
+                not shown on their dashboard.
               </p>
             </div>
           </div>
@@ -318,12 +314,16 @@ export function GiftClaim({
                     </legend>
                     <div className="clear-both">
                       <p className="mb-4 text-sm leading-6 text-ink-500">
-                        Choose the person who will receive your collection.
+                        {gift.designatedRecipient
+                          ? "Your organizer assigned this recipient. Confirm their details before you start."
+                          : "Choose the person who will receive your collection."}
                       </p>
                       <label className="block text-base font-medium">
                         Their name
                         <input
                           name="recipientName"
+                          defaultValue={gift.designatedRecipient?.name}
+                          readOnly={Boolean(gift.designatedRecipient)}
                           autoComplete="section-recipient name"
                           required
                           maxLength={120}
@@ -335,6 +335,8 @@ export function GiftClaim({
                       Their email
                       <input
                         name="recipientEmail"
+                        defaultValue={gift.designatedRecipient?.email}
+                        readOnly={Boolean(gift.designatedRecipient)}
                         type="email"
                         autoComplete="section-recipient email"
                         required
@@ -342,6 +344,21 @@ export function GiftClaim({
                         className={inputClass}
                       />
                     </label>
+                    {gift.designatedRecipient && (
+                      <label className="flex items-start gap-3 text-base leading-7">
+                        <input
+                          name="designatedRecipientConfirmed"
+                          type="checkbox"
+                          required
+                          className="mt-1 h-5 w-5 shrink-0 accent-espresso"
+                        />
+                        <span>
+                          I confirm that my stories are for{" "}
+                          {gift.designatedRecipient.name} at{" "}
+                          {gift.designatedRecipient.email}.
+                        </span>
+                      </label>
+                    )}
                     <label className="block text-base font-medium">
                       Their phone{" "}
                       <span className="font-normal text-ink-500">

@@ -92,6 +92,8 @@ export function OrganizationSetup() {
           >
             <option value="church">Church</option>
             <option value="nonprofit">Nonprofit</option>
+            <option value="retirement_community">Retirement community</option>
+            <option value="family">Family</option>
             <option value="other">Other organization</option>
           </select>
         </label>

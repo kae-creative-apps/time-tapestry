@@ -1,3 +1,5 @@
+import { prepareChapterPlayback } from "./playback-render";
+import { playbackJobMatchesCollection } from "../playback";
 import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { constants, createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -216,9 +218,10 @@ export async function processFilmJob(
       );
     if (
       !c ||
-      c.status === "approved" ||
+      (c.status === "approved" && !playbackJobMatchesCollection(claimed, c)) ||
       !(await filmJobInputsCurrent(claimed, c)) ||
-      (await latestFilmJob(claimed.collectionId))?.id !== claimed.id
+      (await latestFilmJob(claimed.collectionId))?.id !==
+        (claimed.sourceJobId ?? claimed.id)
     )
       throw new Error(
         "The stories changed during film creation. Review the current scripts before generating again.",
@@ -278,7 +281,7 @@ export async function processFilmJob(
             ...job,
             status,
             chapters: job.chapters.map((chapter) =>
-              chapter.artifact
+              chapter.artifact || chapter.playback
                 ? chapter
                 : { ...chapter, status, progress: fraction },
             ),
@@ -294,7 +297,11 @@ export async function processFilmJob(
     }
     for (const chapter of claimed.chapters) {
       await assertCurrent();
-      if (chapter.artifact) continue;
+      if (
+        chapter.artifact ||
+        (claimed.outputMode === "interactive" && chapter.playback)
+      )
+        continue;
       const work = path.join(
         dataRoot,
         "film-work",
@@ -311,6 +318,24 @@ export async function processFilmJob(
           assertCurrent,
           (fraction) => progress(chapter.chapterId, "preparing", fraction),
         );
+        if (claimed.outputMode === "interactive") {
+          const playback = await prepareChapterPlayback(
+            claimed,
+            chapter,
+            prepared,
+            work,
+            assertCurrent,
+          );
+          await updateFilmJob(claimed.id, token, (job) => ({
+            ...job,
+            chapters: job.chapters.map((item) =>
+              item.chapterId === chapter.chapterId
+                ? { ...item, status: "ready", progress: 1, playback }
+                : item,
+            ),
+          }));
+          continue;
+        }
         await progress(chapter.chapterId, "rendering", 0);
         const rendered = await cachedRender(
           work,
@@ -378,7 +403,8 @@ export async function processFilmJob(
     const stale =
       !c ||
       !(await filmJobInputsCurrent(claimed, c)) ||
-      (await latestFilmJob(claimed.collectionId))?.id !== claimed.id;
+      (await latestFilmJob(claimed.collectionId))?.id !==
+        (claimed.sourceJobId ?? claimed.id);
     // Remotion may surface a cancellation error after a progress callback
     // detects low disk. Keep that original reason when deciding safe recovery.
     const failure = diskError ?? error;
@@ -400,7 +426,7 @@ export async function processFilmJob(
           error: message,
           lease: undefined,
           chapters: job.chapters.map((chapter) =>
-            chapter.artifact
+            chapter.artifact || chapter.playback
               ? chapter
               : { ...chapter, status: "queued", error: message },
           ),

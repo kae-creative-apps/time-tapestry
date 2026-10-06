@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { mediaBytes } from "../media";
 import { getMedia, mutateRecord } from "../store";
-import { fileHash, privateJson, probeFilm } from "./render";
+import { fileHash, privateJson, probeFilm } from "./media-files";
 import { sha256 } from "./plan";
 import {
   originalProbeKey,

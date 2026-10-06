@@ -54,7 +54,7 @@ export default function ForOrganizations() {
                 },
                 {
                   title: "Let each person make it theirs.",
-                  text: "They choose a recipient and begin collecting their stories and videos. You can see which gifts have been started.",
+                  text: "They choose a recipient and begin collecting their stories and videos. Follow their progress through four chapters and confirmed postcard mailing. Their stories stay private.",
                   icon: "collection" as const,
                 },
               ].map((step, index) => (

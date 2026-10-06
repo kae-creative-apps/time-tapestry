@@ -1,417 +1,363 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Logo } from "@/components/Logo";
+import { BrandLockup } from "@/components/Logo";
 import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon, type AppIconName } from "@/components/icons";
 import { Footer } from "@/components/Footer";
 import { SiriOrb } from "@/components/ui/siri-orb";
-import { PostcardPreview } from "@/components/marketing/PostcardPreview";
 import { InterviewPreview } from "@/components/marketing/InterviewPreview";
-import { StoryMorphVisual } from "@/components/marketing/StoryMorphHero";
+import { PostcardCollection } from "@/components/marketing/PostcardCollection";
+import { FrontDoorNav } from "@/components/marketing/FrontDoorNav";
+import styles from "@/components/marketing/FrontDoor.module.css";
 
-const storyThemes = [
+const steps = [
   {
-    title: "Kindness received",
-    note: "The people who helped shape you.",
-    color: "bg-sage-100",
-    icon: "heart",
+    number: "01",
+    title: "Start with a conversation.",
+    description:
+      "Gentle questions help you find the stories you want to share. Record with your voice or camera, and take it at your own pace.",
+    icon: "conversation",
   },
   {
-    title: "A life of faith",
-    note: "The choices shaped by following Jesus.",
-    color: "bg-clay-50",
-    icon: "sprout",
-  },
-  {
-    title: "What you sowed",
-    note: "The ways you gave to others.",
-    color: "bg-paper-200",
-    icon: "handHeart",
-  },
-  {
-    title: "What I hope you carry",
-    note: "Words for someone you love.",
-    color: "bg-[#eee4dc]",
+    number: "02",
+    title: "See your stories take shape.",
+    description:
+      "Your recordings become four short films, in your own voice, and a four-chapter story book you can download and print.",
     icon: "collection",
   },
-] satisfies { title: string; note: string; color: string; icon: AppIconName }[];
+  {
+    number: "03",
+    title: "Give them to your people.",
+    description:
+      "Invite the people you love to a private collection. They can watch, read, and reply with a memory of their own.",
+    icon: "heart",
+  },
+] satisfies {
+  number: string;
+  title: string;
+  description: string;
+  icon: AppIconName;
+}[];
+
+const chapters = [
+  ["01", "Kindness received", "The people who made a difference."],
+  ["02", "A life of faith", "What carried you, if you want to share."],
+  ["03", "What you sowed", "The ways you gave to others."],
+  ["04", "What I hope you carry", "Words for someone you love."],
+];
+
+function BookCover({ large = false }: { large?: boolean }) {
+  return (
+    <div
+      className={`${styles.bookCover} ${large ? styles.bookCoverLarge : ""}`}
+    >
+      <div className={styles.bookSpine} />
+      <div className={styles.bookCoverContent}>
+        <BrandLockup variant="mark" className={styles.bookMark} />
+        <p className={styles.bookTitle}>
+          Stories
+          <br />
+          from Gigi
+        </p>
+        <p className={styles.bookDedication}>For Sammie, with love.</p>
+        <span className={styles.bookRule} />
+        <p className={styles.bookImprint}>TIME TAPESTRY</p>
+      </div>
+      <BrandPattern className={styles.bookWeave} />
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-paper">
-      <header className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-10 sm:py-6 lg:px-14">
-        <Logo className="[&_svg]:h-10 sm:[&_svg]:h-12" />
-        <nav
-          aria-label="Main navigation"
-          className="flex items-center gap-2 text-base font-medium lg:gap-3"
-        >
-          <Link
-            href="#how-it-works"
-            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 lg:inline-flex"
-          >
-            How it works
-          </Link>
-          <Link
-            href="/for-organizations"
-            className="hidden min-h-12 items-center justify-center whitespace-nowrap rounded-full px-4 py-3 transition-colors hover:bg-sage-100 xl:inline-flex"
-          >
-            For churches & organizations
-          </Link>
-          <Link
-            href="/account"
-            className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-full px-3 py-3 transition-colors hover:bg-sage-100 sm:px-4"
-          >
-            My stories
-          </Link>
-          <Link
-            href="#begin"
-            className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-full border border-espresso/25 px-5 py-3 transition-colors hover:bg-sage-100 sm:ml-2 sm:px-6"
-          >
-            Start a story{" "}
-            <AppIcon
-              name="arrowUpRight"
-              size={18}
-              className="ml-3 hidden sm:inline"
-            />
-          </Link>
-        </nav>
-      </header>
+    <div className={styles.frontDoor}>
+      <FrontDoorNav />
       <main id="main-content">
-        <section
-          aria-labelledby="hero-heading"
-          className="mx-auto max-w-[1440px] px-4 sm:px-8"
-        >
-          <div className="brand-gradient-chocolate relative isolate grid overflow-hidden rounded-[28px] text-white lg:min-h-[620px] lg:grid-cols-[1.05fr_1fr]">
-            <div className="relative z-10 flex flex-col justify-center px-7 pb-3 pt-10 sm:px-12 sm:pt-16 lg:px-14 lg:py-20">
-              <p className="brand-eyebrow mb-7 text-paper">
-                Stories woven together
-              </p>
-              <h1
-                id="hero-heading"
-                className="max-w-xl font-display text-[40px] font-medium leading-[1.07] tracking-[-.045em] text-white sm:text-[64px] xl:text-[76px]"
-              >
-                A life is made
-                <br />
-                of many threads.
-              </h1>
-              <p className="mt-6 max-w-md text-base leading-relaxed text-paper sm:text-lg">
-                The kindness you received. The faith you lived. The time and
-                money you sowed into others. Gather those stories into a gift
-                for someone you love.
-              </p>
-              <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-3">
-                <Link
-                  href="#how-it-works"
-                  className="inline-flex min-h-14 items-center justify-center gap-5 rounded-[14px] bg-paper px-6 py-4 font-medium text-espresso transition-colors hover:bg-clay-100"
-                >
-                  See how it works <AppIcon name="arrowRight" size={20} />
-                </Link>
-                <InterviewPreview />
-              </div>
-              <p className="mt-7 text-xs leading-relaxed text-paper">
-                A hackathon pilot. You review everything before sharing.
-              </p>
+        <section className={styles.hero} aria-labelledby="hero-heading">
+          <div className={styles.heroIntro}>
+            <p className={styles.eyebrow}>
+              A little of your life. A gift for theirs.
+            </p>
+            <h1 id="hero-heading">
+              Give them the stories
+              <br className={styles.heroBreak} /> only you can tell.
+            </h1>
+            <p className={styles.heroDescription}>
+              The neighbor who showed up. The faith that carried you. The reason
+              you always set another place at the table. Share those stories, in
+              your own voice, with the people you love.
+            </p>
+            <div className={styles.actions}>
+              <Link href="/share" className={styles.primaryButton}>
+                Share my story <AppIcon name="arrowUpRight" size={20} />
+              </Link>
+              <Link href="/request" className={styles.secondaryButton}>
+                Ask someone for theirs <AppIcon name="arrowUpRight" size={20} />
+              </Link>
             </div>
-            <StoryMorphVisual className="self-center" />
-          </div>
-        </section>
-
-        <section
-          className="mx-auto grid max-w-[1280px] gap-9 px-6 py-16 sm:px-10 sm:py-24 lg:grid-cols-[.95fr_1fr] lg:items-center lg:gap-20"
-          aria-labelledby="why-heading"
-        >
-          <figure className="relative min-h-[300px] overflow-hidden rounded-[24px] bg-sage-100 sm:min-h-[400px]">
-            <Image
-              src="/brand/story-exchange-branded-v1.png"
-              alt="Illustration of two generations passing a Time Tapestry postcard across a table."
-              fill
-              priority
-              sizes="(min-width: 1024px) 45vw, 100vw"
-              className="object-cover object-center"
-            />
-          </figure>
-          <div>
-            <p className="brand-eyebrow mb-5 text-taupe-600">
-              The life behind the stories
-            </p>
-            <h2
-              id="why-heading"
-              className="max-w-lg text-4xl font-medium leading-[1.15] sm:text-5xl"
-            >
-              Help them know what shaped you.
-            </h2>
-            <p className="mt-6 text-lg leading-relaxed text-ink-500">
-              Your family may know what you did. There is more to tell about who
-              helped you, where you saw God at work, and why you chose to give.
-            </p>
-            <p className="mt-4 text-lg leading-relaxed text-ink-500">
-              These are the stories that help them understand the faith and
-              character behind the life they know.
+            <p className={styles.pilotNote}>
+              Free during our pilot. No payment required.
             </p>
           </div>
-        </section>
-
-        <section
-          id="how-it-works"
-          className="scroll-mt-8 border-y border-warmgray-200 bg-white"
-          aria-labelledby="conversation-heading"
-        >
-          <div className="mx-auto grid max-w-[1280px] gap-10 px-6 py-16 sm:px-10 sm:py-24 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-20">
-            <div>
-              <p className="brand-eyebrow mb-5 text-taupe-600">
-                01 / Begin with a conversation
-              </p>
-              <h2
-                id="conversation-heading"
-                className="max-w-lg text-4xl font-medium leading-[1.15] sm:text-5xl"
-              >
-                You don’t have to know where to start.
-              </h2>
-              <p className="mt-6 text-lg leading-relaxed text-ink-500">
-                A conversation invites stories of kindness, following
-                Jesus, and living generously, one question at a time. Record video
-                with sound or audio only. You can pause or skip any question,
-                including questions about faith.
-              </p>
-              <p className="mt-4 text-lg leading-relaxed text-ink-500">
-                There is room for the time you gave and the money you sowed into
-                people, your church, or a ministry. Share the meaning behind
-                those choices. Dollar amounts are always optional.
-              </p>
-              <div className="mt-7 flex items-start gap-3 text-sm leading-relaxed text-ink-500">
-                <AppIcon
-                  name="check"
-                  size={20}
-                  className="mt-0.5 text-sage-700"
+          <div className={styles.showcase}>
+            <figure className={styles.postcardFloat}>
+              <div className={styles.postcardArtwork}>
+                <Image
+                  src="/brand/postcards/designer-2026-10-06-v2/postcard-01-kindness-front.webp"
+                  alt="Sample kindness postcard from Gigi to Sammie, with a warm woven pattern."
+                  width={1500}
+                  height={1000}
+                  sizes="(max-width: 700px) 44vw, (max-width: 1100px) 26vw, 340px"
+                  priority
+                  unoptimized
                 />
-                <p>
-                  You’ll review your stories and recordings before choosing what
-                  to share.
-                </p>
               </div>
-            </div>
-            <div className="brand-gradient-chocolate relative overflow-hidden rounded-[26px] p-8 text-white sm:p-10">
-              <div className="mb-12 flex items-center gap-4">
-                <SiriOrb size={64} animationDuration={18} />
-                <p className="text-sm text-paper">
-                  A question from the interview
-                </p>
+              <figcaption>
+                A little encouragement
+                <br />
+                <span>Sample postcard design</span>
+              </figcaption>
+            </figure>
+            <div className={styles.conversationPanel}>
+              <p className={styles.panelEyebrow}>It begins with one question</p>
+              <div className={styles.heroOrb}>
+                <SiriOrb size="144px" />
               </div>
-              <p className="font-display text-3xl font-medium leading-[1.35] sm:text-4xl">
+              <p className={styles.previewQuestion}>
                 “Tell me about someone whose kindness has stayed with you.”
               </p>
-              <p className="mt-7 max-w-sm text-base leading-relaxed text-paper">
-                There is no perfect answer. Start with a moment you remember.
+              <InterviewPreview />
+              <p className={styles.previewNote}>
+                Listen to a sample. No microphone needed.
               </p>
-              <div className="mt-10 flex flex-wrap gap-2 border-t border-white/20 pt-5 text-xs text-paper">
-                <span className="rounded-full border border-white/25 px-3 py-2">
-                  Speak
-                </span>
-                <span className="rounded-full border border-white/25 px-3 py-2">
-                  Pause anytime
-                </span>
-                <span className="rounded-full border border-white/25 px-3 py-2">
-                  Record video
-                </span>
-              </div>
             </div>
+            <figure className={styles.bookFloat}>
+              <BookCover />
+              <figcaption>
+                A story book to keep
+                <br />
+                <span>Book cover illustration</span>
+              </figcaption>
+            </figure>
+          </div>
+          <div
+            className={styles.giftLine}
+            aria-label="Your story collection includes"
+          >
+            <span>
+              <AppIcon name="video" size={21} /> Four films in your voice
+            </span>
+            <span>
+              <AppIcon name="collection" size={21} /> A printable story book
+            </span>
+            <span>
+              <AppIcon name="shield" size={21} /> Shared privately
+            </span>
           </div>
         </section>
-
         <section
-          id="collection"
-          className="mx-auto max-w-[1328px] scroll-mt-8 px-6 py-16 sm:px-10 sm:py-24"
-          aria-labelledby="collection-heading"
+          id="how-it-works"
+          className={styles.howSection}
+          aria-labelledby="how-heading"
         >
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] lg:items-end lg:gap-20">
-            <div>
-              <p className="brand-eyebrow mb-5 text-taupe-600">
-                02 / Gather what matters
-              </p>
-              <h2
-                id="collection-heading"
-                className="max-w-xl text-4xl font-medium leading-[1.15] sm:text-5xl"
-              >
-                Your words, in a collection of their own.
-              </h2>
-            </div>
-            <p className="max-w-lg text-lg leading-relaxed text-ink-500">
-              Your interview becomes four written stories and films made from
-              your recordings. Add the Scripture or encouragement you want to
-              pass on, then review everything together on a personal page for
-              the people you choose.
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>You already have the stories</p>
+            <h2 id="how-heading">We help you share them.</h2>
+            <p>
+              You don’t need to write a memoir or know where to start.
+              <br className={styles.desktopBreak} /> Just begin with what you
+              remember.
             </p>
           </div>
-          <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {storyThemes.map((story, index) => (
-              <li
-                key={story.title}
-                className={`flex min-h-[245px] flex-col rounded-[20px] p-7 ${story.color}`}
-              >
-                <div className="mb-9 flex items-center justify-between">
-                  <span className="text-xs tracking-[.12em] text-ink-500">
-                    0{index + 1}
-                  </span>
-                  <AppIcon
-                    name={story.icon}
-                    size={26}
-                    className="text-taupe-600"
-                  />
+          <div className={styles.steps}>
+            {steps.map((step) => (
+              <div className={styles.step} key={step.number}>
+                <div className={styles.stepTop}>
+                  <span>{step.number}</span>
+                  <AppIcon name={step.icon} size={28} />
                 </div>
-                <h3 className="max-w-[220px] text-2xl font-semibold leading-tight">
-                  {story.title}
-                </h3>
-                <p className="mt-3 text-sm leading-relaxed text-ink-500">
-                  {story.note}
-                </p>
-              </li>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </div>
             ))}
-          </ol>
-          <p className="mt-7 flex max-w-3xl items-start gap-3 text-sm leading-relaxed text-ink-500">
-            <AppIcon
-              name="collection"
-              size={20}
-              className="mt-0.5 text-sage-700"
-            />
-            The whole approved collection is available together. Your family can
-            explore it at their own pace, then return whenever a postcard
-            arrives.
-          </p>
+          </div>
         </section>
-
         <section
-          id="postcards"
-          className="mx-auto max-w-[1440px] px-4 sm:px-8"
-          aria-labelledby="postcards-heading"
+          id="collection"
+          className={styles.collectionSection}
+          aria-labelledby="collection-heading"
         >
-          <div className="grid overflow-hidden rounded-[28px] lg:grid-cols-[1fr_1.08fr]">
-            <div className="brand-gradient-sage relative isolate flex min-h-[370px] items-center justify-center overflow-hidden p-7 sm:p-12">
-              <BrandPattern
-                variant="ribbon"
-                className="absolute inset-0 -z-10 h-full w-full opacity-[.09]"
-              />
-              <PostcardPreview />
-            </div>
-            <div className="bg-[#f0e8e0] px-7 py-12 sm:px-12 sm:py-14">
-              <p className="brand-eyebrow mb-5 text-taupe-600">
-                03 / Keep coming back
-              </p>
-              <h2
-                id="postcards-heading"
-                className="max-w-lg text-4xl font-medium leading-[1.15] sm:text-[44px]"
-              >
-                A little reminder to come back together.
-              </h2>
-              <p className="mt-6 max-w-lg text-base leading-relaxed text-ink-500">
-                The first postcard introduces the collection. Three more bring
-                them back to a story, a Scripture, or an encouragement you
-                chose.
-              </p>
-              <p className="mb-1 mt-7 text-xs font-medium uppercase tracking-[.12em] text-taupe-600">
-                The postcard plan
-              </p>
-              <ol className="divide-y divide-espresso/15">
-                {[
-                  ["After approval", "An invitation to the whole collection"],
-                  ["Week 2", "A story worth returning to"],
-                  ["Week 4", "Words of faith and encouragement"],
-                  ["Week 6", "Another reason to reconnect"],
-                ].map(([when, what]) => (
-                  <li
-                    key={when}
-                    className="grid grid-cols-[95px_1fr] gap-4 py-4 text-sm sm:grid-cols-[115px_1fr]"
-                  >
-                    <span className="font-semibold">{when}</span>
-                    <span className="text-ink-500">{what}</span>
-                  </li>
+          <div className={styles.collectionInner}>
+            <div className={styles.collectionVisual}>
+              <div className={styles.collectionBook}>
+                <BookCover large />
+              </div>
+              <div className={styles.chapterSheet}>
+                <p className={styles.sheetEyebrow}>A life in four chapters</p>
+                {chapters.map(([number, title, note]) => (
+                  <div className={styles.chapter} key={number}>
+                    <span>{number}</span>
+                    <div>
+                      <h3>{title}</h3>
+                      <p>{note}</p>
+                    </div>
+                  </div>
                 ))}
-              </ol>
-              <p className="mt-4 text-xs leading-relaxed text-ink-500">
-                Each postcard’s QR code returns to the collection. Mailing and
-                delivery are being tested in the pilot.
+                <span className={styles.sheetFooter}>
+                  Stories woven together
+                </span>
+              </div>
+              <p className={styles.visualCaption}>
+                Sample collection illustration
               </p>
+            </div>
+            <div className={styles.collectionCopy}>
+              <p className={styles.eyebrow}>More than the words alone</p>
+              <h2 id="collection-heading">
+                The story matters.
+                <br />
+                So does the way
+                <br className={styles.desktopBreak} /> you tell it.
+              </h2>
+              <p>
+                Your laugh in the middle of a memory. The way you say someone’s
+                name. Your films keep the voice your family knows, using your
+                original audio or video.
+              </p>
+              <p>
+                Alongside them, a written story book gathers your memories into
+                four chapters. Download it, print a copy, and leave room on the
+                shelf for a little of your life.
+              </p>
+              <Link href="/share" className={styles.textLink}>
+                Start with your first story{" "}
+                <AppIcon name="arrowRight" size={20} />
+              </Link>
             </div>
           </div>
         </section>
-
+        <PostcardCollection />
+        <section className={styles.moreSection} aria-labelledby="more-heading">
+          <div className={styles.moreCopy}>
+            <p className={styles.eyebrow}>Keep the conversation going</p>
+            <h2 id="more-heading">
+              There’s always
+              <br />
+              another story.
+            </h2>
+            <p>
+              Once your first collection is complete, come back when another
+              memory finds you. Add a new recording, or let your family choose a
+              few questions they’d love to hear you answer.
+            </p>
+            <p>
+              Explore 100 prompts about the people, choices, joys, and beliefs
+              that shaped your life. Each new story becomes another film and a
+              chapter in your growing book.
+            </p>
+            <p className={styles.faithNote}>
+              Christian faith questions are always optional. Share what feels
+              true to your life.
+            </p>
+            <Link href="#begin" className={styles.textLink}>
+              Make a place for your stories{" "}
+              <AppIcon name="arrowRight" size={20} />
+            </Link>
+          </div>
+          <div className={styles.promptDisplay}>
+            <div className={styles.promptDisplayHeader}>
+              <AppIcon name="conversation" size={23} />
+              <span>A question can open a whole story.</span>
+            </div>
+            <div className={styles.promptCard}>
+              <span>Relationships</span>
+              <p>“Tell me how one of your lasting friendships began.”</p>
+            </div>
+            <div className={`${styles.promptCard} ${styles.promptCardSage}`}>
+              <span>Character</span>
+              <p>“Tell me about a time keeping a promise mattered to you.”</p>
+            </div>
+            <div className={`${styles.promptCard} ${styles.promptCardClay}`}>
+              <span>Health</span>
+              <p>
+                “What meal do you remember as an expression of someone’s care?”
+              </p>
+            </div>
+            <p className={styles.promptCaption}>
+              A few questions from the prompt library
+            </p>
+          </div>
+        </section>
+        <section
+          className={styles.privacySection}
+          aria-labelledby="privacy-heading"
+        >
+          <div className={styles.privacyIcon}>
+            <AppIcon name="shield" size={32} />
+          </div>
+          <div>
+            <h2 id="privacy-heading">
+              Your stories belong with the people you choose.
+            </h2>
+            <p>
+              Invite family by email to your private collection. Each viewer
+              verifies their email before opening your stories, and you can
+              remove access when you need to.
+            </p>
+          </div>
+          <Link href="/privacy" className={styles.textLink}>
+            How we protect your stories{" "}
+            <AppIcon name="arrowUpRight" size={19} />
+          </Link>
+        </section>
         <section
           id="begin"
-          className="mx-auto max-w-[1328px] scroll-mt-8 px-6 py-16 sm:px-10 sm:py-24"
+          className={styles.beginSection}
           aria-labelledby="begin-heading"
         >
-          <p className="brand-eyebrow mb-5 text-taupe-600">
-            There’s a place for your story
-          </p>
-          <h2
-            id="begin-heading"
-            className="max-w-2xl text-4xl font-medium leading-[1.15] sm:text-5xl"
-          >
-            Whose story would you like to pass on?
-          </h2>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            <article className="flex flex-col rounded-[24px] border border-warmgray-200 bg-white p-7 sm:p-8">
-              <AppIcon
-                name="conversation"
-                size={28}
-                className="mb-8 text-sage-700"
-              />
-              <h3 className="text-2xl font-semibold">Share your story.</h3>
-              <p className="mb-8 mt-4 leading-relaxed text-ink-500">
-                Gather the stories, faith, and generosity you want your family
-                to carry forward.
-              </p>
-              <Link
-                href="/share"
-                className="brand-button-primary mt-auto justify-between gap-3"
-              >
-                Share my story <AppIcon name="arrowUpRight" size={18} />
-              </Link>
-            </article>
-            <article className="flex flex-col rounded-[24px] border border-warmgray-200 bg-white p-7 sm:p-8">
-              <AppIcon name="heart" size={28} className="mb-8 text-clay-700" />
-              <h3 className="text-2xl font-semibold">
-                Invite someone you love.
-              </h3>
-              <p className="mb-8 mt-4 leading-relaxed text-ink-500">
-                Give someone the invitation to tell the stories you have always
-                wanted to hear.
-              </p>
-              <Link
-                href="/request"
-                className="brand-button-secondary mt-auto justify-between gap-3"
-              >
-                Request their story <AppIcon name="arrowUpRight" size={18} />
-              </Link>
-            </article>
-            <article className="flex flex-col rounded-[24px] border border-sage-200 bg-sage-100 p-7 sm:p-8">
-              <AppIcon
-                name="handHeart"
-                size={28}
-                className="mb-8 text-sage-700"
-              />
-              <h3 className="text-2xl font-semibold">
-                Give to your community.
-              </h3>
-              <p className="mb-8 mt-4 leading-relaxed text-ink-500">
-                Create free gifts for donors, church members, or the families
-                your organization serves.
-              </p>
-              <Link
-                href="/for-organizations"
-                className="brand-button-secondary mt-auto justify-between gap-3"
-              >
-                Start a free group gift{" "}
-                <AppIcon name="arrowUpRight" size={18} />
-              </Link>
-            </article>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>Someone will be glad you began</p>
+            <h2 id="begin-heading">Every family has a place to start.</h2>
+            <p>
+              Tell a story of your own, or invite someone whose stories you
+              love.
+            </p>
           </div>
-          <p className="mt-6 text-sm leading-relaxed text-ink-500">
-            Free during the pilot. No payment details required. Physical
-            postcard delivery is still being tested.{" "}
-            <Link href="/pricing" className="underline underline-offset-4">
-              Read the pilot details.
-            </Link>
+          <div className={styles.beginChoices}>
+            <div className={styles.beginChoice}>
+              <AppIcon name="conversation" size={30} />
+              <h3>“I have a story to share.”</h3>
+              <p>
+                Start with a memory. We’ll help you find the words and turn your
+                recordings into something your family can return to.
+              </p>
+              <Link href="/share" className={styles.primaryButton}>
+                Share my story <AppIcon name="arrowUpRight" size={20} />
+              </Link>
+            </div>
+            <div className={`${styles.beginChoice} ${styles.inviteChoice}`}>
+              <AppIcon name="heart" size={30} />
+              <h3>“I’d love to hear theirs.”</h3>
+              <p>
+                Send someone a personal invitation. Let them know you’d love to
+                hear about the people and moments that made them who they are.
+              </p>
+              <Link href="/request" className={styles.secondaryButton}>
+                Request their story <AppIcon name="arrowUpRight" size={20} />
+              </Link>
+            </div>
+          </div>
+          <p className={styles.beginPilot}>
+            Time Tapestry is free during our pilot. Physical postcard mailing is
+            still being tested. <Link href="/pricing">About the pilot</Link>
           </p>
+          <div className={styles.organizationLine}>
+            <p>Good stories belong in communities, too.</p>
+            <Link href="/for-organizations" className={styles.textLink}>
+              For churches & organizations{" "}
+              <AppIcon name="arrowUpRight" size={20} />
+            </Link>
+          </div>
         </section>
       </main>
       <Footer />

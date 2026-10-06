@@ -47,9 +47,13 @@ export function publicView(
     requesterKey,
     creationRequestHash,
     privateGenerosityNotes,
+    pendingAddressVerification,
+    addressVerification,
     ...view
   } = structuredClone(c);
   void creationRequestHash;
+  void pendingAddressVerification;
+  void addressVerification;
   void ownerKey;
   void recipientKey;
   void requesterKey;
@@ -92,6 +96,17 @@ export function publicView(
     view.chapters = view.chapters.map((chapter) => ({
       ...chapter,
       sourceTakeIds: [],
+      playback:
+        chapter.playback &&
+        chapter.editorialReviewed &&
+        chapter.reviewedPlaybackSha256 === chapter.playback.outputSha256
+          ? {
+              ...chapter.playback,
+              sourceTakeIds: [],
+              sourceSha256: "",
+              planSha256: "",
+            }
+          : undefined,
       film: chapter.film
         ? {
             ...chapter.film,

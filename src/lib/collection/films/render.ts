@@ -7,10 +7,12 @@ import {
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import { fileHash, privateJson, probeFilm } from "./media-files";
+export { fileHash, privateJson, probeFilm } from "./media-files";
 import {
   alignedWords,
   FILM_CLOSER_SECONDS,
@@ -30,24 +32,11 @@ import type {
 } from "./types";
 
 const exec = promisify(execFile);
-export async function fileHash(file: string) {
-  const hash = createHash("sha256");
-  for await (const chunk of createReadStream(file)) hash.update(chunk);
-  return hash.digest("hex");
-}
 const cachedHash = async (file: string) =>
   fileHash(file).catch((error) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   });
-export async function privateJson(file: string, value: unknown) {
-  const temporary = `${file}.${randomBytes(8).toString("hex")}.tmp`;
-  await writeFile(temporary, JSON.stringify(value), {
-    mode: 0o600,
-    flag: "wx",
-  });
-  await rename(temporary, file);
-}
 async function readJson<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(file, "utf8")) as T;
@@ -55,31 +44,6 @@ async function readJson<T>(file: string): Promise<T | null> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
-}
-export async function probeFilm(file: string) {
-  const { stdout } = await exec(
-    "ffprobe",
-    [
-      "-v",
-      "error",
-      "-show_entries",
-      "format=duration:stream=codec_type",
-      "-of",
-      "json",
-      file,
-    ],
-    { timeout: 60000 },
-  );
-  const result = JSON.parse(stdout);
-  const durationSeconds = Number(result.format?.duration);
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
-    throw new Error("A film asset has invalid duration.");
-  return {
-    durationSeconds,
-    types: (result.streams ?? []).map(
-      (stream: { codec_type: string }) => stream.codec_type,
-    ) as string[],
-  };
 }
 
 type AudioReceipt = {

@@ -9,7 +9,13 @@ import {
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { get, head } from "@vercel/blob";
-import { dataRoot, getCollection, getMedia, putMedia } from "./store";
+import {
+  dataRoot,
+  getCollection,
+  getMedia,
+  putMedia,
+  mutateRecord,
+} from "./store";
 import type { Collection, StoredMedia } from "./types";
 import {
   reserveMediaUpload,
@@ -18,6 +24,7 @@ import {
   MAX_MEDIA_BYTES,
 } from "./usage";
 import { SecurityError } from "../security/policy";
+import { playbackMediaId, playbackExportMediaId } from "./playback";
 import { isGeneratedFilmMedia } from "./recording-validation";
 import {
   PRIMARY_RECIPIENT_ID,
@@ -87,6 +94,26 @@ export function mediaAllowed(
             chapter.film?.mediaId === m.id &&
             chapter.film.narrationKind === "original_recording",
         ) ||
+        c.chapters.some((chapter) => {
+          const playback = chapter.playback;
+          if (
+            !playback ||
+            !chapter.editorialReviewed ||
+            chapter.reviewedPlaybackSha256 !== playback.outputSha256 ||
+            m.role !== "owner"
+          )
+            return false;
+          return (
+            (m.provenance === "chapter_playback" &&
+              m.mimeType === "audio/mp4" &&
+              playback.mediaId === m.id &&
+              m.id === playbackMediaId(playback)) ||
+            (m.provenance === "generated_film" &&
+              m.mimeType === "video/mp4" &&
+              playback.exportMediaId === m.id &&
+              m.id === playbackExportMediaId(playback))
+          );
+        }) ||
         (m.provenance === "generated_film" &&
           m.mimeType === "video/mp4" &&
           Boolean(
@@ -167,14 +194,24 @@ export async function finalizeCloudMedia(id: string) {
     mediaId: m.id,
     bytes: blob.size,
   });
-  const next = {
-    ...m,
-    url: blob.url,
-    mimeType: blob.contentType,
-    bytes: blob.size,
-  };
-  await putMedia(next);
-  return next;
+  return mutateRecord<StoredMedia>(`media-${id}`, (current) => {
+    if (
+      !current ||
+      current.collectionId !== m.collectionId ||
+      current.role !== m.role
+    )
+      throw new Error(
+        "Upload record changed. Reopen your recording before retrying.",
+      );
+    // A transcription can finish while Blob HEAD is in flight. Retain it and
+    // every other current metadata field rather than overwriting a stale copy.
+    return {
+      ...current,
+      url: blob.url,
+      mimeType: blob.contentType,
+      bytes: blob.size,
+    };
+  });
 }
 export async function mediaBytes(
   m: StoredMedia,

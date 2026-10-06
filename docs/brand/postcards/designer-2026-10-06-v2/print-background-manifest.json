@@ -1,0 +1,40 @@
+{
+  "source_sha256": "c7a6ce910a53345e1042323d2aee6c9483b29b1c187eabc65ccaa12b55b005e5",
+  "method": "Remove only the 14.66-size sample dedication text blocks from each front PDF form. Preserve title, motif, logo and colors. Export exact 1/8-inch bleed crop at 300 dpi. Dynamic card number and owner/recipient first names are rendered by the shared HTML template.",
+  "bleed_crop_box_points": [
+    18,
+    18,
+    468,
+    324
+  ],
+  "dimensions_pixels": [
+    1875,
+    1275
+  ],
+  "assets": [
+    {
+      "theme": "kindness",
+      "path": "public/brand/postcards/designer-2026-10-06-v2/postcard-01-kindness-print-background.png",
+      "sha256": "0830a4704b59d93d28527094665d3a3238a913c0e6999600645771eeb3c61c49",
+      "bytes": 103439
+    },
+    {
+      "theme": "faith",
+      "path": "public/brand/postcards/designer-2026-10-06-v2/postcard-02-faith-print-background.png",
+      "sha256": "faec1f98721c99d471cf7754b6ea83df038fb780940ec8232e5869b486ef2d6f",
+      "bytes": 92315
+    },
+    {
+      "theme": "generosity",
+      "path": "public/brand/postcards/designer-2026-10-06-v2/postcard-03-generosity-print-background.png",
+      "sha256": "ea3b8d591bc5cdb3aa6726ab2c055cce0c76056e042bd355efcaa4382c67bdc1",
+      "bytes": 101474
+    },
+    {
+      "theme": "encouragement",
+      "path": "public/brand/postcards/designer-2026-10-06-v2/postcard-04-encouragement-print-background.png",
+      "sha256": "9edca0aa0056506d9034ccdab22bca0b7167c3111761bee0f39ab3157380c1ff",
+      "bytes": 113038
+    }
+  ]
+}

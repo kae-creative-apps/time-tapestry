@@ -56,6 +56,8 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
   const { POST: create } = await import("../src/app/api/collection/route");
   const { POST: post, GET: get } =
     await import("../src/app/api/collection/[id]/route");
+  const { POST: verifyAddress } =
+    await import("../src/app/api/lob/verify-address/route");
   const { POST: interview } =
     await import("../src/app/api/collection/[id]/interview/route");
   const { POST: upload } =
@@ -192,6 +194,22 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       return Response.json(
         Array.isArray(payload[0]) ? payload.map(execute) : execute(payload),
       );
+    }
+    if (new URL(request.url).pathname === "/v1/us_verifications") {
+      assert.equal(new URL(request.url).origin, "https://api.lob.com");
+      const input = await request.json();
+      return Response.json({
+        id: "us_ver_lifecyclefixture",
+        deliverability: "deliverable",
+        primary_line: input.primary_line,
+        secondary_line: input.secondary_line || "",
+        components: {
+          city: input.city,
+          state: input.state,
+          zip_code: input.zip_code,
+          zip_code_plus_4: "",
+        },
+      });
     }
     const url = request.url,
       provider =
@@ -623,8 +641,21 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       (await act({ action: "address", address }, c.requesterKey)).status,
       400,
     );
+    const addressCheck = await verifyAddress(
+      req(
+        `/api/lob/verify-address?collectionId=${c.id}&key=${c.recipientKey}`,
+        { address },
+      ),
+    );
+    assert.equal(addressCheck.status, 200);
+    const { verificationId } = await addressCheck.json();
     assert.equal(
-      (await act({ action: "address", address }, c.recipientKey)).status,
+      (
+        await act(
+          { action: "address", address, verificationId },
+          c.recipientKey,
+        )
+      ).status,
       200,
     );
     assert.equal((await read()).postcardPreparation?.status, "needs_attention");

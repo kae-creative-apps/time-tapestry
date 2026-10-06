@@ -1,0 +1,211 @@
+.player {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #432e2326;
+  border-radius: 20px;
+  background: #fbfaf8;
+}
+.stage {
+  padding: 1.3rem 1.5rem 1.5rem;
+  background: #432e23;
+  color: #fbfaf8;
+  text-align: center;
+}
+.stageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: #e5d7ca;
+}
+.mark {
+  height: 25px;
+  width: auto;
+  flex-shrink: 0;
+}
+.orb {
+  --voice-level: 0;
+  display: flex;
+  justify-content: center;
+  width: fit-content;
+  margin: 2rem auto;
+  transform: scale(calc(1 + var(--voice-level) * 0.17));
+  filter: drop-shadow(0 0 calc(var(--voice-level) * 22px) #e5c8bb66);
+  transition:
+    transform 80ms linear,
+    filter 80ms linear;
+}
+.captions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 145px;
+  max-width: 540px;
+  margin: auto;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.5rem, 2.8vw, 2rem);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+.captions span {
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0.03em 0.04em;
+  color: #fbfaf8;
+}
+.captions .currentWord {
+  background: #e5c8bb;
+  color: #432e23;
+}
+.stageNote {
+  margin-top: 1.1rem;
+  color: #d9c8b8;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+.controls {
+  padding: 1.25rem;
+}
+.mainControls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+.playButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  min-height: 56px;
+  padding: 0.75rem 1.3rem;
+  border-radius: 100px;
+  background: #432e23;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.playButton:disabled {
+  opacity: 0.5;
+}
+.skipControls {
+  display: flex;
+  gap: 0.25rem;
+}
+.skipControls button {
+  min-height: 52px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  border: 1px solid #432e2330;
+  border-radius: 100px;
+}
+.seek {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 0.8rem 0 0;
+  accent-color: #432e23;
+  cursor: pointer;
+}
+.time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: #756454;
+}
+.status {
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+.status:not(:empty) {
+  margin-top: 0.9rem;
+}
+.error {
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #6e2b23;
+}
+.native,
+.transcript {
+  margin-top: 0.8rem;
+  border-top: 1px solid #432e2320;
+  padding-top: 0.4rem;
+}
+.native summary,
+.transcript summary {
+  min-height: 48px;
+  cursor: pointer;
+  padding: 0.7rem 0.2rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.native audio {
+  width: 100%;
+  margin: 0.4rem 0;
+}
+.transcript p {
+  margin: 0.75rem 0;
+  font-size: 1rem;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+.download {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 52px;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 420px) {
+  .stage {
+    padding: 1rem;
+  }
+  .stageHeader {
+    font-size: 0.64rem;
+  }
+  .orb {
+    margin: 1.8rem auto;
+  }
+  .captions {
+    font-size: 1.5rem;
+    min-height: 140px;
+  }
+  .controls {
+    padding: 1rem;
+  }
+  .playButton {
+    flex: 1;
+    padding-inline: 1rem;
+  }
+  .skipControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .skipControls button {
+    flex: 1;
+  }
+  .mainControls {
+    gap: 0.7rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb {
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+}

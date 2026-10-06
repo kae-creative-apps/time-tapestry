@@ -5,27 +5,9 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AppIcon } from "@/components/icons";
 
-export type OrganizationGift = {
-  id: string;
-  name: string;
-  email: string;
-  status: "issued" | "redeeming" | "redeemed" | "revoked";
-  createdAt: string;
-  giftUrl?: string;
-};
-
-export type Organization = {
-  id: string;
-  organizationName: string;
-  organizationType: "church" | "nonprofit" | "other";
-  contactName: string;
-  contactEmail: string;
-  quantity: number;
-  createdAt: string;
-  updatedAt: string;
-  seats: { total: number; available: number; issued: number; redeemed: number };
-  gifts: OrganizationGift[];
-};
+import type { OrganizationView } from "@/lib/organizations/types";
+export type Organization = OrganizationView;
+export type OrganizationGift = OrganizationView["gifts"][number];
 
 export const inputClass =
   "mt-2 min-h-12 w-full rounded-xl border border-warmgray-300 bg-white px-4 py-3 text-base text-ink transition-colors hover:border-taupe disabled:opacity-60";

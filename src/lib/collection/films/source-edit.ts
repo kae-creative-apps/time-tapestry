@@ -55,6 +55,9 @@ export async function assembleSourceEdits(
       clip,
       words,
       silenceByMedia.get(clip.mediaId) ?? [],
+      job.outputMode === "interactive"
+        ? { minimumSilenceMs: 1200, keepSilenceMs: 300 }
+        : {},
     );
     const edit = edits.get(chapterId)!;
     edit.clips.push(...cleaned.clips);

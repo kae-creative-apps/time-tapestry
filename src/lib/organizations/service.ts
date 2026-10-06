@@ -14,6 +14,8 @@ import type {
   OrganizationType,
   OrganizationView,
 } from "./types";
+import { organizationChapterProgress } from "./progress";
+import { organizationJoinUrl } from "./join-token";
 
 export class OrganizationError extends Error {
   constructor(
@@ -68,12 +70,15 @@ function requireGift(
   key?: string,
 ) {
   const gift = organization.gifts.find((item) => item.id === giftId);
-  if (!gift || (key !== undefined && !secretMatches(gift.key, key)))
+  if (
+    !gift ||
+    (key !== undefined &&
+      !(gift.keyHash
+        ? secretMatches(gift.keyHash, hash(key))
+        : secretMatches(gift.key || "", key)))
+  )
     throw new OrganizationError("This gift link is not valid.", 404);
   return gift;
-}
-function giftUrl(organizationId: string, gift: OrganizationGift) {
-  return `/gift/${organizationId}/${gift.id}?key=${gift.key}`;
 }
 function seatCounts(organization: OrganizationRecord) {
   const redeemed = organization.gifts.filter(
@@ -110,9 +115,15 @@ export function organizationView(
       email: gift.email,
       status: gift.status,
       createdAt: gift.createdAt,
-      ...(gift.status === "issued"
-        ? { giftUrl: giftUrl(organization.id, gift) }
+      ...(gift.designatedRecipient
+        ? {
+            designatedRecipient: {
+              name: gift.designatedRecipient.name,
+              email: gift.designatedRecipient.email,
+            },
+          }
         : {}),
+      progress: organizationChapterProgress(null),
     })),
   };
 }
@@ -125,7 +136,15 @@ export async function createOrganization(value: unknown) {
       "Please add your church or organization name.",
       400,
     );
-  if (!["church", "nonprofit", "other"].includes(String(b.organizationType)))
+  if (
+    ![
+      "church",
+      "nonprofit",
+      "retirement_community",
+      "family",
+      "other",
+    ].includes(String(b.organizationType))
+  )
     throw new OrganizationError("Please choose an organization type.", 400);
   if (
     typeof b.quantity !== "number" ||
@@ -172,65 +191,109 @@ export async function getOrganizationForManager(id: string, key: string) {
     await readRecord<OrganizationRecord>(keyFor(id)),
     key,
   );
-  return organizationView(organization);
+  const view = organizationView(organization);
+  // At most 100 active gifts. Read only known collection IDs, never scan stories.
+  for (let offset = 0; offset < organization.gifts.length; offset += 10) {
+    await Promise.all(
+      organization.gifts.slice(offset, offset + 10).map(async (gift, index) => {
+        if (!gift.claim?.collectionId || gift.status !== "redeemed") return;
+        const collection = await getCollection(gift.claim.collectionId);
+        // Old redeemed gifts predate the reverse association; their private claim is authoritative.
+        if (
+          collection?.sponsorship &&
+          (collection.sponsorship.organizationId !== id ||
+            collection.sponsorship.giftId !== gift.id)
+        )
+          return;
+        view.gifts[offset + index].progress =
+          organizationChapterProgress(collection);
+      }),
+    );
+  }
+  return view;
 }
 
 export async function issueGift(id: string, key: string, value: unknown) {
   const b = inputObject(value);
   let issued: OrganizationGift | undefined;
-  const result = await mutateRecord<OrganizationRecord>(
-    keyFor(id),
-    (stored) => {
-      const organization = requireManager(stored, key);
-      const receiver = contact(b.name, b.email);
-      if (seatCounts(organization).available < 1)
-        throw new OrganizationError(
-          "Every gift is assigned. Revoke an unused gift link to make room.",
-          409,
-        );
-      // Keep the single-record ledger bounded even after repeated revocations.
-      if (organization.gifts.length >= 1000)
-        throw new OrganizationError(
-          "This group has reached its gift history limit. Please create another group.",
-          409,
-        );
-      issued = {
-        id: randomUUID(),
-        name: receiver.name,
-        email: receiver.email,
-        key: secret(),
-        status: "issued",
-        createdAt: new Date().toISOString(),
-      };
-      organization.gifts.push(issued);
-      organization.updatedAt = issued.createdAt;
-      return organization;
-    },
-  );
+  const accessKey = secret();
+  await mutateRecord<OrganizationRecord>(keyFor(id), (stored) => {
+    const organization = requireManager(stored, key);
+    const receiver = contact(b.name, b.email);
+    if (seatCounts(organization).available < 1)
+      throw new OrganizationError(
+        "Every gift is assigned. Revoke an unused gift link to make room.",
+        409,
+      );
+    // Keep the single-record ledger bounded even after repeated revocations.
+    if (organization.gifts.length >= 1000)
+      throw new OrganizationError(
+        "This group has reached its gift history limit. Please create another group.",
+        409,
+      );
+    issued = {
+      id: randomUUID(),
+      name: receiver.name,
+      email: receiver.email,
+      keyHash: hash(accessKey),
+      ...(b.designatedRecipient !== undefined
+        ? {
+            designatedRecipient: contact(
+              inputObject(b.designatedRecipient).name,
+              inputObject(b.designatedRecipient).email,
+            ),
+          }
+        : {}),
+      status: "issued",
+      createdAt: new Date().toISOString(),
+    };
+    organization.gifts.push(issued);
+    organization.updatedAt = issued.createdAt;
+    return organization;
+  });
   return {
-    organization: organizationView(result),
-    giftUrl: giftUrl(id, issued!),
+    organization: await getOrganizationForManager(id, key),
+    giftUrl: organizationJoinUrl(id, issued!.id, accessKey),
+  };
+}
+
+/** Returning a new capability invalidates the previous invitation; raw secrets stay out of the ledger. */
+export async function replaceGiftLink(id: string, key: string, giftId: string) {
+  const accessKey = secret();
+  await mutateRecord<OrganizationRecord>(keyFor(id), (stored) => {
+    const organization = requireManager(stored, key);
+    const gift = requireGift(organization, giftId);
+    if (gift.status !== "issued")
+      throw new OrganizationError(
+        "Only an unused invitation can receive a new link.",
+        409,
+      );
+    delete gift.key;
+    gift.keyHash = hash(accessKey);
+    organization.updatedAt = new Date().toISOString();
+    return organization;
+  });
+  return {
+    organization: await getOrganizationForManager(id, key),
+    giftUrl: organizationJoinUrl(id, giftId, accessKey),
   };
 }
 
 export async function revokeGift(id: string, key: string, giftId: string) {
-  const result = await mutateRecord<OrganizationRecord>(
-    keyFor(id),
-    (stored) => {
-      const organization = requireManager(stored, key);
-      const gift = requireGift(organization, giftId);
-      if (gift.status === "redeeming" || gift.status === "redeemed")
-        throw new OrganizationError(
-          "This gift has already been claimed and cannot be revoked.",
-          409,
-        );
-      gift.status = "revoked";
-      gift.revokedAt ||= new Date().toISOString();
-      organization.updatedAt = gift.revokedAt;
-      return organization;
-    },
-  );
-  return { organization: organizationView(result) };
+  await mutateRecord<OrganizationRecord>(keyFor(id), (stored) => {
+    const organization = requireManager(stored, key);
+    const gift = requireGift(organization, giftId);
+    if (gift.status === "redeeming" || gift.status === "redeemed")
+      throw new OrganizationError(
+        "This gift has already been claimed and cannot be revoked.",
+        409,
+      );
+    gift.status = "revoked";
+    gift.revokedAt ||= new Date().toISOString();
+    organization.updatedAt = gift.revokedAt;
+    return organization;
+  });
+  return { organization: await getOrganizationForManager(id, key) };
 }
 
 export async function getGiftView(
@@ -247,6 +310,14 @@ export async function getGiftView(
     name: gift.name,
     email: gift.email,
     status: gift.status,
+    ...(gift.designatedRecipient
+      ? {
+          designatedRecipient: {
+            name: gift.designatedRecipient.name,
+            email: gift.designatedRecipient.email,
+          },
+        }
+      : {}),
   };
 }
 
@@ -283,9 +354,20 @@ export async function redeemGift(
           );
         return organization;
       }
+      if (gift.designatedRecipient && b.designatedRecipientConfirmed !== true)
+        throw new OrganizationError(
+          "Confirm the assigned recipient before starting this gift.",
+          400,
+        );
       let prepared: Collection;
       try {
-        prepared = prepareCollection(value);
+        prepared = prepareCollection({
+          ...b,
+          ...(gift.designatedRecipient
+            ? { recipient: gift.designatedRecipient }
+            : {}),
+        });
+        prepared.sponsorship = { organizationId: id, giftId };
       } catch (error) {
         if (error instanceof CollectionInputError)
           throw new OrganizationError(error.message, 400);

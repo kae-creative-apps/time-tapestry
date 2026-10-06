@@ -1,3 +1,10 @@
+import { sha256 } from "./plan";
+import { appOrigin, linksFor } from "../access";
+import {
+  playbackJobMatchesCollection,
+  attachChapterPlayback,
+  playbackReady,
+} from "../playback";
 import { queueFilmsReady } from "../notifications";
 import { queuePreparationAttention } from "../recovery-notifications";
 import { randomUUID } from "node:crypto";
@@ -130,6 +137,26 @@ function filmTemplateCurrent(job: StoryFilmJob) {
 }
 
 function filmOutputsAlreadyAttached(job: StoryFilmJob, c: Collection) {
+  if (job.outputMode === "interactive")
+    return (
+      job.chapters.length === 4 &&
+      job.chapters.every(
+        (chapter) =>
+          chapter.playback &&
+          c.chapters.find((item) => item.id === chapter.chapterId)?.playback
+            ?.outputSha256 === chapter.playback.outputSha256,
+      )
+    );
+  if (job.sourceJobId)
+    return (
+      job.chapters.length === 4 &&
+      job.chapters.every(
+        (chapter) =>
+          chapter.artifact &&
+          c.chapters.find((item) => item.id === chapter.chapterId)?.playback
+            ?.exportSha256 === chapter.artifact.outputSha256,
+      )
+    );
   return (
     job.chapters.length === 4 &&
     job.chapters.every(
@@ -192,7 +219,8 @@ async function enqueuePreparedJob(
     const current = await getCollection(job.collectionId);
     if (
       !current ||
-      current.status === "approved" ||
+      (current.status === "approved" &&
+        !playbackJobMatchesCollection(job, current)) ||
       !filmJobMatches(job, current) ||
       !(await originalJobInputsCurrent(job))
     )
@@ -285,6 +313,7 @@ export async function enqueueAutomaticOriginalFilms(
   options: {
     processingApproved: true;
     presentation?: "video" | "audio";
+    outputMode?: "interactive" | "mp4";
   } & EnqueueOptions,
 ) {
   if (options.processingApproved !== true)
@@ -304,7 +333,8 @@ export async function enqueueAutomaticOriginalFilms(
       kind: "story-film-job",
       mode: "original",
       preparation: "automatic",
-      id: `film_${prepared.versionHash}`,
+      id: `film_${options.outputMode === "interactive" ? sha256(`${prepared.versionHash}:interactive-v1`) : prepared.versionHash}`,
+      outputMode: options.outputMode,
       collectionId: c.id,
       storytellerName: c.storyteller.name,
       versionHash: prepared.versionHash,
@@ -361,9 +391,9 @@ export async function retryStoryFilms(
     if (job.status === "failed" && !filmTemplateCurrent(job))
       return staleTemplateJob(job);
     if (
-      c.status === "approved" ||
+      (c.status === "approved" && !playbackJobMatchesCollection(job, c)) ||
       !(await filmJobInputsCurrent(job, c)) ||
-      (await latestFilmJob(c.id))?.id !== job.id
+      (await latestFilmJob(c.id))?.id !== (job.sourceJobId ?? job.id)
     )
       throw new Error(
         "These film scripts are out of date. Generate films from the current reviewed stories.",
@@ -480,9 +510,10 @@ export async function claimNextFilmJob(
       const c = await getCollection(job.collectionId);
       if (
         !c ||
-        c.status === "approved" ||
+        (c.status === "approved" && !playbackJobMatchesCollection(job, c)) ||
         !(await filmJobInputsCurrent(job, c)) ||
-        (await latestFilmJob(job.collectionId))?.id !== job.id
+        (await latestFilmJob(job.collectionId))?.id !==
+          (job.sourceJobId ?? job.id)
       )
         return {
           ...job,
@@ -536,6 +567,7 @@ export async function updateFilmJob(
 }
 
 export async function attachReadyFilms(job: StoryFilmJob) {
+  if (job.outputMode === "interactive") return attachChapterPlayback(job);
   if (
     job.chapters.length !== 4 ||
     job.chapters.some((chapter) => !chapter.artifact)
@@ -543,7 +575,10 @@ export async function attachReadyFilms(job: StoryFilmJob) {
     throw new Error("All four films must finish before attachment.");
   return mutateCollection(job.collectionId, async (c) => {
     const latest = await getFilmJob(job.id);
-    if ((await latestFilmJob(job.collectionId))?.id !== job.id)
+    if (
+      (await latestFilmJob(job.collectionId))?.id !==
+      (job.sourceJobId ?? job.id)
+    )
       throw new Error(
         "A newer film version replaced this job. Completed files are preserved.",
       );
@@ -567,7 +602,10 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       )
     )
       return c;
-    if (c.status === "approved" || !filmJobMatches(job, c))
+    if (
+      (c.status === "approved" && !playbackJobMatchesCollection(job, c)) ||
+      !filmJobMatches(job, c)
+    )
       throw new Error(
         "The stories changed while rendering. Completed films are preserved but have not been shared.",
       );
@@ -590,14 +628,36 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       const target = c.chapters.find(
         (entry) => entry.id === chapter.chapterId,
       )!;
+      if (job.sourceJobId) {
+        if (!playbackJobMatchesCollection(job, c) || !target.playback)
+          throw new Error("The export does not match these chapters.");
+        target.playback.exportMediaId = chapter.artifact!.mediaId;
+        target.playback.exportSha256 = chapter.artifact!.outputSha256;
+        continue;
+      }
       await preserveGeneratedFilmProvenance(c.id, target, getMedia, putMedia);
+      target.playback = undefined;
+      target.reviewedPlaybackSha256 = undefined;
       target.videoMediaId = chapter.artifact!.mediaId;
       target.videoStatus = "ready";
       target.editorialReviewed = false;
       target.reviewedFilmSha256 = undefined;
       target.film = chapter.artifact;
     }
-    queueFilmsReady(c, job.id);
+    if (job.sourceJobId) {
+      const id = `${c.id}:export-ready:${job.id}`;
+      if (!c.notifications.some((item) => item.id === id))
+        c.notifications.push({
+          id,
+          kind: "review_ready",
+          to: c.storyteller.email,
+          subject: "Your downloadable Time Tapestry videos are ready",
+          text: "Your four videos are ready to download from your private collection. Your original recordings and shared stories are unchanged.",
+          url: appOrigin() + linksFor(c).review,
+          dueAt: nowIso(),
+          status: "pending",
+        });
+    } else queueFilmsReady(c, job.id);
     return c;
   });
 }
@@ -677,4 +737,41 @@ async function publishFilmAttention(job: StoryFilmJob) {
       );
     return c;
   });
+}
+
+export async function enqueuePlaybackExport(c: Collection) {
+  const source = await latestFilmJob(c.id);
+  if (!source || !(await playbackReady(c, source)))
+    throw new Error("Your chapters are still being prepared.");
+  const id = `film_${sha256(`${source.id}:mp4-export-v1`)}`;
+  const result = await mutateRecord<StoryFilmJob>(id, (current) => {
+    if (current) {
+      if (current.collectionId !== c.id || current.sourceJobId !== source.id)
+        throw new Error("Export identity mismatch.");
+      return current;
+    }
+    return {
+      ...source,
+      id,
+      sourceJobId: source.id,
+      outputMode: "mp4",
+      status: "queued",
+      attempts: 0,
+      lease: undefined,
+      error: undefined,
+      nextAttemptAt: undefined,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      chapters: source.chapters.map((chapter) => ({
+        ...chapter,
+        artifact: undefined,
+        status: "queued",
+        progress: 0,
+      })),
+    };
+  });
+  await mutateRecord<Index>(registryKey, (registry) => ({
+    ids: [...new Set([...(registry?.ids ?? []), id])],
+  }));
+  return result;
 }

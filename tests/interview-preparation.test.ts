@@ -16,6 +16,7 @@ import type {
   InterviewChapterId,
 } from "../src/lib/collection/types";
 import type { InterviewPreparationJob } from "../src/lib/collection/interview-preparation-types";
+import type { StoryFilmJob } from "../src/lib/collection/films/types";
 
 let directory: string;
 let store: typeof import("../src/lib/collection/store");
@@ -26,6 +27,12 @@ let route: typeof import("../src/app/api/collection/[id]/route");
 let statusRoute: typeof import("../src/app/api/collection/[id]/preparation/route");
 let access: typeof import("../src/lib/collection/access");
 const consent = { processingApproved: true as const };
+const sourceQuestions = [
+  "Take your time. Tell me about a moment when someone’s kindness made a difference in your life.",
+  "What is a decision you made while following Jesus that later changed your life for the better?",
+  "When you think about helping others over the years, is there a person or a story that comes to mind?",
+  "As we move to our final theme, what is one thing you most want Sam to know or remember from your life as she walks her own path?",
+];
 
 before(async () => {
   directory = await mkdtemp(
@@ -138,6 +145,53 @@ async function draft(c: Collection): Promise<ChapterPackage[]> {
   }));
 }
 const fakeFilms = async () => ({ id: `film_${"f".repeat(64)}` });
+async function attachSyntheticInteractivePlayback(
+  c: Collection,
+  existing?: StoryFilmJob,
+) {
+  const { playbackMediaId } = await import("../src/lib/collection/playback");
+  await store.putCollection(c);
+  const job =
+    existing ??
+    (await films.enqueueAutomaticOriginalFilms(c, {
+      processingApproved: true,
+      outputMode: "interactive",
+    }));
+  for (const chapter of job.chapters) {
+    const playback = {
+      schemaVersion: 1 as const,
+      jobId: job.id,
+      chapterId: chapter.chapterId,
+      mediaId: "",
+      sourceTakeIds: chapter.sourceTakeIds,
+      sourceSha256: chapter.sourceSha256,
+      planSha256: "a".repeat(64),
+      outputSha256: String(chapter.chapterNumber).repeat(64),
+      durationMs: 10_000,
+      words: [{ text: "Fictional", startMs: 0, endMs: 900 }],
+      createdAt: c.createdAt,
+    };
+    playback.mediaId = playbackMediaId(playback);
+    await store.putMedia({
+      id: playback.mediaId,
+      collectionId: c.id,
+      role: "owner",
+      mimeType: "audio/mp4",
+      originalName: "fictional-chapter.m4a",
+      bytes: 100,
+      localPath: "/synthetic-private-playback",
+      createdAt: c.createdAt,
+      provenance: "chapter_playback",
+    });
+    chapter.playback = playback;
+    chapter.status = "ready";
+    chapter.progress = 1;
+  }
+  job.status = "ready";
+  await store.mutateRecord(job.id, () => job);
+  await films.attachReadyFilms(job);
+  return (await store.getCollection(c.id))!;
+}
 function request(
   c: Collection,
   action = "submit_interview",
@@ -278,7 +332,7 @@ test("recovery precedes four stories and original films, with no ready notice or
     },
     enqueueFilms: async (current, options) => {
       events.push("films");
-      assert.deepEqual(options, consent);
+      assert.deepEqual(options, { ...consent, outputMode: "interactive" });
       assert.equal(current.chapters.length, 4);
       assert.equal(
         current.chapters.every(
@@ -342,6 +396,251 @@ test("actual missing areas stop preparation without creating text or queuing fil
       (notice) => notice.kind === "preparation_attention",
     ).length,
     1,
+  );
+});
+
+test("authenticated raw-original recovery runs before missing-area checks when the live provider saved only placeholders", async () => {
+  const { recoverOriginalInterviewSpeech } =
+    await import("../src/lib/collection/interview-source-recovery");
+  const c = await liveFixture();
+  const session = c.interviews![0];
+  session.turns = sourceQuestions.map((text, sequence) => ({
+    id: `question-${sequence}`,
+    role: "agent",
+    sequence,
+    text,
+    timing: "unaligned",
+    capturedAt: new Date(
+      Date.parse(session.startedAt) + sequence * 10_000,
+    ).toISOString(),
+  }));
+  session.turns.push({
+    id: "placeholder",
+    role: "user",
+    sequence: 4,
+    chapterId: "q1",
+    text: "...",
+    capturedAt: c.createdAt,
+    timing: "unaligned",
+  });
+  session.turns.push({
+    id: "app-control",
+    role: "user",
+    sequence: 5,
+    chapterId: "q4",
+    text: "[Interview control: The user finished all four parts.]",
+    capturedAt: c.createdAt,
+    timing: "unaligned",
+  });
+  await store.putCollection(c);
+  const response = await route.POST(request(c), {
+    params: Promise.resolve({ id: c.id }),
+  });
+  assert.equal(response.status, 202);
+  const queued = (await response.json()).preparation as { id: string };
+  const job = (await preparation.getInterviewPreparationJob(queued.id))!;
+  const events: string[] = [];
+  const originalTurns = structuredClone(session.turns);
+  const result = await preparation.runInterviewPreparationOnce(
+    "source-worker",
+    {
+      onlyId: queued.id,
+      reconcile: async (current) => {
+        events.push("provider");
+        return current;
+      },
+      recoverOriginal: async (current) => {
+        events.push("original");
+        return recoverOriginalInterviewSpeech(current, {
+          jobId: job.id,
+          attempt: 1,
+          processingApprovedAt: job.processingApprovedAt,
+          originalMedia: job.originalMedia,
+          assertCurrent: async () => {},
+          readSource: async (_session, segment) => ({
+            segment,
+            durationMs: 40_000,
+            words: [
+              "Grandmother.",
+              "Forgiveness.",
+              "Neighbors.",
+              "Listen.",
+            ].map((text, index) => ({
+              mediaId: segment.mediaId,
+              text,
+              startMs: index * 10_000 + 5000,
+              endMs: index * 10_000 + 6000,
+            })),
+          }),
+        });
+      },
+      draft: async (current) => {
+        events.push("draft");
+        return draft(current);
+      },
+      enqueueFilms: async () => {
+        events.push("films");
+        return fakeFilms();
+      },
+    },
+  );
+  assert.equal(result?.status, "films_queued");
+  assert.deepEqual(events, ["provider", "original", "draft", "films"]);
+  const saved = (await store.getCollection(c.id))!;
+  for (const turn of originalTurns)
+    assert.deepEqual(
+      saved.interviews![0].turns.find((item) => item.id === turn.id),
+      turn,
+    );
+  assert.deepEqual(saved.interviews![0].segments, session.segments);
+  assert.deepEqual(
+    saved.chapters.map((chapter) => chapter.content),
+    ["Grandmother.", "Forgiveness.", "Neighbors.", "Listen."],
+  );
+});
+
+test("source speech without a trustworthy part assignment is preserved and does not invent completion", async () => {
+  const { recoverInterviewSourceWords } =
+    await import("../src/lib/collection/interview-source-recovery");
+  const c = await liveFixture();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  let recoveries = 0,
+    drafts = 0;
+  const result = await preparation.runInterviewPreparationOnce(
+    "source-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      recoverOriginal: async (current) => {
+        recoveries++;
+        const session = current.interviews![0],
+          segment = session.segments[0];
+        session.turns = recoverInterviewSourceWords(session, [
+          {
+            segment,
+            durationMs: 40_000,
+            words: [
+              {
+                mediaId: segment.mediaId,
+                text: "Grandmother.",
+                startMs: 1000,
+                endMs: 2000,
+              },
+            ],
+          },
+        ]);
+        return current;
+      },
+      draft: async (current) => {
+        drafts++;
+        return draft(current);
+      },
+      enqueueFilms: fakeFilms,
+    },
+  );
+  assert.equal(recoveries, 1);
+  assert.equal(drafts, 0);
+  assert.equal(result?.status, "needs_attention");
+  assert.equal(result?.missingAreas?.length, 4);
+  const saved = (await store.getCollection(c.id))!;
+  assert.equal(saved.interviews![0].turns[0].text, "Grandmother.");
+  assert.equal(saved.interviews![0].turns[0].chapterId, undefined);
+  assert.deepEqual(saved.interviews![0].segments, c.interviews![0].segments);
+});
+
+test("a silent original stops with a source issue instead of claiming four missed answers or retrying transcription", async () => {
+  const { recoverInterviewSourceWords } =
+    await import("../src/lib/collection/interview-source-recovery");
+  const c = await liveFixture();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  let drafts = 0;
+  const result = await preparation.runInterviewPreparationOnce(
+    "source-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      recoverOriginal: async (current) => {
+        const session = current.interviews![0];
+        session.turns = recoverInterviewSourceWords(session, [
+          { segment: session.segments[0], durationMs: 40_000, words: [] },
+        ]);
+        return current;
+      },
+      draft: async (current) => {
+        drafts++;
+        return draft(current);
+      },
+      enqueueFilms: fakeFilms,
+    },
+  );
+  assert.equal(result?.status, "needs_attention");
+  assert.match(result?.error ?? "", /did not contain recognizable speech/);
+  assert.equal(result?.missingAreas, undefined);
+  assert.equal(drafts, 0);
+  assert.deepEqual((await store.getCollection(c.id))!.interviews, c.interviews);
+});
+
+test("a late source transcript commits only the requested retake inside the recovery checkpoint", async () => {
+  let c = await liveFixture();
+  c = recovered(c);
+  const original = c.interviews![0];
+  c.selectedTakeIds = { q2: "old-saved-q2", "q2-f1": "old-saved-followup" };
+  c.interviews!.push({
+    ...structuredClone(original),
+    id: "replacement-session",
+    replacesChapterId: "q2",
+    turns: [
+      {
+        id: "replacement-placeholder",
+        sequence: 0,
+        role: "user",
+        chapterId: "q2",
+        text: "...",
+        capturedAt: c.createdAt,
+        timing: "unaligned",
+      },
+    ],
+    excludedTurnIds: [],
+  });
+  await store.putCollection(c);
+  const originals = structuredClone(
+    c.interviews!.map((session) => session.segments),
+  );
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const result = await preparation.runInterviewPreparationOnce(
+    "source-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      recoverOriginal: async (current) => {
+        current.interviews![1].turns.push({
+          id: "replacement-source",
+          sequence: 1,
+          role: "user",
+          chapterId: "q2",
+          text: "My sister helped me make that choice.",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        });
+        return current;
+      },
+      draft,
+      enqueueFilms: fakeFilms,
+    },
+  );
+  assert.equal(result?.status, "films_queued");
+  const saved = (await store.getCollection(c.id))!;
+  assert.ok(saved.interviews![1].replacementCommittedAt);
+  assert.deepEqual(saved.interviews![0].excludedTurnIds, ["fictional-turn-q2"]);
+  assert.deepEqual(saved.selectedTakeIds, {});
+  assert.equal(
+    saved.chapters[1].content,
+    "My sister helped me make that choice.",
+  );
+  assert.equal(saved.chapters[0].content, original.turns[0].text);
+  assert.deepEqual(
+    saved.interviews!.map((session) => session.segments),
+    originals,
   );
 });
 
@@ -503,45 +802,7 @@ test("owner-only status is private and readiness requires all four matching orig
     false,
   );
   const job = (await films.getFilmJob(completed!.filmJobId!))!;
-  for (const chapter of job.chapters) {
-    const mediaId = `output_${randomUUID()}`;
-    await store.putMedia({
-      id: mediaId,
-      collectionId: c.id,
-      role: "owner",
-      mimeType: "video/mp4",
-      originalName: "fictional-render.mp4",
-      bytes: 100,
-      url: "https://output.example.test/fictional.mp4",
-      createdAt: c.createdAt,
-      provenance: "generated_film",
-    });
-    chapter.status = "ready";
-    chapter.artifact = {
-      jobId: job.id,
-      chapterId: chapter.chapterId,
-      mediaId,
-      sourceTakeIds: chapter.sourceTakeIds,
-      sourceSha256: chapter.sourceSha256,
-      outputSha256: String(chapter.chapterNumber).repeat(64),
-      durationSeconds: 10,
-      createdAt: c.createdAt,
-      narrationKind: "original_recording",
-      presentation: "video",
-      planSha256: "a".repeat(64),
-      sourceRanges: [],
-      sourceAssets: [],
-    };
-    const target = saved.chapters.find(
-      (item) => item.id === chapter.chapterId,
-    )!;
-    target.videoStatus = "ready";
-    target.videoMediaId = mediaId;
-    target.film = chapter.artifact;
-  }
-  job.status = "ready";
-  await store.mutateRecord(job.id, () => job);
-  await store.putCollection(saved);
+  saved = await attachSyntheticInteractivePlayback(saved, job);
   assert.equal(
     (await preparation.getInterviewPreparationView(saved))?.ready,
     true,
@@ -574,13 +835,14 @@ test("owner-only status is private and readiness requires all four matching orig
     access.publicView(saved, "recipient").interviewPreparation,
     undefined,
   );
-  saved.chapters[3].videoStatus = "awaiting_edit";
+  const lastPlayback = saved.chapters[3].playback;
+  saved.chapters[3].playback = undefined;
   assert.equal(
     (await preparation.getInterviewPreparationView(saved))?.ready,
     false,
   );
-  saved.chapters[3].videoStatus = "ready";
-  saved.chapters[3].film!.outputSha256 = "f".repeat(64);
+  saved.chapters[3].playback = lastPlayback;
+  saved.chapters[3].playback!.outputSha256 = "f".repeat(64);
   assert.equal(
     (await preparation.getInterviewPreparationView(saved))?.ready,
     false,
@@ -932,8 +1194,6 @@ test("resume after film enqueue checkpoint loss preserves ready films and review
   });
   const c = await liveFixture();
   const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
-  const { attachSyntheticOriginalFilms } =
-    await import("./recorded-review-fixture");
   const interrupted = await preparation.runInterviewPreparationOnce(
     "crashed-worker",
     {
@@ -941,11 +1201,11 @@ test("resume after film enqueue checkpoint loss preserves ready films and review
       reconcile: async (current) => recovered(current),
       draft,
       enqueueFilms: async (current) => {
-        await attachSyntheticOriginalFilms(current);
+        await attachSyntheticInteractivePlayback(current);
         await store.mutateCollection(c.id, (saved) => {
           saved.chapters[0].editorialReviewed = true;
-          saved.chapters[0].reviewedFilmSha256 =
-            saved.chapters[0].film!.outputSha256;
+          saved.chapters[0].reviewedPlaybackSha256 =
+            saved.chapters[0].playback!.outputSha256;
           return saved;
         });
         throw new Error("Synthetic crash before preparation film checkpoint");

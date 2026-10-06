@@ -37,7 +37,7 @@ export function InterviewProgress({
       >
         <p className="font-medium">Part {progress.position} of 4</p>
         <p role="status" className="text-ink-500">
-          {status}
+          {interviewChapterTitle(activeChapterId, faithFraming)}
         </p>
       </section>
     );

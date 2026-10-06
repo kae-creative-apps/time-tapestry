@@ -4,6 +4,7 @@ import {
   getOrganizationForManager,
   issueGift,
   revokeGift,
+  replaceGiftLink,
   OrganizationError,
 } from "@/lib/organizations/service";
 import {
@@ -24,7 +25,11 @@ export async function POST(
     await getOrganizationForManager(id, key);
     await guardRequest(req, { action: "issue_gift", resourceId: id });
     const body = await organizationBody(req);
-    if (body.action !== undefined && body.action !== "revoke")
+    if (
+      body.action !== undefined &&
+      body.action !== "revoke" &&
+      body.action !== "replace_link"
+    )
       throw new OrganizationError("This gift action is not available.", 400);
     const result =
       body.action === "revoke"
@@ -33,9 +38,15 @@ export async function POST(
             key,
             typeof body.giftId === "string" ? body.giftId : "",
           )
-        : await issueGift(id, key, body);
+        : body.action === "replace_link"
+          ? await replaceGiftLink(
+              id,
+              key,
+              typeof body.giftId === "string" ? body.giftId : "",
+            )
+          : await issueGift(id, key, body);
     return NextResponse.json(result, {
-      status: body.action === "revoke" ? 200 : 201,
+      status: body.action ? 200 : 201,
       headers: privateHeaders,
     });
   } catch (error) {

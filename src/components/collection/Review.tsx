@@ -5,7 +5,8 @@ import { AppIcon } from "@/components/icons";
 import { useCollection } from "./useCollection";
 import { CollectionSharing } from "./CollectionSharing";
 import { OwnerReplies } from "./OwnerReplies";
-import { FilmGenerationPanel } from "./FilmGenerationPanel";
+import { hasChapterPlayback } from "@/lib/audio/playback-types";
+import { FilmGenerationPanel, StoryExportPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
 import { ApprovedStories } from "./ApprovedStories";
 import { PostcardProof } from "./PostcardProof";
@@ -93,6 +94,8 @@ export default function Review({
       chapter.id,
       chapter.videoMediaId,
       chapter.film?.outputSha256,
+      chapter.playback?.mediaId,
+      chapter.playback?.outputSha256,
     ]),
   );
   useEffect(
@@ -169,7 +172,7 @@ export default function Review({
       setActiveChapter("q1");
       setApprovedPlayback(false);
       setNotice(
-        "Your recordings are saved. We’re preparing your four films. Nothing is shared until you approve.",
+        "Your recordings are saved. We’re preparing your four stories. Nothing is shared until you approve.",
       );
     }
     setWorking(false);
@@ -191,9 +194,23 @@ export default function Review({
       deliveryMode: "digital",
       autoPostcards: true,
       recordingsReviewed: true,
-      reviewedFilmHashes: Object.fromEntries(
-        c.chapters.map((chapter) => [chapter.id, chapter.film?.outputSha256]),
-      ),
+      ...(c.chapters.length === 4 && c.chapters.every(hasChapterPlayback)
+        ? {
+            reviewedPlaybackHashes: Object.fromEntries(
+              c.chapters.map((chapter) => [
+                chapter.id,
+                chapter.playback!.outputSha256,
+              ]),
+            ),
+          }
+        : {
+            reviewedFilmHashes: Object.fromEntries(
+              c.chapters.map((chapter) => [
+                chapter.id,
+                chapter.film?.outputSha256,
+              ]),
+            ),
+          }),
     });
     if (result) {
       setNotice("");
@@ -234,15 +251,18 @@ export default function Review({
       </PortalShell>
     );
   const approved = c.status === "approved";
+  const playbackReady =
+    c.chapters.length === 4 && c.chapters.every(hasChapterPlayback);
   const filmsReady =
-    c.chapters.length === 4 &&
-    c.chapters.every(
-      (chapter) =>
-        chapter.videoMediaId &&
-        chapter.film?.mediaId === chapter.videoMediaId &&
-        chapter.film.narrationKind === "original_recording" &&
-        chapter.film.outputSha256,
-    );
+    playbackReady ||
+    (c.chapters.length === 4 &&
+      c.chapters.every(
+        (chapter) =>
+          chapter.videoMediaId &&
+          chapter.film?.mediaId === chapter.videoMediaId &&
+          chapter.film.narrationKind === "original_recording" &&
+          chapter.film.outputSha256,
+      ));
   const activeIndex = Math.max(
     0,
     c.chapters.findIndex((chapter) => chapter.id === activeChapter),
@@ -346,7 +366,11 @@ export default function Review({
                 Watch your approved stories
               </summary>
               <div className="mt-4">
-                <ApprovedStories collection={c} accessKey={accessKey} />
+                <ApprovedStories
+                  collection={c}
+                  accessKey={accessKey}
+                  onRefresh={load}
+                />
               </div>
             </details>
             <OwnerReplies
@@ -486,6 +510,16 @@ export default function Review({
                   />
                 </div>
               )}
+              {playbackReady && (
+                <div className="mt-5">
+                  <StoryExportPanel
+                    collection={c}
+                    accessKey={accessKey}
+                    disabled={blocked}
+                    onComplete={load}
+                  />
+                </div>
+              )}
               <div className="mt-5">
                 <button
                   type="button"
@@ -536,7 +570,7 @@ export default function Review({
                 Ready to share with {c.recipient.name}?
               </h2>
               <p className="mt-3 text-base leading-7 text-ink-600">
-                Your gift includes four films in your own recorded voice, four
+                Your gift includes four stories in your own recorded voice, four
                 written chapters and a printable story book.
               </p>
               <div className="mt-5 rounded-xl bg-sage-50 p-4">
@@ -592,13 +626,13 @@ export default function Review({
                   }
                 />
                 <span>
-                  I have reviewed all four films and the written story. I
-                  approve this gift for {c.recipient.name}.
+                  I have reviewed all four recorded stories and the written
+                  story book. I approve this gift for {c.recipient.name}.
                 </span>
               </label>
               {!filmsReady && (
                 <p className="mt-3 text-base leading-7 text-ink-600">
-                  Approval opens when all four films are ready. You can leave
+                  Approval opens when all four stories are ready. You can leave
                   and return to your saved gift.
                 </p>
               )}

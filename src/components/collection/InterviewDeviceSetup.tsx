@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  createInputMonitor,
+  type InputMonitor,
+  type InputMonitorState,
+} from "@/lib/audio/input-monitor";
+import {
   interviewCaptureConstraints,
   interviewDeviceError,
   type InterviewDevices,
@@ -21,12 +26,17 @@ export function InterviewDeviceSetup({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [level, setLevel] = useState(0);
+  const [inputState, setInputState] =
+    useState<InputMonitorState>("unavailable");
+  const monitor = useRef<InputMonitor | null>(null);
   const media = useRef<MediaStream | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const generation = useRef(0);
 
   const stopPreview = useCallback(() => {
     generation.current += 1;
+    monitor.current?.close();
+    monitor.current = null;
     media.current?.getTracks().forEach((track) => track.stop());
     media.current = null;
     setPreview(null);
@@ -48,6 +58,8 @@ export function InterviewDeviceSetup({
     return () => {
       current = false;
       generation.current += 1;
+      monitor.current?.close();
+      monitor.current = null;
       media.current?.getTracks().forEach((track) => track.stop());
       media.current = null;
       navigator.mediaDevices?.removeEventListener("devicechange", refresh);
@@ -60,35 +72,7 @@ export function InterviewDeviceSetup({
 
   useEffect(() => {
     if (video.current) video.current.srcObject = preview;
-    if (!preview) {
-      setLevel(0);
-      return;
-    }
-    let context: AudioContext | undefined;
-    let frame = 0;
-    try {
-      context = new AudioContext();
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 256;
-      const source = context.createMediaStreamSource(preview);
-      source.connect(analyser);
-      // The analyser is never connected to speakers, so this check cannot echo.
-      const samples = new Uint8Array(analyser.fftSize);
-      const update = () => {
-        analyser.getByteTimeDomainData(samples);
-        const peak = Math.max(...samples.map((value) => Math.abs(value - 128)));
-        setLevel(Math.min(100, Math.round((peak / 64) * 100)));
-        frame = requestAnimationFrame(update);
-      };
-      update();
-      void context.resume().catch(() => {});
-    } catch {
-      // Preview and device selection still work without an audio meter.
-    }
-    return () => {
-      cancelAnimationFrame(frame);
-      void context?.close().catch(() => {});
-    };
+    if (!preview) setLevel(0);
   }, [preview]);
 
   async function checkDevices() {
@@ -96,6 +80,11 @@ export function InterviewDeviceSetup({
     const attempt = generation.current;
     setChecking(true);
     setError("");
+    // This runs in the click handler before awaiting microphone permission.
+    monitor.current = createInputMonitor({
+      onLevel: setLevel,
+      onState: setInputState,
+    });
     try {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error(
@@ -109,11 +98,19 @@ export function InterviewDeviceSetup({
         return;
       }
       media.current = stream;
+      try {
+        monitor.current?.attach(stream);
+      } catch {
+        setInputState("unavailable");
+      }
       setPreview(stream);
       const items = await navigator.mediaDevices.enumerateDevices();
       if (generation.current === attempt) setAvailable(items);
     } catch (cause) {
-      if (generation.current === attempt) setError(interviewDeviceError(cause));
+      if (generation.current === attempt) {
+        monitor.current?.close();
+        setError(interviewDeviceError(cause));
+      }
     } finally {
       if (generation.current === attempt) setChecking(false);
     }
@@ -185,6 +182,22 @@ export function InterviewDeviceSetup({
           <p className="text-sm text-ink-500">
             Speak to check your microphone.
           </p>
+          {inputState === "suspended" && (
+            <button
+              type="button"
+              onClick={() => {
+                void monitor.current?.resumeFromGesture();
+              }}
+              className="min-h-11 text-sm text-oxblood underline underline-offset-4"
+            >
+              Resume microphone meter
+            </button>
+          )}
+          {inputState === "unavailable" && (
+            <p className="text-sm text-ink-500">
+              The input meter is unavailable in this browser.
+            </p>
+          )}
           <meter
             min={0}
             max={100}

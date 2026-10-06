@@ -504,6 +504,8 @@ Alex <alex@example.com>"
             Mailing address for {c.recipient.name}
           </h3>
           <AddressForm
+            collectionId={c.id}
+            accessKey={ownerKey || ""}
             initial={c.address}
             busy={busy}
             onDirtyChange={setAddressDirty}
@@ -511,7 +513,9 @@ Alex <alex@example.com>"
             mailingStarted={c.deliveries.some(
               (delivery) => delivery.providerId,
             )}
-            onSave={(address) => act({ action: "address", address })}
+            onSave={(address, verificationId) =>
+              act({ action: "address", address, verificationId })
+            }
           />
           {c.addressConfirmed && !addressDirty && (
             <p className="mt-4 text-base text-sage-700">

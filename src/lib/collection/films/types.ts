@@ -1,3 +1,4 @@
+import type { StoryPlaybackArtifact } from "../../audio/playback-types";
 export type FilmStage =
   | "queued"
   | "transcribing"
@@ -105,6 +106,7 @@ export type FilmVoice = {
 
 export type FilmWord = { text: string; startMs: number; endMs: number };
 export type FilmChapter = {
+  playback?: StoryPlaybackArtifact;
   chapterId: string;
   chapterNumber: 1 | 2 | 3 | 4;
   title: string;
@@ -121,6 +123,9 @@ export type FilmChapter = {
 };
 
 export type StoryFilmJob = {
+  outputMode?: "interactive" | "mp4";
+  /** An export is pinned to an already prepared interactive job. */
+  sourceJobId?: string;
   schemaVersion: 1;
   kind: "story-film-job";
   id: string;

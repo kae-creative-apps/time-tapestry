@@ -26,7 +26,8 @@ export function getInterviewProgress(
   const otherAreas = areas.filter((area) => !area.active && !area.answered);
   return {
     areas,
-    position: CHAPTERS.findIndex((chapter) => chapter.id === activeChapterId) + 1,
+    position:
+      CHAPTERS.findIndex((chapter) => chapter.id === activeChapterId) + 1,
     answeredCount: areas.filter((area) => area.answered).length,
     otherAreasRemaining: otherAreas.length,
     nextUnansweredChapterId: otherAreas[0]?.id ?? null,
@@ -52,18 +53,37 @@ export function detectInterviewThemeFromQuestion(
     .replace(/\s+/g, " ");
   if (
     /tell me about someone whose kindness has stayed with you/.test(question) ||
-    /thinking about the people who shaped your life.{0,100}specific moment of kindness.{0,100}remember clearly/.test(question)
-  ) return "q1";
+    /tell me about a moment when someone's kindness made a difference in your life/.test(
+      question,
+    ) ||
+    /thinking about the people who shaped your life.{0,100}specific moment of kindness.{0,100}remember clearly/.test(
+      question,
+    )
+  )
+    return "q1";
   if (
-    /(?:decision|choice).{0,100}(?:following jesus|guided by (?:your|their) beliefs).{0,100}(?:changed|affected).{0,40}(?:life|better)/.test(question) ||
-    /tell me about a decision that mattered to you and what you learned from it/.test(question)
-  ) return "q2";
+    /(?:decision|choice).{0,100}(?:following jesus|guided by (?:your|their) beliefs).{0,100}(?:changed|affected).{0,40}(?:life|better)/.test(
+      question,
+    ) ||
+    /tell me about a decision that mattered to you and what you learned from it/.test(
+      question,
+    )
+  )
+    return "q2";
   if (
-    /when you think about helping others over the years.{0,90}(?:person|story).{0,40}comes to mind/.test(question)
-  ) return "q3";
+    /when you think about helping others over the years.{0,90}(?:person|story).{0,40}comes to mind/.test(
+      question,
+    )
+  )
+    return "q3";
   if (
-    /looking back at these stories.{0,150}(?:carry|carried).{0,40}(?:life|lives)/.test(question) ||
-    /(?:move|moving) to (?:our|the) final (?:theme|story area).{0,150}(?:know|remember|carry)/.test(question)
-  ) return "q4";
+    /looking back at these stories.{0,150}(?:carry|carried).{0,40}(?:life|lives)/.test(
+      question,
+    ) ||
+    /(?:move|moving) to (?:our|the) final (?:theme|story area).{0,150}(?:know|remember|carry)/.test(
+      question,
+    )
+  )
+    return "q4";
   return null;
 }

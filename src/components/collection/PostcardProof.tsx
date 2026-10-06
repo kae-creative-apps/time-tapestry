@@ -9,7 +9,7 @@ import {
   PUBLIC_POSTCARD_MESSAGE_LIMIT,
 } from "@/lib/collection/postcard-public-message";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
-import { PostcardFace } from "./PostcardFace";
+import { PostcardPreview } from "@/components/postcard/PostcardPreview";
 import {
   mergePostcardDrafts,
   postcardDraftsEqual,
@@ -485,24 +485,13 @@ export function PostcardProof({
       )}
       {card && (
         <div key={`${proof?.hash}:${card.chapterId}`}>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-base font-medium">Front</h3>
-              <PostcardFace
-                html={card.front}
-                title={`Card ${active + 1} front`}
-                onFit={(value) => setFit(`${card.chapterId}:front`, value)}
-              />
-            </div>
-            <div>
-              <h3 className="mb-2 text-base font-medium">Back</h3>
-              <PostcardFace
-                html={card.back}
-                title={`Card ${active + 1} back`}
-                onFit={(value) => setFit(`${card.chapterId}:back`, value)}
-              />
-            </div>
-          </div>
+          <PostcardPreview
+            front={card.front}
+            back={card.back}
+            title={`Card ${active + 1}`}
+            onFrontFit={(value) => setFit(`${card.chapterId}:front`, value)}
+            onBackFit={(value) => setFit(`${card.chapterId}:back`, value)}
+          />
           <p className="mt-3 text-sm leading-6 text-ink-600">
             {dirty || saving
               ? "The preview shows your last saved wording. It updates after your changes are saved."

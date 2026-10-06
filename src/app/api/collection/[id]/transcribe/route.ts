@@ -5,19 +5,28 @@ import OpenAI, { toFile } from "openai";
 import {
   getCollection,
   getMedia,
-  putMedia,
+  mutateRecord,
   mutateCollection,
 } from "@/lib/collection/store";
 import { roleFor, requireOwner, publicView } from "@/lib/collection/access";
 import { mediaBytes } from "@/lib/collection/media";
 import { isStoredOwnerRecording } from "@/lib/collection/recording-validation";
 import { assertOrigin } from "@/lib/security/policy";
+import type { StoredMedia } from "@/lib/collection/types";
+import {
+  PipelineInputError,
+  pipelineContext,
+  pipelineFailure,
+  withPipelineStage,
+} from "@/lib/observability/pipeline-logger";
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  let trace = pipelineContext();
   try {
     const { id } = await params;
+    trace = pipelineContext(id);
     const c = await getCollection(id);
     if (!c || roleFor(c, req.nextUrl.searchParams.get("key") || "") !== "owner")
       return NextResponse.json(
@@ -35,16 +44,16 @@ export async function POST(
       typeof b.mediaId === "string" ? b.mediaId : "invalid-id",
     );
     if (!isStoredOwnerRecording(m, c))
-      throw new Error(
+      throw new PipelineInputError(
         "Your original recording could not be found. Please try again.",
       );
     const take = c.takes.find((item) => item.id === b.takeId);
     if (!take || (take.mediaId !== m.id && take.audioMediaId !== m.id))
-      throw new Error(
+      throw new PipelineInputError(
         "Save this recording to its answer before transcribing it.",
       );
     if (take.audioMediaId && take.audioMediaId !== m.id)
-      throw new Error(
+      throw new PipelineInputError(
         "Use this recording's saved audio backup for transcription.",
       );
     if (!process.env.OPENAI_API_KEY && !m.transcription)
@@ -59,7 +68,7 @@ export async function POST(
     if (!transcription) {
       const bytes = await mediaBytes(m, 25 * 1024 * 1024);
       if (bytes.byteLength > 25 * 1024 * 1024)
-        throw new Error(
+        throw new PipelineInputError(
           "This recording is too large to transcribe here. Your original is saved. Record a shorter answer to continue.",
         );
       const extension = m.mimeType.includes("mp4")
@@ -76,12 +85,18 @@ export async function POST(
         type: m.mimeType,
       });
       await guard.reserveProviderBudget();
-      const result = await client.audio.transcriptions.create({
-        model: "whisper-1",
-        file,
-      });
+      const result = await withPipelineStage(
+        "TRANSCRIPTION",
+        trace,
+        () =>
+          client.audio.transcriptions.create({
+            model: "whisper-1",
+            file,
+          }),
+        "openai",
+      );
       if (!result.text?.trim() || result.text.length > 30000)
-        throw new Error(
+        throw new PipelineInputError(
           "The recording did not return a usable transcript. Replay it and try a new recording if needed.",
         );
       transcription = {
@@ -106,11 +121,23 @@ export async function POST(
         (target.mediaId !== m.id && target.audioMediaId !== m.id) ||
         (target.audioMediaId && target.audioMediaId !== m.id)
       )
-        throw new Error(
+        throw new PipelineInputError(
           "This recording changed while it was being transcribed. Reload and try again.",
         );
-      const saved = currentMedia.transcription ?? transcription!;
-      await putMedia({ ...currentMedia, transcription: saved });
+      const savedMedia = await mutateRecord<StoredMedia>(
+        `media-${m.id}`,
+        (latest) => {
+          if (!isStoredOwnerRecording(latest, current))
+            throw new PipelineInputError(
+              "This original recording is no longer available. Reload and try again.",
+            );
+          return {
+            ...latest,
+            transcription: latest.transcription ?? transcription!,
+          };
+        },
+      );
+      const saved = savedMedia.transcription!;
       const changed = target.text !== saved.text;
       target.text = saved.text;
       target.transcriptionStatus = "ready";
@@ -138,14 +165,8 @@ export async function POST(
   } catch (e) {
     const protection = securityErrorResponse(e);
     if (protection) return protection;
-    return NextResponse.json(
-      {
-        error:
-          e instanceof Error
-            ? e.message
-            : "We could not transcribe this recording. Your original is saved. Please try again.",
-      },
-      { status: 400 },
-    );
+    return NextResponse.json(pipelineFailure("TRANSCRIPTION", trace, e), {
+      status: 400,
+    });
   }
 }

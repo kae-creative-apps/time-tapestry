@@ -43,13 +43,15 @@ export async function GET(
       const extension =
         m.mimeType === "video/mp4"
           ? "mp4"
-          : m.mimeType.startsWith("video/")
-            ? "webm"
-            : m.mimeType.includes("wav")
-              ? "wav"
-              : m.mimeType.includes("mpeg")
-                ? "mp3"
-                : "webm";
+          : m.mimeType === "audio/mp4"
+            ? "m4a"
+            : m.mimeType.startsWith("video/")
+              ? "webm"
+              : m.mimeType.includes("wav")
+                ? "wav"
+                : m.mimeType.includes("mpeg")
+                  ? "mp3"
+                  : "webm";
       headers["Content-Disposition"] =
         `attachment; filename="time-tapestry-recording.${extension}"`;
     }
