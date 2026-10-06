@@ -1,0 +1,12 @@
+{
+  "name": "time-tapestry-woven-logo-hyperframes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "npx --yes hyperframes@0.8.65 preview",
+    "check": "npx --yes hyperframes@0.8.65 check",
+    "render": "npx --yes hyperframes@0.8.65 render",
+    "publish": "npx --yes hyperframes@0.8.65 publish"
+  }
+}

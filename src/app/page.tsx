@@ -18,7 +18,7 @@ const storyThemes = [
   },
   {
     title: "A life of faith",
-    note: "The choices behind what you believe.",
+    note: "The choices shaped by following Jesus.",
     color: "bg-clay-50",
     icon: "sprout",
   },
@@ -168,9 +168,10 @@ export default function Home() {
                 You don’t have to know where to start.
               </h2>
               <p className="mt-6 text-lg leading-relaxed text-ink-500">
-                An AI interviewer asks one question at a time. Speak, write, or
-                record video, and pause when you need to. Share the moments that
-                come to mind.
+                Our Christian AI interview invites stories of kindness, following
+                Jesus, and living generously, one question at a time. Record video
+                with sound or audio only. You can pause or skip any question,
+                including questions about faith.
               </p>
               <p className="mt-4 text-lg leading-relaxed text-ink-500">
                 There is room for the time you gave and the money you sowed into
@@ -207,7 +208,7 @@ export default function Home() {
                   Speak
                 </span>
                 <span className="rounded-full border border-white/25 px-3 py-2">
-                  Write
+                  Pause anytime
                 </span>
                 <span className="rounded-full border border-white/25 px-3 py-2">
                   Record video
@@ -312,9 +313,9 @@ export default function Home() {
               <ol className="divide-y divide-espresso/15">
                 {[
                   ["After approval", "An invitation to the whole collection"],
-                  ["Month 3", "A story worth returning to"],
-                  ["Month 6", "Words of faith and encouragement"],
-                  ["Month 9", "Another reason to reconnect"],
+                  ["Week 2", "A story worth returning to"],
+                  ["Week 4", "Words of faith and encouragement"],
+                  ["Week 6", "Another reason to reconnect"],
                 ].map(([when, what]) => (
                   <li
                     key={when}

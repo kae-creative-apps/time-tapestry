@@ -1,6 +1,7 @@
 import { getCollection, getMedia, mutateRecord, readRecord } from "../store";
 import type { Collection, StoredMedia } from "../types";
 import { selectedAnswers } from "../content";
+import { isStoredOwnerRecording } from "../recording-validation";
 import { CHAPTERS } from "../../interview-state";
 import { sha256 } from "./plan";
 import type {
@@ -12,7 +13,7 @@ import type {
   StoryFilmJob,
 } from "./types";
 
-export const ORIGINAL_TEMPLATE_VERSION = "original-story-v1";
+export const ORIGINAL_TEMPLATE_VERSION = "original-story-orb-v2";
 export const originalProbeKey = (mediaId: string) =>
   `film-probe-${sha256(mediaId).slice(0, 48)}`;
 export type OriginalProbe = {
@@ -98,13 +99,7 @@ export async function originalFilmSources(
   const result: OriginalFilmSource[] = [];
   for (const source of sources.values()) {
     const media = await getMedia(source.mediaId);
-    if (
-      media &&
-      media.collectionId === c.id &&
-      media.role === "owner" &&
-      /^(audio|video)\//.test(media.mimeType) &&
-      (media.localPath || media.url)
-    ) {
+    if (isStoredOwnerRecording(media, c)) {
       const probe = await readRecord<OriginalProbe>(originalProbeKey(media.id));
       result.push({
         ...source,
@@ -338,7 +333,7 @@ export async function prepareOriginalJob(
     selectedIds.has(item.mediaId),
   )) {
     const media = await getMedia(source.mediaId);
-    if (!media || media.collectionId !== c.id || media.role !== "owner")
+    if (!isStoredOwnerRecording(media, c))
       throw new Error("An original recording is no longer available.");
     snapshots.push({ ...source, metadataSha256: sourceMetadataHash(media) });
   }
@@ -391,12 +386,12 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
     const edit = await getOriginalFilmEdit(job.collectionId);
     if (edit?.revisionHash !== job.originalPlanHash) return false;
   }
+  const collection = await getCollection(job.collectionId);
+  if (!collection) return false;
   for (const source of job.originalSources ?? []) {
     const media = await getMedia(source.mediaId);
     if (
-      !media ||
-      media.collectionId !== job.collectionId ||
-      media.role !== "owner" ||
+      !isStoredOwnerRecording(media, collection) ||
       sourceMetadataHash(media) !== source.metadataSha256
     )
       return false;
@@ -404,7 +399,8 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-export const AUTOMATIC_TEMPLATE_VERSION = "original-scribe-word-match-v2";
+export const AUTOMATIC_TEMPLATE_VERSION =
+  "original-scribe-source-cleanup-orb-v4";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",
@@ -414,7 +410,7 @@ export async function prepareAutomaticJob(
   const snapshots: OriginalSourceSnapshot[] = [];
   for (const source of sources) {
     const media = await getMedia(source.mediaId);
-    if (!media || media.collectionId !== c.id || media.role !== "owner")
+    if (!isStoredOwnerRecording(media, c))
       throw new Error("An original recording is unavailable.");
     snapshots.push({ ...source, metadataSha256: sourceMetadataHash(media) });
   }

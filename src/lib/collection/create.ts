@@ -59,6 +59,7 @@ export function prepareCollection(value: unknown): Collection {
   const key = () => randomBytes(32).toString("hex");
   const c: Collection = {
     schemaVersion: 2,
+    postcardCadence: "biweekly",
     id: randomUUID(),
     createdAt: now,
     updatedAt: now,

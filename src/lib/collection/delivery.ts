@@ -3,9 +3,16 @@ import { BRAND_COLORS } from "../brand-art";
 import {
   assertReleasedPostcardProof,
   prepareAutomaticPostcards,
+  postcardDeliveryMode,
 } from "./postcard-proofs";
-import { addCalendarMonths } from "./content";
+import { postcardScheduledDate } from "./postcard-cadence";
 import { appOrigin, linksFor } from "./access";
+import {
+  PRIMARY_RECIPIENT_ID,
+  normalizeRecipientEmail,
+  recipientById,
+  storedRecipientId,
+} from "./recipients";
 import { getCollection, listCollections, mutateCollection } from "./store";
 import {
   lobPostcardTransport,
@@ -109,7 +116,7 @@ export function nextDuePostcard(
     const earliest = previous?.mailedAt
       ? Math.max(
           time(delivery.scheduledFor),
-          time(addCalendarMonths(previous.mailedAt, 3)),
+          time(postcardScheduledDate(c, previous.mailedAt, 1)),
         )
       : time(delivery.scheduledFor);
     return Number.isFinite(earliest) &&
@@ -136,7 +143,7 @@ export function shiftFuturePostcards(
       delivery.status === "mailed"
     )
       return;
-    const minimum = addCalendarMonths(mailedAt, (nextIndex - index) * 3);
+    const minimum = postcardScheduledDate(c, mailedAt, nextIndex - index);
     if (time(delivery.scheduledFor) < time(minimum))
       delivery.scheduledFor = minimum;
   });
@@ -146,6 +153,35 @@ export function notificationSuppressionReason(
   c: Collection,
   n: Notification,
 ): string | null {
+  if (
+    [
+      "collection_ready",
+      "address_request",
+      "postcard_followup",
+      "reply_invitation",
+    ].includes(n.kind) &&
+    (storedRecipientId(n) !== PRIMARY_RECIPIENT_ID ||
+      normalizeRecipientEmail(n.to) !==
+        normalizeRecipientEmail(c.recipient.email))
+  )
+    return "This postcard-related email does not match the primary recipient.";
+  if (n.kind === "recipient_invitation") {
+    const recipient = n.recipientId && recipientById(c, n.recipientId);
+    const member = c.additionalRecipients?.find(
+      (item) => item.id === n.recipientId,
+    );
+    if (
+      c.status !== "approved" ||
+      !recipient ||
+      recipient.primary ||
+      !member ||
+      normalizeRecipientEmail(n.to) !== recipient.email ||
+      n.url !== appOrigin() + linksFor(c).collection ||
+      n.id !==
+        `${c.id}:recipient:${recipient.id}:invitation:${member.invitationVersion || 1}`
+    )
+      return "This digital invitation no longer matches an active recipient of the approved collection.";
+  }
   if (n.kind === "collection_ready") {
     if (n.id !== `${c.id}:digital-ready`)
       return "The first postcard introduces the gift, so this email is not sent.";
@@ -186,7 +222,13 @@ export function notificationSuppressionReason(
       return "The stories have not been approved for sharing.";
     if (!c.replyRemindersEnabled)
       return "The recipient turned off follow-up emails.";
-    if (c.replies.some((r) => r.chapterId === n.chapterId))
+    if (
+      c.replies.some(
+        (r) =>
+          r.chapterId === n.chapterId &&
+          storedRecipientId(r) === PRIMARY_RECIPIENT_ID,
+      )
+    )
       return "The recipient has already replied to this story.";
     const delivery = c.deliveries.find((d) => d.chapterId === n.chapterId);
     if (!delivery?.mailedAt || delivery.status !== "mailed")
@@ -208,6 +250,7 @@ export function postcardFollowup(
   return {
     id: postcardIdempotencyKey(c, chapter.id) + "/followup",
     kind: "postcard_followup",
+    recipientId: PRIMARY_RECIPIENT_ID,
     chapterId: chapter.id,
     to: c.recipient.email,
     subject: viewed
@@ -484,6 +527,7 @@ function notificationRequest(c: Collection, n: Notification) {
     invitation: "Start your interview",
     review_ready: "Review your stories",
     collection_ready: "See your stories",
+    recipient_invitation: "Watch the collection",
     postcard_mailed: "View postcard status",
     postcard_followup: "Read the story",
     reply_invitation: "Send a reply",
@@ -533,6 +577,11 @@ async function providerPost(
   idempotencyKey: string,
 ) {
   const isMail = provider === "lob";
+  if (isMail && postcardDeliveryMode() !== "live")
+    throw new ProviderError(
+      "Postcard delivery is on hold until a live printing-service key is configured.",
+      false,
+    );
   const transport = isMail
     ? lobPostcardTransport(body)
     : { contentType: "application/json", body };
@@ -846,6 +895,37 @@ async function processNotification(
     return c;
   });
   if (!lease) return false;
+  // A removal may have been saved after claiming an invitation. Check the
+  // current membership again immediately before contacting the email provider.
+  const current = await getCollection(id);
+  const currentNotification = current?.notifications.find(
+    (item) => item.id === notificationId,
+  );
+  if (
+    !current ||
+    !currentNotification ||
+    currentNotification.status === "suppressed" ||
+    currentNotification.dispatch?.leaseId !== lease.leaseId ||
+    notificationSuppressionReason(current, currentNotification)
+  ) {
+    if (currentNotification)
+      await mutateCollection(id, (c) => {
+        const n = c.notifications.find((item) => item.id === notificationId);
+        if (n && n.dispatch?.leaseId === lease!.leaseId) {
+          n.status = "suppressed";
+          n.error =
+            notificationSuppressionReason(c, n) ||
+            "This email is no longer eligible to send.";
+          n.dispatch = {
+            ...n.dispatch,
+            leaseId: undefined,
+            leaseExpiresAt: undefined,
+          };
+        }
+        return c;
+      });
+    return false;
+  }
   try {
     const providerId = await providerPost(
       "resend",

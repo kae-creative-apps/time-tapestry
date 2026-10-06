@@ -10,6 +10,11 @@ import {
   type SourceWord,
 } from "./word-matching";
 import type { OriginalChapterEdit, StoryFilmJob } from "./types";
+import {
+  cleanSourcePassage,
+  SOURCE_CLEANUP_VERSION,
+  type SourceSilence,
+} from "./source-cleanup";
 
 export async function assembleSourceEdits(
   c: Collection,
@@ -18,6 +23,7 @@ export async function assembleSourceEdits(
   durations: Map<string, number>,
   sourceHashes: { mediaId: string; sha256: string }[],
   assertCurrent: () => Promise<void> = async () => {},
+  silenceByMedia: Map<string, SourceSilence[]> = new Map(),
 ) {
   const sources = job.originalSources ?? [];
   const edits = new Map(
@@ -27,6 +33,7 @@ export async function assembleSourceEdits(
         chapterId: chapter.chapterId,
         presentation: job.automaticPresentation ?? "video",
         clips: [],
+        cleanup: { version: SOURCE_CLEANUP_VERSION, removed: [] },
       } as OriginalChapterEdit,
     ]),
   );
@@ -35,8 +42,28 @@ export async function assembleSourceEdits(
     chapterId: string;
     confidence: number;
   }[] = [];
+  const originalClips = new Map<string, OriginalChapterEdit["clips"]>();
+  const addPassage = (
+    chapterId: string,
+    clip: OriginalChapterEdit["clips"][number],
+    words: SourceWord[],
+  ) => {
+    const preserved = originalClips.get(chapterId) ?? [];
+    preserved.push(clip);
+    originalClips.set(chapterId, preserved);
+    const cleaned = cleanSourcePassage(
+      clip,
+      words,
+      silenceByMedia.get(clip.mediaId) ?? [],
+    );
+    const edit = edits.get(chapterId)!;
+    edit.clips.push(...cleaned.clips);
+    edit.cleanup!.removed.push(...cleaned.removed);
+    if (cleaned.skippedReason)
+      edit.cleanup!.skippedReason = cleaned.skippedReason;
+  };
   // Dedicated question recordings are already explicitly attributed. Preserve
-  // the complete take, including natural pauses, and add actual word captions.
+  // their complete meaning, using only verified word and waveform boundaries.
   for (const chapter of job.chapters) {
     for (const answer of selectedAnswers(c, chapter.chapterId).filter(
       (answer) => !answer.liveSource,
@@ -58,12 +85,16 @@ export async function assembleSourceEdits(
         throw new Error(
           "A question recording contains multiple detected speakers and needs an editor check.",
         );
-      edits.get(chapter.chapterId)!.clips.push({
-        mediaId: source.mediaId,
-        inMs: 0,
-        outMs: durations.get(source.mediaId)!,
-        captions: captionsForWords(words),
-      });
+      addPassage(
+        chapter.chapterId,
+        {
+          mediaId: source.mediaId,
+          inMs: 0,
+          outMs: durations.get(source.mediaId)!,
+          captions: captionsForWords(words),
+        },
+        words,
+      );
       report.push({
         sourceTakeIds: [answer.id],
         chapterId: chapter.chapterId,
@@ -170,7 +201,17 @@ export async function assembleSourceEdits(
         allWords,
         durations,
       );
-      edits.get(answer.liveSource!.chapterId)!.clips.push(...matchedClips);
+      for (const clip of matchedClips)
+        addPassage(
+          answer.liveSource!.chapterId,
+          clip,
+          match.words.filter(
+            (word) =>
+              word.mediaId === clip.mediaId &&
+              word.startMs >= clip.inMs &&
+              word.endMs <= clip.outMs,
+          ),
+        );
       report.push({
         sourceTakeIds: [answer.id],
         chapterId: answer.liveSource!.chapterId,
@@ -181,7 +222,15 @@ export async function assembleSourceEdits(
 
   const chapters = job.chapters.map((chapter) => {
     const edit = edits.get(chapter.chapterId)!;
-    if (!edit.clips.length || edit.clips.length > 40)
+    if (edit.clips.length > 500) {
+      edit.clips = originalClips.get(chapter.chapterId) ?? [];
+      edit.cleanup = {
+        version: SOURCE_CLEANUP_VERSION,
+        removed: [],
+        skippedReason: "clip_limit",
+      };
+    }
+    if (!edit.clips.length || edit.clips.length > 500)
       throw new Error(
         "A theme could not be assembled into verified original clips. No incomplete four-film collection was attached.",
       );

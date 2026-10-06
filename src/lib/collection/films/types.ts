@@ -49,11 +49,25 @@ export type OriginalClipSelection = {
   inMs: number;
   outMs: number;
   captions?: SourceCaption[];
+  /** Non-speech source handles available for a short sample-level fade. */
+  audioFadeInMs?: number;
+  audioFadeOutMs?: number;
 };
 export type OriginalChapterEdit = {
   chapterId: string;
   presentation: "video" | "audio";
   clips: OriginalClipSelection[];
+  cleanup?: {
+    version: string;
+    skippedReason?: "clip_limit";
+    removed: Array<{
+      mediaId: string;
+      inMs: number;
+      outMs: number;
+      reason: "filler" | "silence";
+      text?: string;
+    }>;
+  };
 };
 export type OriginalFilmEdit = {
   schemaVersion: 1;

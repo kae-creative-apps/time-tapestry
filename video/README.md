@@ -1,5 +1,7 @@
 # Chapter video worker
 
+For the shared four-theme visual system and narrated Studio previews, see [Four story-film templates](STORY_TEMPLATES_v1.md). The older manual operator workflow is documented below; hosted queue and automatic source alignment live in `src/lib/collection/films/`.
+
 This is a runnable production scaffold, not a claim that the application already performs professional editorial review. It exports accepted recordings from a collection, renders operator-approved edit plans, stores the results privately and attaches them for final owner review. It does not yet choose the best clips, align a transcript automatically, or operate a durable queue.
 
 ## Implemented

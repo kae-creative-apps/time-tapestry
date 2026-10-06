@@ -4,6 +4,7 @@ import {
   interviewCaptureConstraints,
   interviewDeviceError,
   muteInterviewMicrophone,
+  requireInterviewAudioTrack,
 } from "../src/lib/collection/interview-devices";
 
 test("selected input devices are required instead of silently switching to another camera or microphone", () => {
@@ -37,6 +38,29 @@ test("voice-only interviews never ask for camera access and system defaults stay
       .facingMode,
     "user",
   );
+});
+
+test("both recording modes require a live microphone even when a camera is available", () => {
+  for (const audioTracks of [[], [{ readyState: "ended" }]]) {
+    const stream = {
+      getAudioTracks: () => audioTracks,
+      getVideoTracks: () => [{ readyState: "live" }],
+    } as unknown as MediaStream;
+    assert.throws(
+      () => requireInterviewAudioTrack(stream),
+      /microphone did not open/,
+    );
+  }
+  assert.throws(
+    () => requireInterviewAudioTrack(null),
+    /microphone did not open/,
+  );
+  for (const enabled of [true, false]) {
+    const stream = {
+      getAudioTracks: () => [{ readyState: "live", enabled }],
+    } as unknown as MediaStream;
+    assert.doesNotThrow(() => requireInterviewAudioTrack(stream));
+  }
 });
 
 test("microphone mute silences every audio track without disabling or ending video", () => {

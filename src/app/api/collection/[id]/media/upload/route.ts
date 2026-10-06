@@ -5,8 +5,10 @@ import { finalizeCloudMedia } from "@/lib/collection/media";
 import { NextRequest, NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getCollection, getMedia, putMedia } from "@/lib/collection/store";
-import { collectionRoleForRequest } from "@/lib/collection/request-access";
+import { collectionAccessForRequest } from "@/lib/collection/request-access";
+import { recipientById, storedRecipientId } from "@/lib/collection/recipients";
 import { mediaTypes } from "@/lib/collection/media";
+import { isGeneratedFilmMedia } from "@/lib/collection/recording-validation";
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -19,7 +21,8 @@ export async function POST(
       request: req,
       onBeforeGenerateToken: async (pathname, payload) => {
         const c = await getCollection(id);
-        const role = c && (await collectionRoleForRequest(req, c));
+        const access = c && (await collectionAccessForRequest(req, c));
+        const role = access?.role;
         if (
           !c ||
           !role ||
@@ -37,9 +40,16 @@ export async function POST(
         )
           throw new Error("Invalid upload");
         const existing = await getMedia(p.mediaId);
+        if (isGeneratedFilmMedia(existing ?? { id: p.mediaId }, c))
+          throw new Error(
+            "Completed films cannot be used for recording uploads.",
+          );
         if (
           existing &&
-          (existing.collectionId !== id || existing.role !== role)
+          (existing.collectionId !== id ||
+            existing.role !== role ||
+            (role === "recipient" &&
+              storedRecipientId(existing) !== access?.recipientId))
         )
           throw new Error("Invalid recording");
         await reserveMediaUpload({
@@ -49,9 +59,13 @@ export async function POST(
         });
         if (!existing)
           await putMedia({
+            provenance: "uploaded_recording",
             id: p.mediaId,
             collectionId: id,
             role,
+            ...(role === "recipient"
+              ? { recipientId: access!.recipientId }
+              : {}),
             mimeType: p.mimeType.split(";")[0],
             originalName: String(p.name || "recording").slice(0, 200),
             bytes: 0,
@@ -63,15 +77,27 @@ export async function POST(
           validUntil: Date.now() + 15 * 60 * 1000,
           addRandomSuffix: false,
           allowOverwrite: false,
-          tokenPayload: JSON.stringify({ id: p.mediaId, collectionId: id }),
+          tokenPayload: JSON.stringify({
+            id: p.mediaId,
+            collectionId: id,
+            ...(role === "recipient"
+              ? { recipientId: access!.recipientId }
+              : {}),
+          }),
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
         const p = JSON.parse(tokenPayload || "{}");
         const m = await getMedia(p.id);
+        const c = m && (await getCollection(m.collectionId));
         if (
           !m ||
           m.collectionId !== p.collectionId ||
+          (m.role === "recipient" &&
+            (!c ||
+              c.status !== "approved" ||
+              storedRecipientId(m) !== storedRecipientId(p) ||
+              !recipientById(c, storedRecipientId(p)))) ||
           !blob.url.includes(".private.blob.vercel-storage.com/")
         )
           throw new Error("Invalid upload completion");

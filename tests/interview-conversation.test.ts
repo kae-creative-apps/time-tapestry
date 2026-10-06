@@ -94,14 +94,16 @@ test("every accepted conversational answer reaches its hidden story without repl
     kind: "text",
     text: "Legacy selected answer",
   };
-  const saved = await legacyPost(
-    request(`/api/collection/${c.id}?key=${c.ownerKey}`, {
-      action: "save_take",
-      take: oldTake,
-    }),
-    params(c.id),
-  );
-  assert.equal(saved.status, 200);
+  // Historical text remains readable, but new typed interviews are no longer accepted.
+  await store.mutateCollection(c.id, (current: Collection) => {
+    current.takes.push({
+      ...oldTake,
+      kind: "text",
+      createdAt: current.createdAt,
+    });
+    current.selectedTakeIds.q1 = oldTake.id;
+    return current;
+  });
   const sessionId = await start(c);
   const agent = { ...turn(0, "Tell me about her kindness."), role: "agent" };
   const first = turn(1, "My neighbor helped me learn to read.");
@@ -332,6 +334,7 @@ test("original segments are owner-scoped, idempotent and projected as estimated 
       mimeType: "video/webm",
       originalName: "synthetic.webm",
       bytes: 10,
+      localPath: path.join(store.dataRoot, "media", id),
       createdAt: c.createdAt,
     });
   const segments = mediaIds.map((mediaId, index) => ({
@@ -687,4 +690,90 @@ test("provider reconnects keep one archive timeline and append idempotent connec
     (await store.getCollection(c.id)).interviews[0].providerConversationIds,
     [originalId, resumedId],
   );
+});
+
+test("transcripts recover before recordings but cannot complete or generate without them", async () => {
+  const c = await make();
+  const sessionId = await start(c, "guided");
+  const turns = [1, 2, 3, 4].map((i) =>
+    turn(i, `Recorded memory ${i}.`, `q${i}`),
+  );
+  assert.equal(
+    (await act(c, { action: "append_turns", sessionId, turns })).status,
+    200,
+  );
+  assert.equal(
+    (await act(c, { action: "set_status", sessionId, status: "completed" }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await store.getCollection(c.id)).interviews[0].status,
+    "active",
+  );
+  const generate = () =>
+    legacyPost(
+      request(`/api/collection/${c.id}?key=${c.ownerKey}`, {
+        action: "generate",
+      }),
+      params(c.id),
+    );
+  assert.equal((await generate()).status, 400);
+  assert.equal((await store.getCollection(c.id)).chapters.length, 0);
+  const mediaId = randomUUID();
+  const media = {
+    id: mediaId,
+    collectionId: c.id,
+    role: "owner",
+    mimeType: "audio/webm",
+    originalName: "synthetic.webm",
+    bytes: 10,
+    createdAt: c.createdAt,
+    localPath: path.join(store.dataRoot, "media", mediaId),
+  };
+  const segment = {
+    id: randomUUID(),
+    mediaId,
+    kind: "voice",
+    startMs: 0,
+    durationMs: 10_000,
+  };
+  for (const change of [
+    { bytes: 0, localPath: undefined },
+    { localPath: undefined },
+    { collectionId: randomUUID() },
+    { role: "recipient" },
+    { mimeType: "video/webm" },
+  ]) {
+    await store.putMedia({ ...media, ...change });
+    assert.equal(
+      (await act(c, { action: "attach_segment", sessionId, segment })).status,
+      400,
+    );
+  }
+  assert.equal(
+    (await store.getCollection(c.id)).interviews[0].segments.length,
+    0,
+  );
+  await store.putMedia(media);
+  assert.equal(
+    (await act(c, { action: "attach_segment", sessionId, segment })).status,
+    200,
+  );
+  await store.putMedia({ ...media, bytes: 0 });
+  assert.equal(
+    (await act(c, { action: "set_status", sessionId, status: "completed" }))
+      .status,
+    400,
+  );
+  await store.putMedia(media);
+  assert.equal(
+    (await act(c, { action: "set_status", sessionId, status: "completed" }))
+      .status,
+    200,
+  );
+  assert.equal((await generate()).status, 200);
+  const saved = await store.getCollection(c.id);
+  assert.equal(saved.interviews[0].turns.length, 4);
+  assert.equal(saved.chapters.length, 4);
 });

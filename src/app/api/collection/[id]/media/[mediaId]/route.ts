@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { getCollection, getMedia } from "@/lib/collection/store";
-import { collectionRoleForRequest } from "@/lib/collection/request-access";
+import { collectionAccessForRequest } from "@/lib/collection/request-access";
 import {
   mediaAllowed,
   assertPrivateBlobUrl,
@@ -17,8 +17,13 @@ export async function GET(
     const { id, mediaId } = await params;
     const c = await getCollection(id),
       m = await getMedia(mediaId);
-    const role = c && (await collectionRoleForRequest(req, c));
-    if (!c || !m || !role || !mediaAllowed(c, role, m))
+    const access = c && (await collectionAccessForRequest(req, c));
+    if (
+      !c ||
+      !m ||
+      !access ||
+      !mediaAllowed(c, access.role, m, access.recipientId)
+    )
       return new NextResponse("Recording not found", {
         status: 404,
         headers: {

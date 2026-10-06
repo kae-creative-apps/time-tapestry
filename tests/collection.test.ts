@@ -6,6 +6,10 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { verifiedRecipientCookie } from "./verified-recipient-fixture";
+import {
+  attachSyntheticOriginalFilms,
+  recordedApproval,
+} from "./recorded-review-fixture";
 let create: any, post: any, get: any, store: any;
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 const request = (url: string, body?: unknown, cookie?: string) =>
@@ -83,44 +87,48 @@ async function act(c: any, body: unknown, key = c.ownerKey) {
   );
   return { status: r.status, body: await r.json() };
 }
+async function recording(c: any, kind = "voice", text?: string) {
+  const id = randomUUID();
+  await store.putMedia({
+    id,
+    collectionId: c.id,
+    role: "owner",
+    mimeType: kind === "voice" ? "audio/webm" : "video/webm",
+    originalName: "synthetic.webm",
+    ...(text
+      ? {
+          transcription: {
+            text,
+            provider: "openai",
+            model: "whisper-1",
+            completedAt: c.createdAt,
+          },
+        }
+      : {}),
+    bytes: 10,
+    createdAt: c.createdAt,
+    localPath: path.join(store.dataRoot, "media", id),
+  });
+  return id;
+}
 async function ready(c: any) {
   for (let i = 1; i <= 4; i++) {
+    const text = `A specific memory for chapter ${i}. I learned to listen and offer help.`;
     const r = await act(c, {
       action: "save_take",
       take: {
         id: randomUUID(),
         questionId: `q${i}`,
-        kind: "text",
+        kind: "voice",
+        mediaId: await recording(c, "voice", text),
         prompt: `Q${i}`,
-        text: `A specific memory for chapter ${i}. I learned to listen and offer help.`,
-        createdAt: new Date().toISOString(),
+        text,
       },
     });
     assert.equal(r.status, 200);
   }
   assert.equal((await act(c, { action: "generate" })).status, 200);
-  const current = await store.getCollection(c.id);
-  for (const ch of current.chapters)
-    assert.equal(
-      (
-        await act(c, {
-          action: "edit_chapter",
-          chapterId: ch.id,
-          title: ch.title,
-          content: ch.content,
-          postcardNote: ch.postcardNote,
-          editorialReviewed: true,
-          blessing: {
-            encouragement: "Take time to listen.",
-            scriptureReference: "",
-            scriptureText: "",
-            scriptureTranslation: "",
-          },
-        })
-      ).status,
-      200,
-    );
-  return store.getCollection(c.id);
+  return attachSyntheticOriginalFilms(await store.getCollection(c.id));
 }
 test("address link cannot expose drafts or owner/private dispatch payloads", async () => {
   const c = await make();
@@ -148,27 +156,34 @@ test("address link cannot expose drafts or owner/private dispatch payloads", asy
     404,
   );
 });
-test("selected transcript change invalidates the previous approved draft", async () => {
+test("client transcript edits are rejected without changing the saved draft", async () => {
   const c = await ready(await make());
-  const take = c.takes[0];
-  await act(c, {
+  const rejected = await act(c, {
     action: "save_take",
-    take: { ...take, text: "Corrected memory" },
+    take: { ...c.takes[0], text: "Corrected memory" },
   });
-  const changed = await store.getCollection(c.id);
-  assert.equal(changed.draftOutdated, true);
-  assert.ok(changed.chapters.every((ch: any) => !ch.editorialReviewed));
-  assert.equal((await act(c, { action: "approve" })).status, 400);
+  assert.equal(rejected.status, 400);
+  const unchanged = await store.getCollection(c.id);
+  assert.equal(unchanged.draftOutdated, false);
+  assert.deepEqual(unchanged.chapters, c.chapters);
+  assert.deepEqual(unchanged.takes, c.takes);
 });
 test("returning to interview does not regenerate or erase edited chapters", async () => {
   const c = await ready(await make());
-  await act(c, {
-    action: "edit_chapter",
-    chapterId: "q1",
-    title: "My revised title",
-    content: "My carefully edited story.",
-    postcardNote: "A personal introduction.",
-    editorialReviewed: true,
+  assert.equal(
+    (
+      await act(c, {
+        action: "edit_chapter",
+        chapterId: "q1",
+        content: "New client words",
+      })
+    ).status,
+    410,
+  );
+  // A historical edited draft remains readable and is archived on regeneration.
+  await store.mutateCollection(c.id, (current: any) => {
+    current.chapters[0].content = "My carefully edited story.";
+    return current;
   });
   await act(c, { action: "generate" });
   let result = await store.getCollection(c.id);
@@ -182,16 +197,22 @@ test("returning to interview does not regenerate or erase edited chapters", asyn
   );
   assert.equal(result.chapters[0].editorialReviewed, false);
 });
-test("explicit take selection survives rerecording and transcript correction", async () => {
+test("explicit take selection survives rerecording and rejected transcript edits", async () => {
   const c = await make();
   const one = {
     id: randomUUID(),
     questionId: "q1",
-    kind: "text",
+    kind: "voice",
+    mediaId: await recording(c, "voice", "First"),
     prompt: "Q",
     text: "First",
   };
-  const two = { ...one, id: randomUUID(), text: "Second" };
+  const two = {
+    ...one,
+    id: randomUUID(),
+    mediaId: await recording(c, "voice", "Second"),
+    text: "Second",
+  };
   await act(c, { action: "save_take", take: one });
   await act(c, { action: "save_take", take: two });
   await act(c, {
@@ -203,14 +224,19 @@ test("explicit take selection survives rerecording and transcript correction", a
   await act(c, { action: "select_take", questionId: "q1", takeId: one.id });
   await act(c, {
     action: "save_take",
-    take: { ...two, id: randomUUID(), text: "Third" },
+    take: {
+      ...two,
+      id: randomUUID(),
+      mediaId: await recording(c, "voice", "Third"),
+      text: "Third",
+    },
   });
   result = await store.getCollection(c.id);
   assert.equal(result.selectedTakeIds.q1, one.id);
 });
 test("approval freezes four packages and queues no recipient spoiler email", async () => {
   const c = await ready(await make());
-  const approved = await act(c, { action: "approve" });
+  const approved = await act(c, { action: "approve", ...recordedApproval(c) });
   assert.equal(approved.status, 200);
   const result = await store.getCollection(c.id);
   assert.equal(result.deliveries.length, 4);
@@ -233,7 +259,7 @@ test("approval freezes four packages and queues no recipient spoiler email", asy
 });
 test("recipient reply is explicit, idempotent and cannot be sent by requester", async () => {
   const c = await ready(await make());
-  await act(c, { action: "approve" });
+  await act(c, { action: "approve", ...recordedApproval(c) });
   const reply = {
     action: "reply",
     chapterId: "q1",
@@ -257,7 +283,8 @@ test("followups have a server-enforced maximum of two", async () => {
     take: {
       id: randomUUID(),
       questionId: "q1",
-      kind: "text",
+      kind: "voice",
+      mediaId: await recording(c, "voice", "A memory"),
       prompt: "Q",
       text: "A memory",
     },
@@ -278,8 +305,7 @@ test("a dead local process lock is recovered without discarding saved data", asy
 });
 
 test("digital approval works without a postal address and postal scheduling is explicit", async () => {
-  const c = await make();
-  await ready(c);
+  const c = await ready(await make());
   await store.mutateCollection(c.id, (current: any) => ({
     ...current,
     address: undefined,
@@ -288,7 +314,7 @@ test("digital approval works without a postal address and postal scheduling is e
   const result = await act(c, {
     action: "approve",
     deliveryMode: "digital",
-    allowWrittenOnly: true,
+    ...recordedApproval(c),
   });
   assert.equal(result.status, 200);
   assert.equal(result.body.collection.status, "approved");
@@ -304,54 +330,150 @@ test("digital approval works without a postal address and postal scheduling is e
   assert.match(postal.body.error, /address/i);
 });
 
-test("AI film review binds the exact output and changed words invalidate it without deleting original files", async () => {
+test("historical AI films remain readable but cannot authorize a new recorded collection", async () => {
+  const c = await ready(await make());
+  const originalMediaId = c.chapters[0].videoMediaId;
+  await store.mutateCollection(c.id, (current: any) => {
+    current.chapters[0].film.narrationKind = "ai_interviewer";
+    return current;
+  });
+  const read = await get(
+    request(`/api/collection/${c.id}?key=${c.ownerKey}`),
+    params(c.id),
+  );
+  assert.equal(read.status, 200);
+  assert.equal(
+    (await read.json()).collection.chapters[0].videoMediaId,
+    originalMediaId,
+  );
+  assert.equal(
+    (
+      await act(c, {
+        action: "edit_chapter",
+        chapterId: "q1",
+        content: "Edited",
+      })
+    ).status,
+    410,
+  );
+  assert.equal(
+    (await act(c, { action: "approve", ...recordedApproval(c) })).status,
+    400,
+  );
+  assert.ok(await store.getMedia(originalMediaId));
+});
+
+test("new answers require completed owner recordings and server-owned transcripts", async () => {
   const c = await make();
-  await ready(c);
-  let current = await store.getCollection(c.id);
-  const chapter = current.chapters[0];
-  const hash = "a".repeat(64);
-  await store.mutateCollection(c.id, (value: any) => {
-    Object.assign(value.chapters[0], {
-      videoStatus: "ready",
-      videoMediaId: "test-media-original",
-      editorialReviewed: false,
-      film: {
-        jobId: "film_test",
-        chapterId: chapter.id,
-        mediaId: "test-media-original",
-        narrationKind: "ai_interviewer",
-        sourceTakeIds: chapter.sourceTakeIds,
-        sourceSha256: hash,
-        scriptSha256: hash,
-        audioSha256: hash,
-        outputSha256: hash,
-        voiceId: "test",
-        modelId: "test",
-        durationSeconds: 30,
-        createdAt: new Date().toISOString(),
-      },
-    });
-    return value;
-  });
-  const payload = {
-    action: "edit_chapter",
-    chapterId: chapter.id,
-    title: chapter.title,
-    content: chapter.content,
-    postcardNote: chapter.postcardNote,
-    editorialReviewed: true,
+  const take = {
+    id: randomUUID(),
+    questionId: "q1",
+    prompt: "Tell me about a memory.",
+    kind: "voice",
+    text: "Words from my recording.",
   };
-  assert.equal((await act(c, payload)).status, 400);
-  const reviewed = await act(c, { ...payload, reviewedFilmSha256: hash });
-  assert.equal(reviewed.status, 200);
-  assert.equal(reviewed.body.collection.chapters[0].reviewedFilmSha256, hash);
-  const edited = await act(c, {
-    ...payload,
-    content: chapter.content + " Another detail.",
-    editorialReviewed: false,
+  for (const kind of ["text", "voice", "video"]) {
+    const rejected = await act(c, {
+      action: "save_take",
+      take: { ...take, kind },
+    });
+    assert.equal(rejected.status, 400, kind);
+  }
+  const validId = await recording(c);
+  const valid = await store.getMedia(validId);
+  for (const change of [
+    { bytes: 0, localPath: undefined },
+    { bytes: 0 },
+    { localPath: undefined },
+    { role: "recipient" },
+    { collectionId: randomUUID() },
+    { mimeType: "video/webm" },
+  ]) {
+    const mediaId = randomUUID();
+    await store.putMedia({ ...valid, ...change, id: mediaId });
+    assert.equal(
+      (await act(c, { action: "save_take", take: { ...take, mediaId } }))
+        .status,
+      400,
+    );
+  }
+  assert.equal((await store.getCollection(c.id)).takes.length, 0);
+  const recorded = {
+    ...take,
+    mediaId: validId,
+    text: "",
+    transcriptionStatus: "pending",
+  };
+  assert.equal(
+    (await act(c, { action: "save_take", take: recorded })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await act(c, {
+        action: "save_take",
+        take: {
+          ...recorded,
+          text: "A corrected transcript.",
+          transcriptionStatus: "ready",
+        },
+      })
+    ).status,
+    400,
+  );
+  const saved = await store.getCollection(c.id);
+  assert.equal(saved.takes.length, 1);
+  assert.equal(saved.takes[0].text, "");
+  assert.equal(saved.takes[0].mediaId, validId);
+  const videoId = await recording(c, "video", take.text);
+  assert.equal(
+    (
+      await act(c, {
+        action: "save_take",
+        take: { ...take, id: randomUUID(), kind: "video", mediaId: videoId },
+      })
+    ).status,
+    200,
+  );
+});
+
+test("drafting cannot use typed answers or unfinished media from saved metadata", async () => {
+  const c = await ready(await make());
+  const before = await store.getCollection(c.id);
+  const firstMediaId = before.takes[0].mediaId;
+  const media = await store.getMedia(firstMediaId);
+  await store.putMedia({ ...media, bytes: 0, localPath: undefined });
+  const rejected = await act(c, { action: "generate", regenerate: true });
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.body.error, /original recording/);
+  assert.deepEqual((await store.getCollection(c.id)).chapters, before.chapters);
+  // Opening a previously saved draft remains possible without regeneration.
+  assert.equal((await act(c, { action: "generate" })).status, 200);
+  await store.putMedia(media);
+  await store.mutateCollection(c.id, (current: any) => {
+    const historical = {
+      ...current.takes[0],
+      id: randomUUID(),
+      questionId: "q1-f1",
+      kind: "text",
+      mediaId: undefined,
+      text: "A historical typed answer.",
+    };
+    current.takes.push(historical);
+    current.selectedTakeIds[historical.questionId] = historical.id;
+    return current;
   });
-  assert.equal(edited.status, 200);
-  assert.equal(edited.body.collection.chapters[0].videoMediaId, undefined);
-  assert.equal(edited.body.collection.chapters[0].film, undefined);
-  assert.equal(edited.body.collection.chapters[0].editorialReviewed, false);
+  assert.equal(
+    (await act(c, { action: "generate", regenerate: true })).status,
+    400,
+  );
+  const read = await get(
+    request(`/api/collection/${c.id}?key=${c.ownerKey}`),
+    params(c.id),
+  );
+  assert.equal(read.status, 200);
+  assert.equal(
+    (await read.json()).collection.takes.at(-1).text,
+    "A historical typed answer.",
+  );
 });

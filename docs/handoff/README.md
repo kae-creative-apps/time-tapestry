@@ -4,7 +4,11 @@ Prepared October 4, 2026 for Kaelyn and Tayloe. This is the starting point for t
 
 ## Start here
 
-1. Check out `codex/four-chapter-legacy` and compare [PR #1](https://github.com/kae-creative-apps/time-tapestry/pull/1) with any concurrent work before merging.
+**October 5 policy update:** new interviews are recorded video with sound or audio only, and new films keep the storyteller's original voice. The end-user flow is listen, record again if needed, keep the answer and give one final approval. Editable transcripts, written stories, private notes and Scripture fields are removed from that flow; existing saved data stays preserved. Only separate public postcard encouragement remains editable. Read [the current QA and remaining checks](../QA_2026-10-05_RECORDING_ONLY.md) and [story editing rules v2](../../video/STORY_EDITING_RULES_v2.md) before using older demos. New gifts use a biweekly postcard cadence; existing legacy gifts retain their saved quarterly cadence.
+
+Approved collections now support additional private digital invitations, with no five-person product limit. Physical postcards still go to one primary recipient. The recipient page brings together the four films, read-only stories, private replies and a personalized PDF book. See [recipient access and book operations](../RECIPIENT_COLLECTION.md) for the current boundaries and remaining hosted checks.
+
+1. Current work is on `codex/four-story-templates`. Compare the reviewed commit with concurrent work and the deployed revision before merging. The earlier October 4 handoff was on `codex/four-chapter-legacy` in [PR #1](https://github.com/kae-creative-apps/time-tapestry/pull/1).
 2. Follow [Kaelyn's setup guide](../KAELYN_SETUP.md). The restricted environment-file handoff supplies the existing ElevenLabs connection and Lob test connection. Preserve an existing local environment file instead of overwriting it.
 3. Run the web application and the [separate story-film worker](../STORY_FILM_WORKER.md). Configure their shared storage consistently.
 4. Work through the [current readiness checklist](READINESS_2026-10-04.md). Passing local tests is separate from verifying a public deployment, real inbox delivery or physical mail.
@@ -15,6 +19,7 @@ Prepared October 4, 2026 for Kaelyn and Tayloe. This is the starting point for t
 | --- | --- | --- |
 | Application, integration code, prompts, tests and locked dependencies | Repository root, `src/`, `scripts/`, `tests/`, `package-lock.json` | Current implementation on this branch |
 | Original-voice story-film renderer and branded closer | [Film worker](../STORY_FILM_WORKER.md), [video source](../../video/), [runtime brand assets](../../public/brand/) | Automatic four-film assembly exists; real-interview editorial QA and hosted worker operation still need verification |
+| Private digital invitations, recipient replies and downloadable story book | [Recipient collection guide](../RECIPIENT_COLLECTION.md) | Authenticated, personalized PDF export and recipient isolation implemented; hosted download, playback and inbox QA still required |
 | Editable pitch deck, PDF, presenter script and slide overview | [Presentation archive](presentation/README.md) | Preserved October 2 v3 rehearsal draft; update before presenting |
 | Brand wording in Word and PDF | [Word](brand/wording-v1/Time_Tapestry_Brand_Wording_v1.docx), [PDF](brand/wording-v1/Time_Tapestry_Brand_Wording_v1.pdf) | User-supplied working brand wording; use current product behavior when making capability claims |
 | Editable brand presentation and asset sheet | [PowerPoint](brand/kit-v39/presentation/Time_Tapestry_Brand_Presentation_v39.pptx), [PDF](brand/kit-v39/presentation/Time_Tapestry_Asset_Sheet_v39.pdf) | Consolidated v39 identity reference; older postcard examples are superseded by the app's v5 design |
@@ -28,7 +33,7 @@ The [asset manifest](ASSET_MANIFEST.json) records the source version, size and S
 
 ## Which reference wins
 
-For current product behavior, read [October 3 QA and its later addenda](../QA_2026-10-03.md), [the film-worker guide](../STORY_FILM_WORKER.md) and [the October 4 setup guide](../KAELYN_SETUP.md). Older meeting notes, slides and video-validation records describe earlier builds. They are historical evidence, not current operating instructions.
+For current product behavior, start with [October 5 recording-only QA](../QA_2026-10-05_RECORDING_ONLY.md), [editing rules v2](../../video/STORY_EDITING_RULES_v2.md) and [the film-worker guide](../STORY_FILM_WORKER.md). [October 3 QA](../QA_2026-10-03.md) and [the October 4 setup guide](../KAELYN_SETUP.md) provide earlier context. Older meeting notes, slides and video-validation records describe earlier builds. They are historical evidence, not current operating instructions.
 
 For today's application postcard, use [v5](../brand/POSTCARD_DESIGN_v5.md), the existing approved SVG pattern paths and the shared print renderer. Preserve the white logo, complete stitch pattern and selected taupe-to-sage field. Do not restore old 4 by 6 layouts or rejected brand variants from earlier presentation examples.
 

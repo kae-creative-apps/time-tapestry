@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  createContext,
-  useContext,
   useEffect,
   useRef,
   useState,
@@ -16,11 +14,8 @@ import {
   useTransform,
   type MotionValue,
 } from "framer-motion";
-import { PostcardFace as PrintedPostcardFace } from "@/components/collection/PostcardFace";
-import {
-  usePostcardSample,
-  type SamplePostcardArtwork,
-} from "./usePostcardSample";
+import { BrandArtwork } from "@/components/BrandArtwork";
+import { BrandPattern } from "@/components/BrandPattern";
 import styles from "./StoryMorphHero.module.css";
 
 /**
@@ -34,7 +29,7 @@ import styles from "./StoryMorphHero.module.css";
 type CardPose = readonly [x: number, y: number, rotation: number];
 type StoryCard = {
   label: string;
-  tone: "paper" | "sage" | "clay" | "photo";
+  tone: "paper" | "sage" | "clay" | "illustrated";
   stack: CardPose;
   ring: CardPose;
   fan: CardPose;
@@ -44,7 +39,7 @@ type StoryCard = {
 const cards: readonly StoryCard[] = [
   {
     label: "kindness",
-    tone: "photo",
+    tone: "illustrated",
     stack: [-50, -65, -10],
     ring: [-48, -52, -19],
     fan: [-68, 28, -20],
@@ -85,18 +80,32 @@ function cardVariables(card: StoryCard): CSSProperties {
   } as CSSProperties;
 }
 
-const SampleArtwork = createContext<SamplePostcardArtwork | null>(null);
-
-function PostcardFace({ index }: { card: StoryCard; index: number }) {
-  const artwork = useContext(SampleArtwork);
+function PostcardFace({ card, index }: { card: StoryCard; index: number }) {
   return (
-    <div className={styles.card}>
-      {artwork && (
-        <PrintedPostcardFace
-          html={artwork.fronts[index]}
-          title={`Illustrative postcard ${index + 1}, from Evelyn to Anna`}
-          trim
-        />
+    <div className={`${styles.card} ${styles[card.tone]}`}>
+      {card.tone === "illustrated" ? (
+        <>
+          <div className={styles.illustration}>
+            <BrandPattern variant="weave" className={styles.kindnessPattern} />
+          </div>
+          <div className={styles.illustrationCaption}>
+            <span>{card.label}</span>
+            <BrandArtwork variant="mark" className={styles.captionMark} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={styles.cardTop}>
+            <span className={styles.number}>0{index + 1}</span>
+            <BrandArtwork variant="mark" className={styles.smallMark} />
+          </div>
+          <BrandPattern
+            variant={card.tone === "sage" ? "weave" : "ribbon"}
+            className={styles.cardPattern}
+          />
+          <span className={styles.cardLabel}>{card.label}</span>
+          <BrandArtwork variant="wordmark" className={styles.wordmark} />
+        </>
       )}
     </div>
   );
@@ -245,7 +254,6 @@ function MovingCards({
 /** Decorative right-hand hero artwork. A 600 × 540 frame is the intended desktop size. */
 export function StoryMorphVisual({ className = "" }: { className?: string }) {
   const target = useRef<HTMLDivElement>(null);
-  const { artwork } = usePostcardSample();
   const [mode, setMode] = useState<MotionMode>("static");
   const introductionComplete = useRef(false);
   const finishIntroduction = () => {
@@ -275,39 +283,37 @@ export function StoryMorphVisual({ className = "" }: { className?: string }) {
       aria-hidden="true"
     >
       <div className={styles.halo} />
-      <SampleArtwork.Provider value={artwork}>
-        <div className={styles.scene}>
-          {mode === "desktop" ? (
-            <MovingCards
-              target={target}
-              enter={!introductionComplete.current}
-              onComplete={finishIntroduction}
-            />
-          ) : (
-            cards.map((card, index) => (
-              <div
-                key={card.label}
-                className={styles.position}
-                style={cardVariables(card)}
-              >
-                {mode === "mobile" ? (
-                  <PostcardArrival
-                    card={card}
-                    index={index}
-                    mode={mode}
-                    enter={!introductionComplete.current}
-                    onComplete={finishIntroduction}
-                  />
-                ) : (
-                  <div className={styles.arrival}>
-                    <PostcardFace card={card} index={index} />
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </SampleArtwork.Provider>
+      <div className={styles.scene}>
+        {mode === "desktop" ? (
+          <MovingCards
+            target={target}
+            enter={!introductionComplete.current}
+            onComplete={finishIntroduction}
+          />
+        ) : (
+          cards.map((card, index) => (
+            <div
+              key={card.label}
+              className={styles.position}
+              style={cardVariables(card)}
+            >
+              {mode === "mobile" ? (
+                <PostcardArrival
+                  card={card}
+                  index={index}
+                  mode={mode}
+                  enter={!introductionComplete.current}
+                  onComplete={finishIntroduction}
+                />
+              ) : (
+                <div className={styles.arrival}>
+                  <PostcardFace card={card} index={index} />
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

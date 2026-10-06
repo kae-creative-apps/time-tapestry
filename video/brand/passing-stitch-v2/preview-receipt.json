@@ -1,0 +1,18 @@
+{
+  "created": "2026-10-05",
+  "status": "review_v2_not_deployed",
+  "composition": "TimeTapestryPassingStitch",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "durationSeconds": 6.5,
+  "silent": true,
+  "driveFileId": "1InRlP28spgHQXrQWWN3EbMkq8vYtZKk0",
+  "driveFolderId": "1eF_1OarXja4pjbrH617FNFR59wDgCp4X",
+  "hashes": {
+    "video/brand/passing-stitch-v2/scene.mjs": "c1e7858fb9005514dd90f9e72494e00b21e90715090dda68a4baebfae2f31d15",
+    "video/brand/passing-stitch-v2/motion.mjs": "a2f669ffea1f8d173fbabb2de79031b014c788c2b15db62090e015d0877532c2",
+    "video/brand/woven-logo-v1/artwork.mjs": "43fee2ee879876bb40b033537d3066a5899ca00888a45211a83388ee96a764f3",
+    "video/output/passing-stitch-v2/Time-Tapestry-Passing-Stitch-v2.mp4": "7a34b1b97138356312c3d551c008af28d3b880b6b7ec59d6704eba5701e13ac7"
+  }
+}

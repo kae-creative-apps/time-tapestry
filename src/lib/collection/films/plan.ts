@@ -9,7 +9,7 @@ import type {
   NarratedFilmPlan,
 } from "./types";
 
-export const FILM_TEMPLATE_VERSION = "narrated-story-v1";
+export const FILM_TEMPLATE_VERSION = "narrated-story-orb-v2";
 export const FILM_FPS = 30;
 export const FILM_INTRO_SECONDS = 3;
 export const FILM_CLOSER_SECONDS = 4;

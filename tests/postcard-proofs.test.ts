@@ -79,7 +79,7 @@ function fixture(): Collection {
 function readiness(enabled: boolean) {
   process.env.COLLECTION_DELIVERY_ENABLED = enabled ? "true" : "false";
   process.env.NEXT_PUBLIC_APP_URL = origin;
-  process.env.LOB_API_KEY = "test-only-no-provider-call";
+  process.env.LOB_API_KEY = "live_fixture_no_provider_call";
   process.env.LOB_FROM_ADDRESS_ID = "test-only";
   process.env.LOB_WEBHOOK_SECRET = "test-only";
   process.env.CRON_SECRET = "test-only";
@@ -121,6 +121,7 @@ test("the public Lob debugger secret cannot release postcards even when all othe
   process.env.LOB_WEBHOOK_SECRET = "secret";
   try {
     assert.deepEqual(postcardDeliveryReadiness(origin), {
+      mode: "live",
       ready: false,
       reasons: ["Mailing confirmation is not configured."],
     });
@@ -179,6 +180,7 @@ test("every public sign-in security dependency is required before release, even 
       assert.deepEqual(
         postcardDeliveryReadiness(origin),
         {
+          mode: "live",
           ready: false,
           reasons: ["Recipient sign-in security is not configured."],
         },
@@ -467,4 +469,58 @@ test("proof endpoint rejects recipient access and stale preview approval without
   );
   assert.equal(response.status, 409);
   assert.deepEqual((await store.getCollection(c.id))!.deliveries, []);
+});
+
+test("biweekly proof dates span six weeks and are bound to the collection cadence", async () => {
+  readiness(false);
+  const c = { ...fixture(), postcardCadence: "biweekly" as const };
+  const proof = await buildPostcardProof(c, now, origin);
+  assert.equal(proof.cadence, "biweekly");
+  assert.deepEqual(
+    proof.cards.map((card) => card.scheduledFor),
+    [
+      now,
+      "2030-02-14T12:00:00.000Z",
+      "2030-02-28T12:00:00.000Z",
+      "2030-03-14T12:00:00.000Z",
+    ],
+  );
+  approvePostcardProof(c, proof, proof.hash, now);
+  assert.equal(postcardProofIsCurrent(c, proof, origin), true);
+  assert.equal(
+    postcardProofIsCurrent(
+      { ...c, postcardCadence: "quarterly" },
+      proof,
+      origin,
+    ),
+    false,
+  );
+  assert.equal(c.postcardProof?.releaseStatus, "held");
+});
+
+test("test printing keys allow held proof approval but cannot release real mail", async () => {
+  readiness(true);
+  process.env.LOB_API_KEY = "test_fixture_no_provider_call";
+  try {
+    const state = postcardDeliveryReadiness(origin);
+    assert.equal(state.mode, "test");
+    assert.equal(state.ready, false);
+    assert.match(state.reasons.join(" "), /Test keys cannot send real mail/);
+    const c = { ...fixture(), postcardCadence: "biweekly" as const };
+    const proof = await buildPostcardProof(c, now, origin);
+    approvePostcardProof(c, proof, proof.hash, now);
+    assert.ok(c.postcardProof?.approvedAt);
+    assert.equal(c.postcardProof?.releaseStatus, "held");
+    assert.throws(
+      () => releasePostcardProof(c, proof.hash, now, origin),
+      /Test keys cannot send real mail/,
+    );
+    await prepareAutomaticPostcards(c, now, origin);
+    assert.equal(c.postcardPreparation?.status, "waiting_for_setup");
+    assert.deepEqual(c.deliveries, []);
+    delete process.env.LOB_API_KEY;
+    assert.equal(postcardDeliveryReadiness(origin).mode, "unconfigured");
+  } finally {
+    readiness(false);
+  }
 });

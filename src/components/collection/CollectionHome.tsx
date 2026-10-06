@@ -7,6 +7,7 @@ import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
+import { recipientReplyDraftKey } from "./recipient-sharing";
 import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 const primary =
@@ -30,8 +31,10 @@ function ReplyForm({
   recordingChapter,
   onOpenRecorder,
   onRecorderBusyChange,
+  revealed,
 }: {
   c: CollectionView;
+  revealed: boolean;
   chapter: ChapterPackage;
   accessKey: string;
   act: (v: unknown) => Promise<CollectionView | null>;
@@ -40,7 +43,7 @@ function ReplyForm({
   onOpenRecorder: (chapterId: string) => void;
   onRecorderBusyChange: (chapterId: string, busy: boolean) => void;
 }) {
-  const [mode, setMode] = useState<"video" | "text" | null>(null),
+  const [mode, setMode] = useState<"video" | "text" | null>("text"),
     [text, setText] = useState(""),
     [mediaId, setMediaId] = useState(""),
     [replyId, setReplyId] = useState(() => crypto.randomUUID()),
@@ -50,7 +53,11 @@ function ReplyForm({
   const [draftReady, setDraftReady] = useState(false);
   const [draftNotice, setDraftNotice] = useState("");
   const [sendError, setSendError] = useState("");
-  const draftKey = `recipient-reply:${chapter.id}`;
+  const draftKey = recipientReplyDraftKey(
+    c.recipientId,
+    c.recipient.email,
+    chapter.id,
+  );
   const draftQueue = useRef<Promise<void>>(Promise.resolve());
   const persist = useCallback(
     (value: string) => {
@@ -67,6 +74,13 @@ function ReplyForm({
   useEffect(() => {
     let alive = true;
     void getTextDraft(c.id, draftKey)
+      .then(
+        async (value) =>
+          value ||
+          (c.isPrimaryRecipient
+            ? await getTextDraft(c.id, `recipient-reply:${chapter.id}`)
+            : ""),
+      )
       .then((value) => {
         if (!alive || !value) return;
         const saved = JSON.parse(value);
@@ -184,7 +198,17 @@ function ReplyForm({
     }
   }
   return (
-    <section className="mt-8 rounded-xl border border-sage-200 bg-sage-50 p-5 sm:p-6">
+    <section
+      id={`reply-form-${chapter.id}`}
+      hidden={!revealed && !text.trim() && !mediaId && !sent}
+      className="mt-8 rounded-xl border border-sage-200 bg-sage-50 p-5 sm:p-6"
+      aria-label={`Reply to ${chapter.title}`}
+    >
+      {revealed && (
+        <p role="status" className="sr-only">
+          You can now reply to this story.
+        </p>
+      )}
       <h3 className="font-serif text-2xl">
         Send a message to {c.storyteller.name}.
       </h3>
@@ -228,7 +252,7 @@ function ReplyForm({
           collectionId={c.id}
           accessKey={accessKey}
           kind="video"
-          questionId={`reply-${chapter.id}`}
+          questionId={`reply-${c.recipientId || c.recipient.email}-${chapter.id}`}
           prompt={`A message for ${c.storyteller.name}`}
           directUpload={c.capabilities.directUpload}
           maxSeconds={180}
@@ -244,7 +268,7 @@ function ReplyForm({
             <textarea
               rows={4}
               maxLength={30000}
-              disabled={busy}
+              disabled={busy || !draftReady}
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="mt-2 w-full rounded-md border border-warmgray-300 bg-white p-4 text-base"
@@ -295,6 +319,9 @@ export default function CollectionHome({
 }) {
   const { collection: c, error, act, load } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState(chapterId || "q1");
+  const [replyRevealed, setReplyRevealed] = useState<Record<string, boolean>>(
+    {},
+  );
   const seen = useRef(new Set<string>());
   const [activeRecorderChapter, setActiveRecorderChapter] = useState<
     string | null
@@ -308,13 +335,21 @@ export default function CollectionHome({
     const opened =
       c.chapters.find((chapter) => chapter.id === activeChapter)?.id ||
       c.chapters[0]?.id;
-    const visitKey = `${c.id}:${opened}`;
+    const visitKey = `${c.id}:${c.recipientId || c.recipient.email}:${opened}`;
     if (!opened || seen.current.has(visitKey)) return;
     seen.current.add(visitKey);
     void act({ action: "view_chapter", chapterId: opened }).then((result) => {
       if (!result) seen.current.delete(visitKey);
     });
-  }, [c?.id, c?.role, c?.status, activeChapter, act]);
+  }, [
+    c?.id,
+    c?.recipientId,
+    c?.recipient.email,
+    c?.role,
+    c?.status,
+    activeChapter,
+    act,
+  ]);
 
   const handleRecorderBusyChange = useCallback(
     (chapter: string, busy: boolean) =>
@@ -359,9 +394,10 @@ export default function CollectionHome({
       </PortalShell>
     );
   if (c.role === "owner") return <Review id={id} accessKey={accessKey} />;
-  const collectionPath = c.role === "recipient"
-    ? `/collection/${encodeURIComponent(id)}${c.status === "approved" && /^q[1-4]$/.test(activeChapter) ? `/chapter/${activeChapter}` : ""}`
-    : `/collection/${encodeURIComponent(id)}${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`;
+  const collectionPath =
+    c.role === "recipient"
+      ? `/collection/${encodeURIComponent(id)}${c.status === "approved" && /^q[1-4]$/.test(activeChapter) ? `/chapter/${activeChapter}` : ""}`
+      : `/collection/${encodeURIComponent(id)}${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`;
   if (c.role === "requester")
     return (
       <PortalShell collectionPath={collectionPath}>
@@ -412,6 +448,22 @@ export default function CollectionHome({
     (chapter) => chapter.id === selectedId,
   );
   const filmCount = c.chapters.filter((chapter) => chapter.videoMediaId).length;
+  const coverFilm = c.chapters.find(
+    (chapter) =>
+      chapter.videoMediaId &&
+      chapter.film?.narrationKind === "original_recording" &&
+      chapter.film.presentation === "video",
+  );
+  const revealReply = (chapterId: string, focus = false) => {
+    setReplyRevealed((current) => ({ ...current, [chapterId]: true }));
+    if (focus)
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`reply-form-${chapterId}`)
+          ?.querySelector("textarea")
+          ?.focus(),
+      );
+  };
   const openAdjacentStory = (nextId: string) => {
     if (recordingChapter) return;
     focusSelectedStory.current = true;
@@ -450,27 +502,62 @@ export default function CollectionHome({
   );
   return (
     <PortalShell collectionPath={collectionPath}>
-      <header className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] p-6 text-white sm:p-9">
-        <BrandPattern
-          variant="ribbon"
-          className="absolute -right-36 -top-20 -z-10 w-[600px] max-w-none text-white opacity-[0.06]"
-        />
-        <p className="brand-eyebrow text-paper">
-          Stories from {c.storyteller.name}
-        </p>
-        <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight text-white sm:text-5xl">
-          {c.recipient.name}, these stories are for you.
-        </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-8 text-paper">
-          A life is made of many threads. Here are four from{" "}
-          {c.storyteller.name}, saved for you to return to in your own time.
-        </p>
-        <p className="mt-6 inline-flex flex-wrap items-center gap-3 rounded-xl bg-paper px-4 py-3 text-base font-semibold text-espresso">
-          <AppIcon name={filmCount ? "video" : "collection"} size={22} />
-          {filmCount > 0
-            ? `${filmCount} ${filmCount === 1 ? "video" : "videos"} available · ${c.chapters.length} written stories`
-            : `${c.chapters.length} written stories to read`}
-        </p>
+      <header className="overflow-hidden rounded-[28px] border border-warmgray-200 bg-paper-100 lg:grid lg:grid-cols-[.8fr_1.2fr]">
+        <div className="relative flex min-h-64 items-center justify-center overflow-hidden bg-clay-50 p-8 text-center">
+          {coverFilm?.videoMediaId ? (
+            <video
+              className="absolute inset-0 h-full w-full object-cover"
+              src={`${url(coverFilm.videoMediaId)}#t=0.1`}
+              muted
+              playsInline
+              preload="metadata"
+              aria-label={`A still from ${c.storyteller.name}'s recorded story`}
+            />
+          ) : (
+            <BrandPattern
+              variant="weave"
+              className="absolute w-4/5 max-w-sm opacity-20"
+            />
+          )}
+          <div className="relative rounded-2xl bg-paper/95 px-7 py-6 text-espresso">
+            <p className="text-sm font-medium uppercase tracking-widest">
+              Stories from
+            </p>
+            <p className="mt-3 font-display text-4xl font-semibold leading-tight sm:text-5xl">
+              {c.storyteller.name}
+            </p>
+          </div>
+        </div>
+        <div className="p-6 text-espresso sm:p-9">
+          <p className="brand-eyebrow text-taupe-600">
+            Your private collection
+          </p>
+          <h1 className="mt-4 max-w-3xl font-display text-3xl font-medium leading-tight sm:text-4xl">
+            {c.recipient.name?.trim()
+              ? `${c.recipient.name}, these stories are for you.`
+              : "These stories are for you."}
+          </h1>
+          {!c.recipient.name?.trim() && (
+            <p className="mt-3 break-words text-base text-ink-500">
+              Invited as {c.recipient.email}
+            </p>
+          )}
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-ink-700">
+            Four stories from {c.storyteller.name}, saved for you to return to
+            in your own time. Watch or listen, then send a message after any
+            story.
+          </p>
+          <p className="mt-5 text-base font-medium">
+            {filmCount} {filmCount === 1 ? "film" : "films"} ·{" "}
+            {c.chapters.length} stories
+          </p>
+          <a
+            className={`${secondary} mt-6 gap-2`}
+            href={`/api/collection/${encodeURIComponent(id)}/book${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`}
+          >
+            <AppIcon name="download" size={20} /> Download the story book (PDF)
+          </a>
+        </div>
       </header>
       <nav
         aria-label="Choose a story"
@@ -541,11 +628,12 @@ export default function CollectionHome({
                           }
                           label={`Story film: ${chapter.title}`}
                           src={url(chapter.videoMediaId)}
+                          onEnded={() => revealReply(chapter.id)}
                         />
                         <p className="p-5 text-base leading-7 text-espresso">
                           {isNarratedFilm(chapter)
                             ? `An AI voice reads ${c.storyteller.name}’s approved story. This is a narrated film, not their original recording.`
-                            : `A video shared by ${c.storyteller.name}.`}
+                            : `Hear ${c.storyteller.name} in their own recorded voice.`}
                         </p>
                       </>
                     ) : (
@@ -631,7 +719,28 @@ export default function CollectionHome({
                     ))}
                 </div>
                 <div className="min-w-0 lg:col-span-2">
+                  {!replyRevealed[chapter.id] && (
+                    <div className="mt-5 flex flex-wrap items-center gap-4">
+                      <p className="text-base leading-7 text-ink-500">
+                        A reply box opens when this film finishes. You can also
+                        reply at any time.
+                      </p>
+                      <button
+                        type="button"
+                        className={secondary}
+                        aria-controls={`reply-form-${chapter.id}`}
+                        onClick={() => revealReply(chapter.id, true)}
+                      >
+                        Reply to this story
+                      </button>
+                    </div>
+                  )}
                   <ReplyForm
+                    key={`${c.recipientId || c.recipient.email}:${chapter.id}`}
+                    revealed={
+                      Boolean(replyRevealed[chapter.id]) ||
+                      !chapter.videoMediaId
+                    }
                     c={c}
                     chapter={chapter}
                     accessKey={accessKey}
@@ -649,31 +758,33 @@ export default function CollectionHome({
       </div>
       {storyNavigation("Continue through the collection")}
       <PortalError message={error} />
-      <details className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-5">
-        <summary className="min-h-11 cursor-pointer text-base font-medium">
-          Reply reminders
-        </summary>
-        <label className="mt-3 flex items-start gap-3 text-base leading-7">
-          <input
-            className="mt-1 h-5 w-5"
-            type="checkbox"
-            checked={c.replyRemindersEnabled}
-            onChange={(event) =>
-              void act({
-                action: "reply_preferences",
-                enabled: event.target.checked,
-              })
-            }
-          />
-          <span>
-            If postcards are mailed, send me a follow-up link with an invitation
-            to reply.
-          </span>
-        </label>
-      </details>
+      {c.isPrimaryRecipient && (
+        <details className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-5">
+          <summary className="min-h-11 cursor-pointer text-base font-medium">
+            Reply reminders
+          </summary>
+          <label className="mt-3 flex items-start gap-3 text-base leading-7">
+            <input
+              className="mt-1 h-5 w-5"
+              type="checkbox"
+              checked={c.replyRemindersEnabled}
+              onChange={(event) =>
+                void act({
+                  action: "reply_preferences",
+                  enabled: event.target.checked,
+                })
+              }
+            />
+            <span>
+              If postcards are mailed, send me a follow-up link with an
+              invitation to reply.
+            </span>
+          </label>
+        </details>
+      )}
       <footer className="mt-10 border-t border-warmgray-200 py-6 text-sm leading-7 text-ink-500">
-        Your recipient verifies their email before opening these approved
-        stories. Scanning a postcard alone does not unlock the collection.
+        This collection is shared with your verified email account. Your replies
+        go to {c.storyteller.name}; other invited readers cannot see them.
       </footer>
     </PortalShell>
   );

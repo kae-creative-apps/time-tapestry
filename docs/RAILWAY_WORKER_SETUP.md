@@ -28,9 +28,9 @@ The image runs as the default root user because Railway volumes mount as root. D
 | `COLLECTION_STORAGE_LIMIT_BYTES` | Match any website override; default 2 GiB per collection |
 | `STORY_FILM_MIN_FREE_BYTES` | Default `1073741824`, a 1 GiB free-space safety floor |
 
-The worker uses the narration voice settings already snapshotted into an approved narration job. Agent lookup and film enqueue limits belong to the website. Preserve its `ELEVENLABS_AGENT_ID` and `STORY_FILM_DAILY_LIMIT` there. OpenAI, Gloo, Resend, Lob, `ADMIN_SECRET`, and `CRON_SECRET` are not required by this service and should not be copied to it unnecessarily.
+The current worker processes original-recording films only, using ElevenLabs for source transcription where needed. Synthetic narration jobs are retired. Live interviewer agent lookup and film enqueue limits belong to the website. Preserve its `ELEVENLABS_AGENT_ID` and `STORY_FILM_DAILY_LIMIT` there. OpenAI, Gloo, Resend, Lob, `ADMIN_SECRET`, and `CRON_SECRET` are not required by this service and should not be copied to it unnecessarily. Read [current recording-only QA](QA_2026-10-05_RECORDING_ONLY.md) before using older narrated previews as a test reference.
 
-Set restart policy Always on a plan that supports it. Configure a bounded termination grace period, for example 60 seconds, and avoid overlapping replicas. A long render may exceed the grace period. Persisted leases and original-job retries provide recovery, not a promise that every deployment finishes the current render. AI narration remains a reviewed manual retry when an interrupted paid request could have completed.
+Set restart policy Always on a plan that supports it. Configure a bounded termination grace period, for example 60 seconds, and avoid overlapping replicas. A long render may exceed the grace period. Persisted leases and original-job retries provide recovery, not a promise that every deployment finishes the current render. Unfinished AI narration jobs cannot be retried under the current policy; their retirement preserves completed artifacts.
 
 ## Capacity and recovery
 

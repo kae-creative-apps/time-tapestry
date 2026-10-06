@@ -1,6 +1,6 @@
 import { BRAND_COLORS } from "../brand-art";
 
-export const POSTCARD_DESIGN_VERSION = "woven-keepsake-v5";
+export const POSTCARD_DESIGN_VERSION = "quiet-flowing-keepsake-v6";
 
 /** 6 x 9 inches at trim, with 1/8 inch bleed on each edge. */
 export const POSTCARD_LAYOUT = {
@@ -10,8 +10,8 @@ export const POSTCARD_LAYOUT = {
   signature: { x: 263, y: 196, width: 362, height: 108 },
   // Equal 40px clear space from the left and bottom trim edges.
   backSignature: { x: 52, y: 514, width: 114, height: 34 },
-  // The complete approved stitch repeat covers the face without stretching.
-  thread: { x: 0, y: -73.438, width: 888, height: 746.876 },
+  // Exact geometry from the approved quiet v41 proof, cropped by the print canvas.
+  thread: { x: 0, y: 0, width: 914.876, height: 600 },
   note: { x: 52, y: 42, width: 784, bottom: 330 },
   qr: { x: 52, y: 352, width: 144, height: 144 },
   caption: { x: 224, y: 356, width: 222, bottom: 530 },
@@ -21,7 +21,7 @@ export const POSTCARD_LAYOUT = {
 
 // Shared with preflight so print CSS and measured copy cannot drift apart.
 export const POSTCARD_TYPE = {
-  dedication: { size: 24, lineHeight: 32 },
+  dedication: { size: 20, lineHeight: 28 },
   salutation: { size: 20, lineHeight: 28, gap: 18 },
   sender: { size: 20, lineHeight: 28, gap: 18 },
   instruction: { size: 18, lineHeight: 26, gap: 14 },
@@ -99,8 +99,8 @@ export function renderPostcardDesign(
   const document = (css: string, body: string) =>
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; script-src 'none'"><style>${base}${css}</style></head><body data-postcard-size="6x9" data-postcard-design="${POSTCARD_DESIGN_VERSION}">${body}</body></html>`;
   const front = document(
-    `body{background:${BRAND_COLORS.taupe};background:linear-gradient(120deg,${BRAND_COLORS.taupe} 0%,${BRAND_COLORS.sage} 100%);color:white}.thread{position:absolute;left:${layout.thread.x}px;top:${layout.thread.y}px;width:${layout.thread.width}px;height:${layout.thread.height}px;opacity:.22}.signature{left:${layout.signature.x}px;top:${layout.signature.y}px;width:${layout.signature.width}px;height:${layout.signature.height}px}.tagline{position:absolute;left:80px;top:336px;width:728px;text-align:center;font-size:30px;line-height:40px}.dedication{position:absolute;left:80px;top:522px;width:728px;text-align:center;font-size:${text.dedication.size}px;line-height:${text.dedication.lineHeight}px}`,
-    `<img class="thread" alt="" src="${assets.approvedThreadPng}"><img class="signature" alt="Time Tapestry" src="${assets.signatureLightPng}"><p class="tagline">Stories woven together.</p><p class="dedication" data-print-bottom="570">From ${escapeHtml(content.storytellerFirstName)}, for ${escapeHtml(content.recipientFirstName)}.</p>`,
+    `body{background:#432e23;background:linear-gradient(120deg,#432e23 0%,#756454 100%);color:white}.art-canvas{position:absolute;left:0;top:0;width:${layout.width}px;height:${layout.height}px;overflow:hidden}.thread{position:absolute;left:${layout.thread.x}px;top:${layout.thread.y}px;width:${layout.thread.width}px;height:${layout.thread.height}px;opacity:.32}.signature{left:${layout.signature.x}px;top:${layout.signature.y}px;width:${layout.signature.width}px;height:${layout.signature.height}px}.tagline{position:absolute;left:80px;top:336px;width:728px;text-align:center;font-size:30px;line-height:40px}.dedication{position:absolute;left:80px;top:522px;width:728px;text-align:center;font-size:${text.dedication.size}px;line-height:${text.dedication.lineHeight}px}`,
+    `<div class="art-canvas" aria-hidden="true"><img class="thread" alt="" src="${assets.approvedThreadPng}"></div><img class="signature" alt="Time Tapestry" src="${assets.signatureLightPng}"><p class="tagline">Stories woven together.</p><p class="dedication" data-print-bottom="570">From ${escapeHtml(content.storytellerFirstName)}, for ${escapeHtml(content.recipientFirstName)}.</p>`,
   );
   const back = document(
     `body{background:white}.content{position:absolute;left:${layout.note.x}px;top:${layout.note.y}px;width:${layout.note.width}px}.salutation{font-size:${text.salutation.size}px;line-height:${text.salutation.lineHeight}px;margin-bottom:${text.salutation.gap}px}.message{font-size:${type.size}px;line-height:${type.lineHeight}px;white-space:pre-line}.sender{font-size:${text.sender.size}px;line-height:${text.sender.lineHeight}px;margin-top:${text.sender.gap}px}.qr{position:absolute;left:${layout.qr.x}px;top:${layout.qr.y}px;width:${layout.qr.width}px;height:${layout.qr.height}px}.caption{position:absolute;left:${layout.caption.x}px;top:${layout.caption.y}px;width:${layout.caption.width}px}.instruction{font-size:${text.instruction.size}px;line-height:${text.instruction.lineHeight}px;margin-bottom:${text.instruction.gap}px}.sign-in{font-size:${text.caption.size}px;line-height:${text.caption.lineHeight}px}.signature{left:${layout.backSignature.x}px;top:${layout.backSignature.y}px;width:${layout.backSignature.width}px;height:${layout.backSignature.height}px}.ink-free{position:absolute;left:${layout.postal.x}px;top:${layout.postal.y}px;width:${layout.postal.width}px;height:${layout.postal.height}px;background:white}`,

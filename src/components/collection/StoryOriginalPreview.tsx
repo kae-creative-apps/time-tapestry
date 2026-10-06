@@ -13,12 +13,14 @@ export function StoryMediaPlayer({
   kind = "video",
   className = "",
   preload = "none",
+  onEnded,
 }: {
   src: string;
   label: string;
   kind?: "video" | "audio";
   className?: string;
   preload?: "none" | "metadata";
+  onEnded?: () => void;
 }) {
   const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -72,6 +74,7 @@ export function StoryMediaPlayer({
     onEnded: () => {
       setPlaying(false);
       setLoading(false);
+      onEnded?.();
     },
     onError: () => {
       setPlaying(false);

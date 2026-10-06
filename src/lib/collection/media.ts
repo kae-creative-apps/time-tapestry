@@ -9,7 +9,7 @@ import {
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { get, head } from "@vercel/blob";
-import { dataRoot, getMedia, putMedia } from "./store";
+import { dataRoot, getCollection, getMedia, putMedia } from "./store";
 import type { Collection, StoredMedia } from "./types";
 import {
   reserveMediaUpload,
@@ -18,6 +18,12 @@ import {
   MAX_MEDIA_BYTES,
 } from "./usage";
 import { SecurityError } from "../security/policy";
+import { isGeneratedFilmMedia } from "./recording-validation";
+import {
+  PRIMARY_RECIPIENT_ID,
+  recipientById,
+  storedRecipientId,
+} from "./recipients";
 
 /** Stored metadata is never authority to contact arbitrary hosts with a Blob credential. */
 export function assertPrivateBlobUrl(value: string) {
@@ -62,14 +68,21 @@ export const mediaTypes = [
   "audio/wav",
   "audio/ogg",
 ];
-export function mediaAllowed(c: Collection, role: string, m: StoredMedia) {
+export function mediaAllowed(
+  c: Collection,
+  role: string,
+  m: StoredMedia,
+  recipientId = PRIMARY_RECIPIENT_ID,
+) {
   if (m.collectionId !== c.id) return false;
   if (role === "owner") return true;
   if (role === "recipient")
     return (
-      m.role === "recipient" ||
-      (c.status === "approved" &&
-        c.chapters.some((ch) => ch.videoMediaId === m.id))
+      Boolean(recipientById(c, recipientId)) &&
+      c.status === "approved" &&
+      ((m.role === "recipient" && storedRecipientId(m) === recipientId) ||
+        (c.status === "approved" &&
+          c.chapters.some((ch) => ch.videoMediaId === m.id)))
     );
   return false;
 }
@@ -77,6 +90,7 @@ export async function saveLocalMedia(
   collectionId: string,
   role: "owner" | "recipient",
   file: File,
+  recipientId = PRIMARY_RECIPIENT_ID,
 ) {
   if (process.env.VERCEL)
     throw new Error("Use the private direct upload for cloud recordings.");
@@ -101,9 +115,11 @@ export async function saveLocalMedia(
     throw error;
   }
   const media: StoredMedia = {
+    provenance: "uploaded_recording",
     id,
     collectionId,
     role,
+    ...(role === "recipient" ? { recipientId } : {}),
     mimeType: mime,
     originalName: file.name.slice(0, 200),
     bytes: file.size,
@@ -121,6 +137,11 @@ export async function saveLocalMedia(
 export async function finalizeCloudMedia(id: string) {
   const m = await getMedia(id);
   if (!m) throw new Error("Upload record not found");
+  const collection = await getCollection(m.collectionId);
+  if (isGeneratedFilmMedia(m, collection ?? undefined))
+    throw new Error(
+      "Completed films cannot be replaced through recording uploads.",
+    );
   const blob = await head(`collections/${m.collectionId}/${m.id}`);
   assertPrivateBlobUrl(blob.url);
   await finalizeMediaUpload({

@@ -1,3 +1,4 @@
+import { historicalApprovedCollection } from "./historical-delivery-fixture";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
@@ -64,7 +65,7 @@ function collection(): Collection {
     recipientViewedChapters: {},
     replyRemindersEnabled: true,
   };
-  return approveCollection(draft, start);
+  return historicalApprovedCollection(draft, start);
 }
 function mailingEvent(
   name = "postcard.mailed",
@@ -358,4 +359,47 @@ test("print artwork uses only escaped public copy and a keyless QR, never privat
     () => recipientChapterUrl(c, "q1", "http://localhost:3000"),
     /HTTPS/,
   );
+});
+
+test("new biweekly journeys retain two-week gaps after delayed mailing", () => {
+  const legacy = collection();
+  const draft = {
+    ...legacy,
+    status: "draft" as const,
+    postcardCadence: "biweekly" as const,
+    deliveries: [],
+  };
+  const c = historicalApprovedCollection(draft, start);
+  assert.deepEqual(
+    c.deliveries.map((d) => d.scheduledFor),
+    [
+      start,
+      "2026-02-14T12:00:00.000Z",
+      "2026-02-28T12:00:00.000Z",
+      "2026-03-14T12:00:00.000Z",
+    ],
+  );
+  c.deliveries[0].providerId = "psc_test001";
+  c.deliveries[0].status = "submitted";
+  const shifted = applyLobEvent(c, mailingEvent(), origin, eventNow).collection;
+  assert.deepEqual(
+    shifted.deliveries.slice(1).map((d) => d.scheduledFor),
+    [
+      "2026-02-17T12:00:00.000Z",
+      "2026-03-03T12:00:00.000Z",
+      "2026-03-17T12:00:00.000Z",
+    ],
+  );
+  assert.equal(
+    nextDuePostcard(shifted, Date.parse("2026-02-17T11:59:59.999Z")),
+    null,
+  );
+  assert.equal(
+    nextDuePostcard(shifted, Date.parse("2026-02-17T12:00:00.000Z"))?.chapterId,
+    "q2",
+  );
+  const savedSchedule = structuredClone(legacy.deliveries);
+  assert.equal(approveCollection(legacy, "2027-01-01T12:00:00.000Z"), legacy);
+  assert.deepEqual(legacy.deliveries, savedSchedule);
+  assert.equal(legacy.postcardCadence, undefined);
 });

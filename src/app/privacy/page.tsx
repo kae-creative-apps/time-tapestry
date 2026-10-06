@@ -37,8 +37,8 @@ export default function Privacy() {
           When configured, Gloo processes answer text to help organize stories
           and follow-up questions; OpenAI transcribes recordings; ElevenLabs
           processes live interview audio and transcripts, speaks the interview
-          questions and narrates the story scripts you approve. AI narration is
-          labeled and does not imitate your voice. Local previews store records
+          questions. New story films use your original recorded voice or video,
+          never an AI replacement for your voice. Local previews store records
           and uploads on the server’s filesystem. Hosted deployments require
           configured persistent storage for records and private recordings. When
           delivery is enabled, Lob receives approved postcard content and

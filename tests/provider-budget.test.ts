@@ -66,8 +66,20 @@ async function fixture(withAnswers = false) {
         id,
         questionId,
         prompt: "A fixture question",
-        kind: "text",
+        kind: "voice",
+        mediaId: `${c.id}-${questionId}-recording`,
         text: "A synthetic answer for a test.",
+        createdAt: c.createdAt,
+      });
+      await store.putMedia({
+        id: `${c.id}-${questionId}-recording`,
+        collectionId: c.id,
+        role: "owner",
+        provenance: "uploaded_recording",
+        mimeType: "audio/webm",
+        originalName: "synthetic-recording.webm",
+        bytes: 100,
+        url: "https://recording.example.test/synthetic.webm",
         createdAt: c.createdAt,
       });
       c.selectedTakeIds[questionId] = id;
@@ -222,22 +234,38 @@ test("reservation is one-shot per guarded action and concurrent owners cannot ex
 test("generation validates all four chapters before any paid edit and charges one valid batch", async (t) => {
   const { gloo } = await import("../src/lib/gloo-client");
   let calls = 0;
-  t.mock.method(gloo!.chat.completions, "create", async () => {
-    calls++;
-    assert.equal(await spent(), 1);
-    return {
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              content: "Synthetic reviewed source.",
-              postcardNote: "Synthetic note.",
-            }),
+  t.mock.method(
+    gloo!.chat.completions,
+    "create",
+    async (body: { messages: Array<{ role: string; content?: unknown }> }) => {
+      calls++;
+      assert.equal(await spent(), 1);
+      const input = body.messages.find(
+        (message) => message.role === "user",
+      )?.content;
+      assert.ok(typeof input === "string");
+      const { answers } = JSON.parse(input) as {
+        answers: Array<{ id: string; text: string }>;
+      };
+      return {
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify({
+                paragraphs: answers.map((answer) => ({
+                  text: answer.text,
+                  sourceIds: [answer.id],
+                })),
+                postcardNote: "Synthetic note.",
+                postcardSourceIds: answers.map((answer) => answer.id),
+              }),
+            },
           },
-        },
-      ],
-    };
-  });
+        ],
+      };
+    },
+  );
   const { POST } = await import("../src/app/api/collection/[id]/route");
   const c = await fixture(true);
   const incomplete = {

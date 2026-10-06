@@ -9,12 +9,20 @@ import {
 } from "@/lib/collection/postcard-public-message";
 import { PortalError, portalPrimary, portalSecondary } from "./PortalUI";
 import { PostcardFace } from "./PostcardFace";
+import {
+  collectionPostcardCadence,
+  postcardCadenceLabel,
+} from "@/lib/collection/postcard-cadence";
 
 type ProofResponse = {
   proof: PostcardProofSnapshot;
   approvedProof: PostcardProofSnapshot | null;
   current: boolean;
-  readiness: { ready: boolean; reasons: string[] };
+  readiness: {
+    ready: boolean;
+    reasons: string[];
+    mode: "test" | "live" | "unconfigured";
+  };
   publicMessages: Record<string, string>;
 };
 const dateLabel = (value: string) =>
@@ -142,7 +150,7 @@ export function PostcardProof({
     setNotice("");
     try {
       const response = await collectionRequest<{
-        readiness: { ready: boolean };
+        readiness: { ready: boolean; mode: "test" | "live" | "unconfigured" };
       }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
@@ -156,7 +164,9 @@ export function PostcardProof({
       setNotice(
         response.readiness.ready
           ? "Your postcards are approved for automatic mailing."
-          : "Your public postcards are approved. Mailing will wait until delivery and secure recipient sign-in are connected.",
+          : response.readiness.mode === "test"
+            ? "Your postcard design is approved and saved. Test mode is on, so nothing will be mailed."
+            : "Your postcard design is approved and saved. Mailing is on hold until setup is complete.",
       );
       setReload((value) => value + 1);
     } catch (cause) {
@@ -175,7 +185,7 @@ export function PostcardProof({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-        Review the words on your postcards
+        Preview and approve your four postcards
       </summary>
       <p className="mt-3 max-w-3xl text-base leading-8 text-ink-500">
         A postcard is open mail. Anyone handling it can read the words and names
@@ -208,10 +218,10 @@ export function PostcardProof({
       )}
       {open && !disabled && (
         <>
-          <div className="mt-5 rounded-2xl border border-warmgray-300 bg-white p-5">
-            <h3 className="text-xl font-semibold">
-              A little encouragement in the mail
-            </h3>
+          <details className="mt-5 rounded-2xl border border-warmgray-300 bg-white p-5">
+            <summary className="min-h-12 cursor-pointer text-lg font-semibold">
+              Edit the words printed on your postcards
+            </summary>
             <p className="mt-2 text-base leading-7 text-ink-500">
               Keep the suggested words or write your own. You can add a short
               Scripture and its reference here if you want it printed. Leave
@@ -261,7 +271,7 @@ export function PostcardProof({
                 Save your changes to update the print preview.
               </p>
             )}
-          </div>
+          </details>
         </>
       )}
       {busy && !proof && (
@@ -271,6 +281,34 @@ export function PostcardProof({
       )}
       {proof && !disabled && (
         <>
+          {!result.readiness.ready && (
+            <section
+              aria-label="Mailing status"
+              role="status"
+              className="mt-5 rounded-2xl border border-sage-200 bg-sage-50 p-5"
+            >
+              <h3 className="text-lg font-semibold">
+                {result.readiness.mode === "test"
+                  ? "Test mode: no postcards will be mailed"
+                  : "Mailing is paused while setup is completed"}
+              </h3>
+              <p className="mt-2 text-base leading-7">
+                You can review the fronts, backs, wording and planned dates
+                below. Approving saves your choices; it does not send mail while
+                this hold is in place.
+              </p>
+              <details className="mt-3">
+                <summary className="min-h-12 cursor-pointer text-base underline underline-offset-4">
+                  What the team still needs to connect
+                </summary>
+                <ul className="list-disc space-y-2 pl-5 text-base leading-7">
+                  {result.readiness.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </details>
+            </section>
+          )}
           <div className="mt-5 grid gap-5 rounded-2xl bg-paper p-5 sm:grid-cols-2">
             <div>
               <h3 className="text-lg font-semibold">Saved mailing address</h3>
@@ -292,14 +330,20 @@ export function PostcardProof({
                 {proof.cards.map((item, index) => (
                   <li key={item.chapterId}>
                     Card {index + 1}: {dateLabel(item.scheduledFor)}{" "}
-                    <span className="text-ink-500">(month {index * 3})</span>
+                    <span className="text-ink-500">
+                      (
+                      {collectionPostcardCadence(c) === "biweekly"
+                        ? `week ${index * 2}`
+                        : `month ${index * 3}`}
+                      )
+                    </span>
                   </li>
                 ))}
               </ol>
               <p className="mt-3 text-sm leading-7 text-ink-500">
                 All four stories open from the first card. If mailing is
-                delayed, later cards move too, keeping at least three months
-                between confirmed mailings.
+                delayed, later cards move too. Your saved schedule spaces cards{" "}
+                {postcardCadenceLabel(c)}.
               </p>
             </div>
           </div>
@@ -371,8 +415,10 @@ export function PostcardProof({
               role="alert"
               className="mt-5 rounded-xl bg-clay-50 p-4 text-base leading-7"
             >
-              Some wording may extend beyond the print area. The team needs to
-              check this layout before mailing.
+              Print layout needs checking: some wording may extend beyond its
+              print area or the print font did not load. This is separate from
+              the mailing status above. Try reopening the preview; the team will
+              need to check any remaining layout issue.
             </p>
           )}
           <p className="mt-5 text-base leading-7 text-ink-500">
@@ -380,7 +426,8 @@ export function PostcardProof({
               ? "This saved print version fixes the wording, address, artwork and QR links."
               : "This is a preview of the current approved wording and saved address."}{" "}
             {result?.approvedProof?.releaseStatus === "released" &&
-            result.current
+            result.current &&
+            result.readiness.ready
               ? "The postcards are on the automatic mailing schedule."
               : "Mailing is on hold until the public messages are approved and delivery is ready."}
           </p>
@@ -408,7 +455,11 @@ export function PostcardProof({
                 }
                 onClick={() => void approvePublicCards()}
               >
-                {busy ? "Saving…" : "Approve postcards for automatic mailing"}
+                {busy
+                  ? "Saving…"
+                  : result.readiness.ready
+                    ? "Approve postcards for automatic mailing"
+                    : "Approve and save postcard designs"}
               </button>
               {!allChecked && (
                 <p className="mt-3 text-base leading-7">

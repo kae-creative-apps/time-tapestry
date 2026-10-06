@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { CHAPTERS } from "../src/lib/interview-state";
 import type { Collection } from "../src/lib/collection/types";
 import type { FilmVoice } from "../src/lib/collection/films/types";
@@ -80,4 +82,33 @@ export function syntheticFilmCollection(): Collection {
     recipientViewedChapters: {},
     replyRemindersEnabled: false,
   };
+}
+
+/** Persist original-source metadata for queue tests; the pure fixture above stays historical text. */
+export async function syntheticRecordedFilmCollection(
+  kind: "voice" | "video" = "video",
+): Promise<Collection> {
+  const store = await import("../src/lib/collection/store");
+  const collection = syntheticFilmCollection();
+  for (const [index, take] of collection.takes.entries()) {
+    take.kind = kind;
+    take.mediaId = `original_${take.id}`;
+    take.durationSeconds = 12;
+    const extension = kind === "voice" ? "wav" : "mp4";
+    const localPath = path.join(store.dataRoot, `${take.mediaId}.${extension}`);
+    const content = Buffer.from(`Synthetic original source ${index}`);
+    await writeFile(localPath, content);
+    await store.putMedia({
+      id: take.mediaId,
+      collectionId: collection.id,
+      role: "owner",
+      mimeType: kind === "voice" ? "audio/wav" : "video/mp4",
+      originalName: `synthetic.${extension}`,
+      bytes: content.length,
+      createdAt: collection.createdAt,
+      localPath,
+    });
+  }
+  await store.putCollection(collection);
+  return collection;
 }

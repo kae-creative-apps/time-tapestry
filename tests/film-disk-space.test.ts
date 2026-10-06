@@ -12,7 +12,7 @@ import {
   filmRenderScratchBytes,
   filmSourceScratchBytes,
 } from "../src/lib/collection/films/disk-space";
-import { syntheticFilmCollection, testVoice } from "./film-fixture";
+import { syntheticFilmCollection } from "./film-fixture";
 
 let store: typeof import("../src/lib/collection/store");
 let jobs: typeof import("../src/lib/collection/films/jobstore");
@@ -139,11 +139,7 @@ test("real local statfs works without a Railway volume", async () => {
 });
 
 test("persistent low disk never claims a queued job or consumes its retry budget", async () => {
-  const c = syntheticFilmCollection();
-  await store.putCollection(c);
-  const queued = await jobs.enqueueStoryFilms(c, true, {
-    resolveVoice: async () => testVoice,
-  });
+  const queued = await originalJob();
   process.env.STORY_FILM_MIN_FREE_BYTES = String(
     Math.floor(Number.MAX_SAFE_INTEGER / 2),
   );
@@ -276,18 +272,26 @@ test("a source disappearing during preclaim settles stale and leaves the queue u
   assert.equal(stopped?.lease, undefined);
   assert.equal(stopped?.attempts, 1);
   assert.match(stopped!.error!, /original recording is unavailable/);
-  const next = await originalJob(-1);
+  const next = await originalJob();
+  const nextSource = (await store.getMedia(next.originalSources![0].mediaId))!;
+  changeSourceAfterInputCheck(t, nextSource.id, () =>
+    JSON.stringify({ ...nextSource, bytes: -1 }),
+  );
   const nextResult = await worker.runFilmWorkerOnce("next-source-worker");
   assert.equal(nextResult?.id, next.id);
-  assert.equal(nextResult?.status, "failed");
+  assert.equal(nextResult?.status, "stale");
 });
 
-test("invalid source size is a failed job, not an indefinite disk pause", async () => {
+test("a source size invalidated after enqueue becomes stale, not an indefinite disk pause", async (t) => {
   process.env.STORY_FILM_MIN_FREE_BYTES = "1";
-  const queued = await originalJob(-1);
+  const queued = await originalJob();
+  const source = (await store.getMedia(queued.originalSources![0].mediaId))!;
+  changeSourceAfterInputCheck(t, source.id, () =>
+    JSON.stringify({ ...source, bytes: -1 }),
+  );
   const stopped = await worker.runFilmWorkerOnce("invalid-source-worker");
   assert.equal(stopped?.id, queued.id);
-  assert.equal(stopped?.status, "failed");
+  assert.equal(stopped?.status, "stale");
   assert.equal(stopped?.lease, undefined);
   assert.match(stopped!.error!, /stored size is invalid/);
 });

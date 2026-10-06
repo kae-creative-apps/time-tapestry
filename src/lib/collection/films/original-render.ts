@@ -18,6 +18,9 @@ import {
 import { fileHash, privateJson, probeFilm } from "./render";
 import { sha256 } from "./plan";
 import { stageOriginalSource, originalAudioCopy } from "./source-media";
+import { extractAudioEnvelope } from "./audio-envelope";
+import { prepareCutAudio, cutAudioEnvelope } from "./cut-audio";
+import type { AudioEnvelope } from "../../film-audio-envelope";
 import type { FilmChapter, StoryFilmJob } from "./types";
 
 export function validateMeasuredCuts(
@@ -106,6 +109,11 @@ export async function prepareOriginalChapter(
       throw new Error("The selected camera recording has no video track.");
     const derivative =
       job.preparation === "automatic" ||
+      chapter.sourceEdit.clips.some(
+        (clip) =>
+          clip.mediaId === mediaId &&
+          ((clip.audioFadeInMs ?? 0) > 0 || (clip.audioFadeOutMs ?? 0) > 0),
+      ) ||
       (audioOnly && media.mimeType.startsWith("video/"))
         ? await originalAudioCopy(source, job.preparation === "automatic")
         : undefined;
@@ -155,11 +163,40 @@ export async function prepareOriginalChapter(
     inMs: clip.inMs,
     outMs: clip.outMs,
     captions: clip.captions ?? [],
+    ...(clip.audioFadeInMs !== undefined
+      ? { audioFadeInMs: clip.audioFadeInMs }
+      : {}),
+    ...(clip.audioFadeOutMs !== undefined
+      ? { audioFadeOutMs: clip.audioFadeOutMs }
+      : {}),
     editorialReason:
       job.preparation === "automatic"
         ? "Matched saved source words to measured Scribe word timestamps. Final owner review is required."
         : "The collection owner explicitly selected and reviewed this original recording range. No automatic speech boundaries or captions were inferred.",
   }));
+  validateVideoPlan(plan);
+  for (const clip of plan.clips) {
+    if (!(clip.audioFadeInMs || clip.audioFadeOutMs)) continue;
+    await assertCurrent();
+    const source = plan.sources.find(
+      (item) => item.assetId === clip.sourceAssetId,
+    )!;
+    const audio = source.audioDerivative
+      ? assets.get(`${source.assetId}:audio`)!
+      : assets.get(source.assetId)!;
+    const derivative = await prepareCutAudio(
+      audio.file,
+      source.audioDerivative?.sha256 ?? source.sha256,
+      clip,
+      path.join(work, "cut-audio"),
+      assertCurrent,
+    );
+    clip.audioDerivative = derivative.metadata;
+    assets.set(derivative.metadata.assetId, {
+      file: derivative.file,
+      mime: "audio/wav",
+    });
+  }
   const closer =
     process.env.STORY_FILM_CLOSER_FILE ||
     path.resolve("public/brand/film-closer-v2.mp4");
@@ -211,11 +248,52 @@ export async function renderOriginalFilm(
         source.audioDerivative.sha256
     )
       throw new Error("A source audio derivative changed before rendering.");
+  for (const clip of plan.clips) {
+    if ((clip.audioFadeInMs || clip.audioFadeOutMs) && !clip.audioDerivative)
+      throw new Error(
+        "A cleaned source cut is missing its sample-smoothed audio.",
+      );
+    if (
+      clip.audioDerivative &&
+      (await fileHash(assets.get(clip.audioDerivative.assetId)!.file)) !==
+        clip.audioDerivative.sha256
+    )
+      throw new Error("A cut audio derivative changed before rendering.");
+  }
   if (
     (await fileHash(assets.get("brand-closer")!.file)) !==
     plan.brandCloser!.sha256
   )
     throw new Error("The brand closer changed before rendering.");
+  const audioEnvelopes: Record<string, AudioEnvelope> = {};
+  const orbSources = new Set(
+    plan.clips
+      .filter(
+        (clip) =>
+          clip.kind !== "video" && clip.sourceAssetId && !clip.audioDerivative,
+      )
+      .map((clip) => clip.sourceAssetId!),
+  );
+  for (const source of plan.sources) {
+    if (!orbSources.has(source.assetId)) continue;
+    await assertCurrent();
+    const played = source.audioDerivative
+      ? assets.get(`${source.assetId}:audio`)!
+      : assets.get(source.assetId)!;
+    audioEnvelopes[source.assetId] = await extractAudioEnvelope(
+      played.file,
+      source.audioDerivative?.durationMs ?? source.durationMs,
+    );
+    await assertCurrent();
+  }
+  for (const clip of plan.clips) {
+    if (clip.kind !== "audio" || !clip.audioDerivative) continue;
+    await assertCurrent();
+    audioEnvelopes[clip.audioDerivative.assetId] = await cutAudioEnvelope(
+      assets.get(clip.audioDerivative.assetId)!.file,
+      clip.audioDerivative.sampleCount,
+    );
+  }
   const token = randomBytes(24).toString("hex");
   const byUrl = new Map(
     [...assets].map(([id, asset], index) => [
@@ -271,7 +349,7 @@ export async function renderOriginalFilm(
     const mediaUrls = Object.fromEntries(
       [...byUrl].map(([url, asset]) => [asset.id, `${origin}${url}`]),
     );
-    const inputProps = { plan, mediaUrls, draft: false };
+    const inputProps = { plan, mediaUrls, audioEnvelopes, draft: false };
     bundled ??= bundle({
       entryPoint: path.resolve("video/remotion/index.ts"),
     }).catch((error) => {

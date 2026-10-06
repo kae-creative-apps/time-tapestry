@@ -99,7 +99,7 @@ export function InterviewDeviceSetup({
     try {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error(
-          "This browser cannot open your devices. Use an updated browser or write your answers.",
+          "This browser cannot open your devices. Open your interview link in an updated browser to record your answers.",
         );
       const stream = await navigator.mediaDevices.getUserMedia(
         interviewCaptureConstraints(kind, devices),

@@ -1,3 +1,7 @@
+import {
+  attachSyntheticOriginalFilms,
+  recordedApproval,
+} from "./recorded-review-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash, createHmac, randomUUID } from "node:crypto";
@@ -9,7 +13,7 @@ import type { Collection } from "../src/lib/collection/types";
 import { verifiedRecipientCookie } from "./verified-recipient-fixture";
 
 /** One continuous journey through real route handlers. Only external transport and rendered-film bytes are fixtures. */
-test("requested gift lifecycle preserves sources, exact approval, private delivery and quarterly replies", async (t) => {
+test("requested gift lifecycle preserves sources, exact approval, private delivery and biweekly replies", async (t) => {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "tapestry-lifecycle-"),
   );
@@ -347,6 +351,15 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       mediaId: originalId,
       durationSeconds: 8,
     };
+    await store.putMedia({
+      ...(await store.getMedia(originalId))!,
+      transcription: {
+        text: firstTake.text,
+        provider: "openai",
+        model: "whisper-1",
+        completedAt: new Date().toISOString(),
+      },
+    });
     assert.equal(
       (await act({ action: "save_take", take: firstTake })).status,
       200,
@@ -381,6 +394,28 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     assert.equal(
       (await talk({ action: "set_status", sessionId, status: "completed" }))
         .status,
+      400,
+      "Transcripts can recover before their recording, but cannot complete alone",
+    );
+    assert.equal(
+      (
+        await talk({
+          action: "attach_segment",
+          sessionId,
+          segment: {
+            id: randomUUID(),
+            mediaId: originalId,
+            kind: "video",
+            startMs: 0,
+            durationMs: 8000,
+          },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await talk({ action: "set_status", sessionId, status: "completed" }))
+        .status,
       200,
     );
     for (const [questionId, text] of [
@@ -389,7 +424,17 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
         "I sowed by quietly giving twenty dollars and an afternoon of work.",
       ],
       ["q4", "I hope you make time to notice people and love them well."],
-    ])
+    ]) {
+      const recordedId = await saveRecording(c.ownerKey);
+      await store.putMedia({
+        ...(await store.getMedia(recordedId))!,
+        transcription: {
+          text,
+          provider: "openai",
+          model: "whisper-1",
+          completedAt: new Date().toISOString(),
+        },
+      });
       assert.equal(
         (
           await act({
@@ -398,13 +443,15 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
               id: randomUUID(),
               questionId,
               prompt: questionId,
-              kind: "text",
+              kind: "video",
+              mediaId: recordedId,
               text,
             },
           })
         ).status,
         200,
       );
+    }
     const pending = await get(
       req(`/api/collection/${c.id}?key=${c.recipientKey}`),
       params(c.id),
@@ -435,57 +482,41 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
       1,
     );
 
-    const filmIds: string[] = [];
-    for (let i = 1; i <= 4; i++) {
-      const mediaId = await saveRecording(c.ownerKey);
-      filmIds.push(mediaId);
-      assert.equal(
-        (
-          await act({
-            action: "attach_video",
-            chapterId: `q${i}`,
-            mediaId,
-            durationSeconds: 8,
-          })
-        ).status,
-        200,
-      );
-      // Simulated successful render boundary. The separate film-worker suite verifies real rendering.
-      await store.mutateCollection(c.id, (current) => {
-        current.chapters[i - 1].film = {
-          narrationKind: "original_recording",
-          presentation: "video",
-          jobId: "fixture_render_job",
-          chapterId: `q${i}`,
-          mediaId,
-          sourceTakeIds: current.chapters[i - 1].sourceTakeIds,
-          sourceSha256: "b".repeat(64),
-          outputSha256: String(i).repeat(64),
-          durationSeconds: 8,
-          createdAt: new Date().toISOString(),
-          planSha256: "c".repeat(64),
-          sourceRanges: [{ mediaId: originalId, inMs: 0, outMs: 8000 }],
-          sourceAssets: [
-            { mediaId: originalId, sha256: "d".repeat(64), durationMs: 8000 },
-          ],
-        };
-        return current;
+    assert.equal(
+      (
+        await act({
+          action: "attach_video",
+          chapterId: "q1",
+          mediaId: originalId,
+        })
+      ).status,
+      410,
+    );
+    const filmsReady = await attachSyntheticOriginalFilms(await read());
+    const filmIds = filmsReady.chapters.map((chapter) => chapter.film!.mediaId);
+    for (const mediaId of filmIds) {
+      await store.putMedia({
+        ...(await store.getMedia(mediaId))!,
+        bytes: bytes.length,
+        localPath: (await store.getMedia(originalId))!.localPath,
       });
-      assert.equal(
-        (await review(`q${i}`, { reviewedFilmSha256: "old-version" })).status,
-        400,
-      );
-      assert.equal((await review(`q${i}`)).status, 200);
     }
+    const exactReview = recordedApproval(filmsReady);
     assert.equal(
       (
         await act(
-          { action: "approve", deliveryMode: "digital", autoPostcards: true },
+          {
+            action: "approve",
+            deliveryMode: "digital",
+            autoPostcards: true,
+            ...exactReview,
+          },
           c.requesterKey,
         )
       ).status,
       400,
     );
+    const beforeRetiredEdit = await read();
     assert.equal(
       (
         await act({
@@ -494,8 +525,9 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
           value: { encouragement: "Notice your neighbor." },
         })
       ).status,
-      200,
+      410,
     );
+    assert.deepEqual(await read(), beforeRetiredEdit);
     assert.equal(
       (
         await act({
@@ -505,15 +537,30 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
         })
       ).status,
       400,
-      "Changes invalidate a previous review",
+      "Approval requires explicit review of recorded films",
     );
-    assert.equal((await review("q1")).status, 200);
+    assert.equal(
+      (
+        await act({
+          action: "approve",
+          deliveryMode: "digital",
+          ...exactReview,
+          reviewedFilmHashes: {
+            ...exactReview.reviewedFilmHashes,
+            q1: "0".repeat(64),
+          },
+        })
+      ).status,
+      400,
+      "Stale film hashes cannot approve a newer output",
+    );
     const approved = await act({
       action: "approve",
       deliveryMode: "digital",
       autoPostcards: true,
+      ...exactReview,
     });
-    assert.equal(approved.status, 200);
+    assert.equal(approved.status, 200, JSON.stringify(approved.body));
     const frozen = await read();
     assert.equal(frozen.status, "approved");
     assert.equal(frozen.postcardPreparation?.status, "waiting_for_address");
@@ -652,7 +699,7 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     );
     assert.equal(
       scheduled.deliveries[1].scheduledFor.slice(0, 10),
-      "2026-05-01",
+      "2026-02-15",
     );
 
     const recipientView = await get(
@@ -724,13 +771,6 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
         .status,
       "sent",
     );
-    tick(14 * 86400000);
-    await run();
-    assert.equal(
-      (await read()).notifications.find((n) => n.kind === "postcard_followup")!
-        .status,
-      "suppressed",
-    );
     const later = Date.parse((await read()).deliveries[1].scheduledFor);
     t.mock.timers.setTime(later - 1);
     await run();
@@ -740,10 +780,16 @@ test("requested gift lifecycle preserves sources, exact approval, private delive
     assert.equal((await read()).deliveries[1].status, "submitted");
     assert.equal(attempts.filter((a) => a.provider === "postcard").length, 3);
     assert.equal((await read()).deliveries[2].status, "scheduled");
+    await run();
+    assert.equal(
+      (await read()).notifications.find((n) => n.kind === "postcard_followup")!
+        .status,
+      "suppressed",
+    );
     assert.equal(
       (await read()).postcardProof!.hash,
       mailed.postcardProof!.hash,
-      "Quarterly dispatch retains the original approved print snapshot",
+      "Biweekly dispatch retains the original approved print snapshot",
     );
   } finally {
     globalThis.fetch = priorFetch;

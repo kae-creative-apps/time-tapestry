@@ -16,7 +16,11 @@ import {
   draftChapters,
   selectedAnswers,
 } from "@/lib/collection/content";
-import { enqueueAutomaticOriginalFilms } from "@/lib/collection/films/jobstore";
+import {
+  enqueueAutomaticOriginalFilms,
+  latestFilmJob,
+  filmJobInputsCurrent,
+} from "@/lib/collection/films/jobstore";
 import {
   releasePostcardProof,
   prepareAutomaticPostcards,
@@ -27,8 +31,17 @@ import type { AnswerTake, Collection, Reply } from "@/lib/collection/types";
 import { getCollectionUsage } from "@/lib/collection/usage";
 import { guardRequest } from "@/lib/security/request";
 import { assertOrigin } from "@/lib/security/policy";
-import { collectionRoleForRequest } from "@/lib/collection/request-access";
+import { collectionAccessForRequest } from "@/lib/collection/request-access";
+import {
+  PRIMARY_RECIPIENT_ID,
+  recipientById,
+  storedRecipientId,
+} from "@/lib/collection/recipients";
 import { readJsonBody, securityErrorResponse } from "@/lib/security/http";
+import {
+  hasRecordedAnswerSource,
+  isStoredOwnerRecording,
+} from "@/lib/collection/recording-validation";
 const noStore = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -43,7 +56,8 @@ export async function GET(
   try {
     const { id } = await params;
     const c = await getCollection(id);
-    const role = c && (await collectionRoleForRequest(req, c));
+    const access = c && (await collectionAccessForRequest(req, c));
+    const role = access?.role;
     if (!c || !role)
       return NextResponse.json(
         {
@@ -55,7 +69,7 @@ export async function GET(
     return NextResponse.json(
       {
         collection: {
-          ...publicView(c, role),
+          ...publicView(c, role, access?.recipientId),
           ...(role === "owner"
             ? { usage: await getCollectionUsage(c.id) }
             : {}),
@@ -77,7 +91,8 @@ export async function POST(
   try {
     const { id } = await params;
     const initial = await getCollection(id);
-    const role = initial && (await collectionRoleForRequest(req, initial));
+    const access = initial && (await collectionAccessForRequest(req, initial));
+    const role = access?.role;
     if (!initial || !role)
       return NextResponse.json(
         {
@@ -89,6 +104,20 @@ export async function POST(
     assertOrigin(req);
     await guardRequest(req, { action: "collection_write", resourceId: id });
     const b = (await readJsonBody(req, 512 * 1024)) as any;
+    if (
+      ["edit_chapter", "blessing", "correct_turn", "attach_video"].includes(
+        b.action,
+      )
+    ) {
+      requireOwner(initial, role);
+      return NextResponse.json(
+        {
+          error:
+            "Record a new answer to change your story. Only the public postcard messages can be edited.",
+        },
+        { status: 410, headers: noStore },
+      );
+    }
     let next: Collection;
     let question: string | null = null;
     let filmPreparationError: string | null = null;
@@ -96,7 +125,7 @@ export async function POST(
       requireOwner(initial, role);
       if (initial.chapters.length && !b.regenerate)
         return NextResponse.json(
-          { collection: publicView(initial, role) },
+          { collection: publicView(initial, role, access?.recipientId) },
           { headers: noStore },
         );
       const guard = await guardRequest(req, {
@@ -105,15 +134,18 @@ export async function POST(
       });
       // Check every chapter before the first provider call, not partway through
       // a four-chapter generation that can never produce a complete draft.
-      for (const [index, chapter] of CHAPTERS.entries())
-        if (
-          !selectedAnswers(initial, chapter.id).some((answer) =>
-            answer.text.trim(),
-          )
-        )
+      for (const [index, chapter] of CHAPTERS.entries()) {
+        const answers = selectedAnswers(initial, chapter.id);
+        if (!answers.some((answer) => answer.text.trim()))
           throw new Error(
-            `Save a written answer or finish transcription for part ${index + 1} before creating your story.`,
+            `Record your answer and finish transcription for part ${index + 1} before creating your story.`,
           );
+        for (const answer of answers)
+          if (!(await hasRecordedAnswerSource(answer, initial, getMedia)))
+            throw new Error(
+              `Finish saving the original recording for each answer in part ${index + 1} before creating your story. Your saved words are unchanged.`,
+            );
+      }
       if (process.env.GLOO_API_KEY && gloo) await guard.reserveProviderBudget();
       const chapters = await draftChapters(initial);
       const prepareFilms =
@@ -249,11 +281,22 @@ export async function POST(
       });
     } else {
       next = await mutateCollection(id, async (c) => {
-        if ((await collectionRoleForRequest(req, c)) !== role)
+        const currentAccess = await collectionAccessForRequest(req, c);
+        if (
+          currentAccess?.role !== role ||
+          currentAccess?.recipientId !== access?.recipientId
+        )
           throw new Error(
             "This private collection is unavailable. Verify your email to continue.",
           );
         if (b.action === "address") {
+          if (
+            role === "recipient" &&
+            currentAccess?.recipientId !== PRIMARY_RECIPIENT_ID
+          )
+            throw new Error(
+              "Only the postcard recipient can update the mailing address.",
+            );
           if (role === "requester" && c.requester.email !== c.recipient.email)
             throw new Error("Use the recipient address link.");
           if (
@@ -291,18 +334,35 @@ export async function POST(
             !c.chapters.some((ch) => ch.id === b.chapterId)
           )
             throw new Error("Chapter unavailable");
-          if (role === "recipient")
-            c.recipientViewedChapters[b.chapterId] = new Date().toISOString();
+          if (role === "recipient") {
+            if (currentAccess?.recipientId === PRIMARY_RECIPIENT_ID)
+              c.recipientViewedChapters[b.chapterId] = new Date().toISOString();
+            else {
+              const member = c.additionalRecipients!.find(
+                (item) => item.id === currentAccess!.recipientId,
+              )!;
+              member.viewedChapters = {
+                ...member.viewedChapters,
+                [b.chapterId]: new Date().toISOString(),
+              };
+            }
+          }
           return c;
         }
         if (b.action === "reply_preferences") {
           if (role !== "recipient") throw new Error("Recipient link required");
-          c.replyRemindersEnabled = Boolean(b.enabled);
+          if (currentAccess?.recipientId === PRIMARY_RECIPIENT_ID)
+            c.replyRemindersEnabled = Boolean(b.enabled);
+          else
+            c.additionalRecipients!.find(
+              (item) => item.id === currentAccess!.recipientId,
+            )!.replyRemindersEnabled = Boolean(b.enabled);
           return c;
         }
         if (b.action === "reply") {
           if (role !== "recipient" || c.status !== "approved")
             throw new Error("Use the recipient link to reply.");
+          const recipient = recipientById(c, currentAccess!.recipientId)!;
           const chapter = c.chapters.find((ch) => ch.id === b.chapterId);
           if (!chapter) throw new Error("This story could not be found.");
           const media = b.mediaId ? await getMedia(b.mediaId) : null;
@@ -310,7 +370,10 @@ export async function POST(
             b.mediaId &&
             (!media ||
               media.collectionId !== c.id ||
-              media.role !== "recipient")
+              media.role !== "recipient" ||
+              storedRecipientId(media) !== recipient.id ||
+              media.bytes <= 0 ||
+              !(media.localPath || media.url))
           )
             throw new Error("Reply recording not found");
           if (typeof b.text === "string" && b.text.length > 30000)
@@ -320,8 +383,14 @@ export async function POST(
           const text = clean(b.text);
           if (!text && !media)
             throw new Error("Record a video or write a message.");
-          if (c.replies.some((r) => r.id === b.replyId)) return c;
+          const previous = c.replies.find((reply) => reply.id === b.replyId);
+          if (previous) {
+            if (storedRecipientId(previous) !== recipient.id)
+              throw new Error("Choose a new reply identifier.");
+            return c;
+          }
           const reply: Reply = {
+            recipientId: recipient.id,
             id: clean(b.replyId, 80) || randomUUID(),
             chapterId: chapter.id,
             text,
@@ -332,9 +401,10 @@ export async function POST(
           c.notifications.push({
             id: `${id}:reply:${reply.id}`,
             kind: "reply_received",
+            recipientId: recipient.id,
             to: c.storyteller.email,
-            subject: `${c.recipient.name} sent you a message`,
-            text: `${c.recipient.name} replied to "${chapter.title}". Open their message on your story page.`,
+            subject: `${recipient.name || recipient.email} sent you a message`,
+            text: `${recipient.name || recipient.email} replied to "${chapter.title}". Open their message on your story page.`,
             url: `${appOrigin()}/collection/${id}?key=${c.ownerKey}#${chapter.id}`,
             dueAt: reply.createdAt,
             status: "pending",
@@ -363,14 +433,16 @@ export async function POST(
           const t = b.take || {};
           if (typeof t.text === "string" && t.text.length > 30000)
             throw new Error(
-              "This written answer is too long for one take. Split it into a follow-up. Your local text is still saved.",
+              "This transcript is too long for one take. Split it into a follow-up. Your local words are still saved.",
             );
           if (
             !validQuestion(t.questionId) ||
-            !["text", "voice", "video"].includes(t.kind) ||
+            !["voice", "video"].includes(t.kind) ||
             !/^[-a-zA-Z0-9_]{8,80}$/.test(t.id)
           )
-            throw new Error("Invalid answer");
+            throw new Error(
+              "Record your answer with video and audio, or audio only.",
+            );
           if (
             t.durationSeconds !== undefined &&
             (!Number.isFinite(t.durationSeconds) ||
@@ -381,35 +453,65 @@ export async function POST(
               "Save a shorter take and continue with another recording.",
             );
           const media = t.mediaId ? await getMedia(t.mediaId) : null;
-          if (
-            t.mediaId &&
-            (!media || media.collectionId !== id || media.role !== "owner")
-          )
+          if (!isStoredOwnerRecording(media, c, t.kind))
             throw new Error("Recording upload is not complete.");
           const audioMedia = t.audioMediaId
             ? await getMedia(t.audioMediaId)
             : null;
-          if (
-            t.audioMediaId &&
-            (!audioMedia ||
-              audioMedia.collectionId !== id ||
-              audioMedia.role !== "owner" ||
-              !audioMedia.mimeType.startsWith("audio/"))
-          )
+          if (t.audioMediaId && !isStoredOwnerRecording(audioMedia, c, "voice"))
             throw new Error("Audio backup is not complete.");
-          if (!clean(t.text) && !media)
-            throw new Error("Write or record an answer.");
+          const existing = c.takes.find((a) => a.id === t.id);
+          if (
+            existing &&
+            (existing.questionId !== t.questionId ||
+              existing.kind !== t.kind ||
+              existing.mediaId !== media!.id ||
+              (existing.audioMediaId &&
+                existing.audioMediaId !== audioMedia?.id))
+          )
+            throw new Error(
+              "A saved take cannot be replaced in place. Record a new take instead.",
+            );
+          const transcript =
+            audioMedia?.transcription?.text ??
+            media!.transcription?.text ??
+            existing?.text ??
+            "";
+          if (
+            typeof t.text === "string" &&
+            t.text.trim() &&
+            t.text.trim() !== transcript
+          )
+            throw new Error(
+              "Transcript editing is no longer available. Record a new answer instead.",
+            );
+          const replacement = b.replaceChapterId;
+          if (
+            replacement !== undefined &&
+            (!CHAPTERS.some((ch) => ch.id === replacement) ||
+              replacement !== t.questionId)
+          )
+            throw new Error(
+              "A recorded replacement must belong to the same story part.",
+            );
+          if (
+            existing &&
+            replacement !== undefined &&
+            existing.replacesChapterId !== replacement
+          )
+            throw new Error("Use a new recording to replace a story part.");
           const take: AnswerTake = {
             id: t.id,
             questionId: t.questionId,
             prompt: clean(t.prompt, 1000),
             kind: t.kind,
-            text: clean(t.text),
+            text: transcript,
             mediaId: media?.id,
             audioMediaId: audioMedia?.id,
             durationSeconds: t.durationSeconds,
             createdAt: new Date().toISOString(),
-            transcriptionStatus: t.transcriptionStatus,
+            transcriptionStatus: transcript ? "ready" : "pending",
+            ...(replacement ? { replacesChapterId: replacement } : {}),
           };
           const before = JSON.stringify(
             c.takes.find((a) => a.id === c.selectedTakeIds[take.questionId]),
@@ -422,6 +524,27 @@ export async function POST(
               createdAt: c.takes[exists].createdAt,
             };
           else c.takes.push(take);
+          if (exists < 0 && replacement) {
+            for (const session of c.interviews || [])
+              for (const turn of session.turns)
+                if (
+                  turn.role === "user" &&
+                  turn.chapterId === replacement &&
+                  !session.excludedTurnIds.includes(turn.id)
+                )
+                  session.excludedTurnIds.push(turn.id);
+            for (const questionId of Object.keys(c.selectedTakeIds))
+              if (
+                questionId === replacement ||
+                questionId.startsWith(`${replacement}-f`)
+              )
+                delete c.selectedTakeIds[questionId];
+            c.selectedTakeIds[replacement] = take.id;
+            c.explicitTakeSelections = {
+              ...c.explicitTakeSelections,
+              [replacement]: true,
+            };
+          }
           // Latest saved take is selected until the person deliberately chooses a different one.
           if (exists < 0 && !c.explicitTakeSelections?.[take.questionId])
             c.selectedTakeIds[take.questionId] = take.id;
@@ -463,105 +586,57 @@ export async function POST(
           );
           return c;
         }
-        if (b.action === "blessing") {
-          if (!CHAPTERS.some((ch) => ch.id === b.questionId))
-            throw new Error("This story could not be found.");
-          const v = b.value || {};
-          const ch = c.chapters.find((ch) => ch.id === b.questionId);
-          if (ch) ch.editorialReviewed = false;
-          c.chapterBlessings[b.questionId] = {
-            encouragement: clean(v.encouragement, 1000),
-            scriptureReference: clean(v.scriptureReference, 120),
-            scriptureText: clean(v.scriptureText, 2000),
-            scriptureTranslation: clean(v.scriptureTranslation, 60),
-          };
-          return c;
-        }
-        if (b.action === "edit_chapter") {
-          if (typeof b.content !== "string" || b.content.length > 100000)
-            throw new Error(
-              "Keep each written story under 100,000 characters. Your draft remains on screen.",
-            );
-          const ch = c.chapters.find((ch) => ch.id === b.chapterId);
-          if (!ch) throw new Error("Chapter not found");
-          if (b.blessing) {
-            const v = b.blessing;
-            c.chapterBlessings[ch.id] = {
-              encouragement: clean(v.encouragement, 1000),
-              scriptureReference: clean(v.scriptureReference, 120),
-              scriptureText: clean(v.scriptureText, 2000),
-              scriptureTranslation: clean(v.scriptureTranslation, 60),
-            };
-          }
-          const changed =
-            (clean(b.title, 120) || ch.title) !== ch.title ||
-            clean(b.content, 100000) !== ch.content;
-          if (changed && ch.film) {
-            ch.film = undefined;
-            ch.videoMediaId = undefined;
-            ch.videoStatus = "not_requested";
-            ch.reviewedFilmSha256 = undefined;
-          }
-          ch.title = clean(b.title, 120) || ch.title;
-          ch.content = clean(b.content, 100000);
-          ch.postcardNote = clean(b.postcardNote, 400);
-          if (
-            b.editorialReviewed &&
-            ch.film &&
-            b.reviewedFilmSha256 !== ch.film.outputSha256
-          )
-            throw new Error(
-              "Watch and approve the latest version of this film before sharing.",
-            );
-          ch.editorialReviewed = !changed && Boolean(b.editorialReviewed);
-          ch.reviewedFilmSha256 = ch.editorialReviewed
-            ? ch.film?.outputSha256
-            : undefined;
-          if (b.videoStatus === "not_requested") {
-            ch.videoStatus = "not_requested";
-            ch.videoMediaId = undefined;
-            ch.film = undefined;
-            ch.reviewedFilmSha256 = undefined;
-          }
-          return c;
-        }
-        if (b.action === "attach_video") {
-          const ch = c.chapters.find((ch) => ch.id === b.chapterId);
-          const m = await getMedia(b.mediaId);
-          if (
-            !ch ||
-            !m ||
-            m.collectionId !== id ||
-            m.role !== "owner" ||
-            !m.mimeType.startsWith("video/")
-          )
-            throw new Error("Add a finished video for this story first");
-          if (
-            !Number.isFinite(b.durationSeconds) ||
-            b.durationSeconds <= 0 ||
-            b.durationSeconds > 3600
-          )
-            throw new Error("Finished videos must be one hour or shorter.");
-          ch.film = undefined;
-          ch.reviewedFilmSha256 = undefined;
-          ch.videoMediaId = m.id;
-          ch.videoStatus = "ready";
-          ch.editorialReviewed = false;
-          return c;
-        }
         if (b.action === "approve") {
+          const job = await latestFilmJob(c.id);
+          if (
+            !job ||
+            job.mode !== "original" ||
+            job.status !== "ready" ||
+            !(await filmJobInputsCurrent(job, c)) ||
+            c.chapters.some((chapter) => {
+              const completed = job.chapters.find(
+                (item) => item.chapterId === chapter.id,
+              );
+              return (
+                completed?.status !== "ready" ||
+                !completed.artifact ||
+                chapter.film?.jobId !== job.id ||
+                chapter.film?.mediaId !== completed.artifact.mediaId ||
+                chapter.film?.outputSha256 !== completed.artifact.outputSha256
+              );
+            })
+          )
+            throw new Error(
+              "Finish preparing and reviewing your four current recorded films before approval.",
+            );
+          for (const chapter of c.chapters) {
+            const media =
+              chapter.film && (await getMedia(chapter.film.mediaId));
+            if (
+              !media ||
+              media.collectionId !== c.id ||
+              media.role !== "owner" ||
+              !media.mimeType.startsWith("video/") ||
+              media.bytes <= 0 ||
+              !(media.url || media.localPath)
+            )
+              throw new Error(
+                "One of your recorded films is not ready. Finish film preparation before approval.",
+              );
+          }
           const approved = approveCollection(c, new Date().toISOString(), {
             deliveryMode: b.deliveryMode === "digital" ? "digital" : "postal",
-            allowWrittenOnly: b.allowWrittenOnly === true,
+            recordingsReviewed: b.recordingsReviewed === true,
+            reviewedFilmHashes: b.reviewedFilmHashes,
           });
           if (
             b.deliveryMode === "digital" &&
-            b.autoPostcards !== true &&
             !approved.notifications.some((n) => n.id === `${id}:digital-ready`)
           )
             approved.notifications.push({
               id: `${id}:digital-ready`,
               kind: "collection_ready",
+              recipientId: PRIMARY_RECIPIENT_ID,
               to: c.recipient.email,
               subject: `A story for you from ${c.storyteller.name}`,
               text: `${c.storyteller.name} has shared four stories with you. Open your private collection to read, watch and send a reply.`,
@@ -581,7 +656,7 @@ export async function POST(
                 kind: "review_ready",
                 to: c.storyteller.email,
                 subject: "Your Time Tapestry collection is approved",
-                text: "Your approved stories are ready. Your four postcards will be sent automatically after the mailing address and delivery service are ready. Open your collection to see progress.",
+                text: "Your approved recordings are ready. Your four postcards will be sent automatically after you approve their printed designs, the mailing address is confirmed, and the delivery service is ready. Open your collection to review the postcards and see progress.",
                 url: appOrigin() + linksFor(c).review,
                 dueAt: new Date().toISOString(),
                 status: "pending",
@@ -593,6 +668,7 @@ export async function POST(
               approved.notifications.push({
                 id: `${id}:address`,
                 kind: "address_request",
+                recipientId: PRIMARY_RECIPIENT_ID,
                 to: c.recipient.email,
                 subject: `A gift from ${c.storyteller.name}`,
                 text: `${c.storyteller.name} has prepared a personal gift for you. Add the address where you would like your postcards to arrive.`,
@@ -615,6 +691,7 @@ export async function POST(
           c.notifications.push({
             id: `${id}:address`,
             kind: "address_request",
+            recipientId: PRIMARY_RECIPIENT_ID,
             to: c.recipient.email,
             subject: `A gift from ${c.storyteller.name}`,
             text: `${c.storyteller.name} is making a personal gift for you. Add the mailing address where you would like to receive it. Your stories will arrive with the first postcard.`,
@@ -630,7 +707,7 @@ export async function POST(
     return NextResponse.json(
       {
         collection: {
-          ...publicView(next, role),
+          ...publicView(next, role, access?.recipientId),
           ...(role === "owner"
             ? { usage: await getCollectionUsage(next.id) }
             : {}),

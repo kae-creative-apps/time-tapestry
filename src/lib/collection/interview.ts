@@ -8,6 +8,7 @@ import type {
   InterviewTurn,
   StoredMedia,
 } from "./types";
+import { isStoredOwnerRecording } from "./recording-validation";
 
 export class InterviewInputError extends Error {
   constructor(
@@ -199,6 +200,11 @@ export async function applyInterviewAction(
   now = new Date().toISOString(),
 ): Promise<Collection> {
   const body = object(input);
+  if (body.action === "correct_turn")
+    return fail(
+      "Record a new answer to replace a saved response. Transcript editing is no longer available.",
+      410,
+    );
   const sessionId = identifier(body.sessionId);
   c.interviews ??= [];
   let session = c.interviews.find((item) => item.id === sessionId);
@@ -286,6 +292,11 @@ export async function applyInterviewAction(
           "This conversation is full. Start a new conversation to keep adding memories. Your saved words are unchanged.",
         );
       if (turn.supersedesTurnId) {
+        if (session.status !== "active")
+          return fail(
+            "Record a new answer to replace a saved response. Transcript editing is no longer available.",
+            410,
+          );
         const original = session.turns.find(
           (item) => item.id === turn.supersedesTurnId,
         );
@@ -352,23 +363,13 @@ export async function applyInterviewAction(
         "This conversation has reached its original recording limit.",
       );
     const media = await findMedia(segment.mediaId);
-    if (
-      !media ||
-      media.collectionId !== c.id ||
-      media.role !== "owner" ||
-      !media.mimeType.startsWith(segment.kind === "video" ? "video/" : "audio/")
-    )
+    if (!isStoredOwnerRecording(media, c, segment.kind))
       return fail(
         "Finish backing up this original recording before attaching it.",
       );
     if (segment.audioMediaId) {
       const audio = await findMedia(segment.audioMediaId);
-      if (
-        !audio ||
-        audio.collectionId !== c.id ||
-        audio.role !== "owner" ||
-        !audio.mimeType.startsWith("audio/")
-      )
+      if (!isStoredOwnerRecording(audio, c, "voice"))
         return fail("The audio backup could not be verified.");
     }
     session.segments.push(segment);
@@ -382,6 +383,23 @@ export async function applyInterviewAction(
       )
     )
       return fail("Invalid conversation status.");
+    if (body.status === "completed") {
+      if (!session.segments.length)
+        return fail(
+          "Save an original video or audio recording before completing this conversation. Your saved words are unchanged.",
+        );
+      for (const segment of session.segments)
+        if (
+          !isStoredOwnerRecording(
+            await findMedia(segment.mediaId),
+            c,
+            segment.kind,
+          )
+        )
+          return fail(
+            "Finish saving your original recordings before completing this conversation.",
+          );
+    }
     if (
       body.status === "active" &&
       c.interviews.some(

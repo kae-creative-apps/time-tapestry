@@ -3,6 +3,16 @@ import type { CollectionUsage } from "./usage";
 import type { StoryFilmArtifact } from "./films/types";
 import type { PrivateGenerosityNotes } from "./generosity-notes";
 export type Contact = { name: string; email: string; phone?: string };
+export type AdditionalRecipient = {
+  id: string;
+  email: string;
+  name?: string;
+  invitedAt: string;
+  invitationVersion?: number;
+  revokedAt?: string;
+  viewedChapters?: Record<string, string>;
+  replyRemindersEnabled?: boolean;
+};
 export type PostalAddress = {
   name: string;
   line1: string;
@@ -13,6 +23,8 @@ export type PostalAddress = {
   country: string;
 };
 export type AnswerTake = {
+  /** A recorded replacement excludes the older chapter answers once, on creation. */
+  replacesChapterId?: InterviewChapterId;
   id: string;
   questionId: string;
   prompt: string;
@@ -107,6 +119,11 @@ export type Delivery = {
   dispatch?: DispatchState;
 };
 export type Reply = {
+  /** Untagged historical replies belong to the primary postcard recipient. */
+  recipientId?: string;
+  /** Display-only attribution resolved from trusted membership by publicView. */
+  authorName?: string;
+  authorEmail?: string;
   id: string;
   chapterId: string;
   text: string;
@@ -114,11 +131,14 @@ export type Reply = {
   createdAt: string;
 };
 export type Notification = {
+  /** Trusted recipient membership for recipient-specific delivery. */
+  recipientId?: string;
   id: string;
   kind:
     | "invitation"
     | "review_ready"
     | "collection_ready"
+    | "recipient_invitation"
     | "postcard_mailed"
     | "postcard_followup"
     | "reply_invitation"
@@ -136,7 +156,12 @@ export type Notification = {
   providerId?: string;
   dispatch?: DispatchState;
 };
+export type PostcardCadence = "biweekly" | "quarterly";
 export type Collection = {
+  /** Digital access only. The primary recipient still owns all physical postcards. */
+  additionalRecipients?: AdditionalRecipient[];
+  /** Fixed when the collection is created. Missing on legacy quarterly collections. */
+  postcardCadence?: PostcardCadence;
   /** Owner-only notebook. Never a source for interviews, stories, films or postcards. */
   privateGenerosityNotes?: PrivateGenerosityNotes;
   /** Internal binding for safe creation retries. Never returned to clients. */
@@ -209,6 +234,8 @@ export type CollectionView = Omit<
   Collection,
   "ownerKey" | "recipientKey" | "requesterKey"
 > & {
+  recipientId?: string;
+  isPrimaryRecipient?: boolean;
   role: "owner" | "recipient" | "requester";
   usage?: CollectionUsage;
   links?: {
@@ -229,6 +256,17 @@ export type CollectionView = Omit<
   };
 };
 export type StoredMedia = {
+  /** Untagged historical recipient uploads belong to the primary recipient. */
+  recipientId?: string;
+  /** Provider output written only by the authenticated server transcription route. */
+  transcription?: {
+    text: string;
+    provider: "openai";
+    model: "whisper-1";
+    completedAt: string;
+  };
+  /** Assigned by server upload/render paths. Omitted on older saved media. */
+  provenance?: "uploaded_recording" | "generated_film";
   id: string;
   collectionId: string;
   role: "owner" | "recipient";
