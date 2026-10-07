@@ -12,6 +12,7 @@ import {
 import type { Collection } from "./types";
 import { selectedAnswers } from "./content";
 import { recipientChapterUrl } from "./postcard-artwork";
+import { publicPostcardMessage } from "./postcard-public-message";
 import { cleanStoryBookText } from "./story-book-reading";
 import { getChapterQuestion, type ChapterId } from "../interview-state";
 import { BRAND_COLORS } from "../brand-art";
@@ -125,10 +126,12 @@ export function storyBookSnapshot(
       chapter.generatedWith === "gloo",
     );
     const extracted = storyQuoteFromTranscript(content);
+    const postcard =
+      id in THEME_LABELS ? publicPostcardMessage(c, id) : undefined;
     const quote =
       extracted && extracted.length < content.length * 0.72
         ? extracted
-        : undefined;
+        : postcard;
     const question = openingQuestion(c, id, chapter.title, recipientName);
     const pageUrl = chapterPageUrl(c, id);
     return {
@@ -276,8 +279,8 @@ const chocolate = color("#3c2a22");
 const [width, height] = PageSizes.Letter;
 const margin = 40;
 const textWidth = width - margin * 2;
-const bodySize = 10.75;
-const bodyLeading = 14.8;
+const bodySize = 10.5;
+const bodyLeading = 14.2;
 
 async function embedStill(doc: PDFDocument, bytes: Uint8Array) {
   const png = bytes[0] === 0x89 && bytes[1] === 0x50;
@@ -492,52 +495,150 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   });
   const chapterPages: number[] = [];
 
-  for (const [index, chapter] of book.chapters.entries()) {
-    let page = doc.addPage(PageSizes.Letter);
-    chapterPages.push(doc.getPageCount() - 1);
+  const postcardDir = path.join(
+    process.cwd(),
+    "public/brand/postcards/designer-2026-10-06-v2",
+  );
+  const postcardFiles: Record<string, string> = {
+    q1: "postcard-01-kindness-print-background.png",
+    q2: "postcard-02-faith-print-background.png",
+    q3: "postcard-03-generosity-print-background.png",
+    q4: "postcard-04-encouragement-print-background.png",
+  };
+  const postcardImages = new Map<
+    string,
+    Awaited<ReturnType<PDFDocument["embedPng"]>>
+  >();
+  const postcardFor = async (id: string) => {
+    const file = postcardFiles[id];
+    if (!file) return undefined;
+    const cached = postcardImages.get(id);
+    if (cached) return cached;
+    const image = await doc.embedPng(
+      await readFile(path.join(postcardDir, file)),
+    );
+    postcardImages.set(id, image);
+    return image;
+  };
+
+  let page: PDFPage | undefined;
+  let y = 0;
+  let running = "";
+  const openSheet = (header = "") => {
+    page = doc.addPage(PageSizes.Letter);
     page.drawRectangle({ x: 0, y: 0, width, height, color: paper });
-    const still = chapter.still?.byteLength
-      ? await embedStill(doc, chapter.still)
-      : undefined;
-    const titleLines = wrapBookText(
-      chapter.title,
-      textWidth - (still ? 132 : 56),
-      (value) => measure(value, 16),
-    );
-    const band = Math.max(78, 34 + titleLines.length * 20);
-    page.drawRectangle({
-      x: 0,
-      y: height - band,
-      width,
-      height: band,
-      color: chocolate,
-    });
-    if (still) {
-      const fitted = still.scaleToFit(112, band - 22);
-      page.drawImage(still, {
-        x: width - margin - fitted.width,
-        y: height - band + (band - fitted.height) / 2,
-        ...fitted,
-      });
-    } else drawOrb(page, width - 62, height - band / 2, 0.95);
-    if (chapter.label) draw(page, chapter.label, margin, height - 22, 9, paper);
-    titleLines.forEach((line, lineIndex) =>
-      draw(page, line, margin, height - 42 - lineIndex * 20, 16, paper),
-    );
-    let y = height - band - 8;
-    const nextPage = () => {
-      page = doc.addPage(PageSizes.Letter);
-      page.drawRectangle({ x: 0, y: 0, width, height, color: paper });
-      const running = chapter.label || `Story ${index + 1}`;
-      draw(page, running, margin, height - 28, 8, taupe);
+    if (header) {
+      draw(page, header, margin, height - 26, 8, taupe);
       page.drawLine({
-        start: { x: margin, y: height - 34 },
-        end: { x: width - margin, y: height - 34 },
+        start: { x: margin, y: height - 32 },
+        end: { x: width - margin, y: height - 32 },
         thickness: 0.4,
         color: sage,
       });
-      y = height - 46;
-    };
+      y = height - 44;
+    } else y = height - 36;
+  };
+  const need = (space: number, continued = false) => {
+    const room = Math.min(space, height - 90);
+    if (!page || y - room < 40) {
+      if (page && y > height - 80) return page;
+      openSheet(continued && page ? running : "");
+    }
+    return page!;
+  };
+
+  for (const [index, chapter] of book.chapters.entries()) {
+    running = chapter.label || `Story ${index + 1}`;
+    const titleLines = wrapBookText(chapter.title, textWidth - 110, (value) =>
+      measure(value, 15),
+    );
+    const bar = 16 + titleLines.length * 17;
+    const rowH = 124;
+    const questionHeight = chapter.question
+      ? wrapBookText(chapter.question, textWidth, (value) => measure(value, 11))
+          .length *
+          14.5 +
+        10
+      : 0;
+    const quoteHeight =
+      chapter.quote && chapter.still?.byteLength
+        ? wrapBookText(`“${chapter.quote}”`, textWidth - 18, (value) =>
+            measure(value, 11.5),
+          ).length *
+            15 +
+          40
+        : 0;
+    const bodyPreview =
+      Math.min(
+        4,
+        wrapBookText(chapter.content, textWidth, (value) =>
+          measure(value, bodySize),
+        ).length,
+      ) * bodyLeading;
+    need(bar + rowH + questionHeight + quoteHeight + bodyPreview + 28);
+    chapterPages.push(doc.getPages().indexOf(page!));
+    let host = page!;
+    host.drawRectangle({
+      x: margin,
+      y: y - bar,
+      width: textWidth,
+      height: bar,
+      color: chocolate,
+    });
+    if (chapter.label)
+      draw(host, chapter.label, margin + 12, y - 13, 8, paper);
+    titleLines.forEach((line, lineIndex) =>
+      draw(host, line, margin + 12, y - 30 - lineIndex * 17, 15, paper),
+    );
+    y -= bar + 8;
+
+    const still = chapter.still?.byteLength
+      ? await embedStill(doc, chapter.still)
+      : undefined;
+    const art = await postcardFor(chapter.id);
+    const artW = still ? 220 : 248;
+    host = need(rowH);
+    if (art) {
+      const fitted = art.scaleToFit(artW, rowH);
+      host.drawImage(art, {
+        x: margin,
+        y: y - rowH + (rowH - fitted.height) / 2,
+        ...fitted,
+      });
+    } else drawOrb(host, margin + 40, y - rowH / 2, 1.15);
+    const sideX = margin + artW + 12;
+    const sideW = textWidth - artW - 12;
+    let quotePlaced = false;
+    if (still) {
+      const fitted = still.scaleToFit(sideW, rowH);
+      host.drawImage(still, {
+        x: width - margin - fitted.width,
+        y: y - rowH + (rowH - fitted.height) / 2,
+        ...fitted,
+      });
+    } else if (chapter.quote) {
+      const quoteLines = wrapBookText(
+        `“${chapter.quote}”`,
+        sideW - 8,
+        (value) => measure(value, 11),
+      ).slice(0, 7);
+      let quoteY = y - 18;
+      for (const line of quoteLines) {
+        draw(host, line, sideX, quoteY, 11);
+        quoteY -= 14;
+      }
+      draw(
+        host,
+        `In ${book.storytellerName}’s own words`,
+        sideX,
+        quoteY - 2,
+        8,
+        taupe,
+      );
+      quotePlaced = true;
+    }
+    y -= rowH + 10;
+
     const block = (
       text: string,
       size = bodySize,
@@ -548,33 +649,33 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
       for (const line of wrapBookText(text, textWidth - inset, (value) =>
         measure(value, size),
       )) {
-        if (y - leading < 36) nextPage();
+        host = need(leading, true);
         y -= leading;
-        if (line) draw(page, line, margin + inset, y, size, fill);
+        if (line) draw(host, line, margin + inset, y, size, fill);
       }
     };
     if (chapter.question) {
-      y -= 8;
+      y -= 2;
       block(chapter.question, 11, 14.5, taupe);
-      y -= 6;
+      y -= 4;
     }
-    if (chapter.quote) {
+    if (chapter.quote && !quotePlaced) {
       const quoteLines = wrapBookText(
         `“${chapter.quote}”`,
         textWidth - 18,
         (value) => measure(value, 11.5),
       );
       const boxHeight = quoteLines.length * 15 + 22;
-      if (y - boxHeight < 36) nextPage();
+      host = need(boxHeight + 8, true);
       y -= 8;
-      page.drawRectangle({
+      host.drawRectangle({
         x: margin,
         y: y - boxHeight + 8,
         width: textWidth,
         height: boxHeight,
         color: color("#f3ebe4"),
       });
-      page.drawRectangle({
+      host.drawRectangle({
         x: margin,
         y: y - boxHeight + 8,
         width: 3,
@@ -583,28 +684,28 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
       });
       for (const line of quoteLines) {
         y -= 15;
-        draw(page, line, margin + 12, y, 11.5);
+        draw(host, line, margin + 12, y, 11.5);
       }
       y -= 14;
       draw(
-        page,
+        host,
         `In ${book.storytellerName}’s own words`,
         margin + 12,
         y,
         8,
         taupe,
       );
-      y -= 8;
+      y -= 6;
     }
-    y -= 4;
+    y -= 2;
     block(chapter.content);
     if (chapter.encouragement || chapter.scripture) {
-      y -= 10;
-      block("A word for you", 12, 16);
+      y -= 8;
+      block("A word for you", 11, 15);
       y -= 2;
       if (chapter.encouragement) block(chapter.encouragement);
       if (chapter.scripture) {
-        y -= 6;
+        y -= 4;
         block(chapter.scripture, 10.5, 14, taupe);
       }
     }
@@ -617,19 +718,30 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
           color: { dark: BRAND_COLORS.espresso, light: "#fbfaf8" },
         }),
       );
-      if (y - 72 < 36) nextPage();
-      y -= 16;
-      const qrSize = qr.scale(0.28);
-      page.drawImage(qr, { x: margin, y: y - qrSize.height, ...qrSize });
+      host = need(64, true);
+      y -= 12;
+      const qrSize = qr.scale(0.26);
+      host.drawImage(qr, { x: margin, y: y - qrSize.height, ...qrSize });
       draw(
-        page,
+        host,
         "Open this chapter",
         margin + qrSize.width + 10,
-        y - 18,
+        y - 16,
         9,
         taupe,
       );
       y -= qrSize.height;
+    }
+    y -= 16;
+    if (y > 52) {
+      host = page!;
+      host.drawLine({
+        start: { x: margin, y },
+        end: { x: width - margin, y },
+        thickness: 0.4,
+        color: sage,
+      });
+      y -= 12;
     }
   }
   for (const entry of contents) {

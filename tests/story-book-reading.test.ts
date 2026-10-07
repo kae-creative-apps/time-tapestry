@@ -7,7 +7,7 @@ test("book reading removes spoken noise and keeps the storyteller's words", () =
     cleanStoryBookText(
       "Um... So it just w- felt encouraging.\n\nHmm.\n\nYeah. I'm, I'm grateful. The lesson was, like, stay curious, you know, and keep going.",
     ),
-    "So it just felt encouraging.\n\nI'm grateful. The lesson was, stay curious, and keep going.",
+    "It just felt encouraging. I'm grateful. The lesson was, stay curious, and keep going.",
   );
   assert.equal(
     cleanStoryBookText("It was like 100 bucks. I like to help."),
@@ -30,6 +30,15 @@ test("a shaped chapter keeps short answers and only loses leftover fillers", () 
   assert.equal(
     cleanStoryBookText(shaped, true),
     "Yes.\n\nI like the garden. It grew.",
+  );
+});
+
+test("false starts and asides become one flowing story", () => {
+  assert.equal(
+    cleanStoryBookText(
+      "Snappy. What? Snappy. What the... oh, when somebody paid for our meal on our honeymoon and it was like 100 bucks.\n\nSuper kind.\n\nwe were shocked and we didn't expect it because we didn't know him.",
+    ),
+    "When somebody paid for our meal on our honeymoon and it was like 100 bucks. We were shocked and we didn't expect it because we didn't know him.",
   );
 });
 

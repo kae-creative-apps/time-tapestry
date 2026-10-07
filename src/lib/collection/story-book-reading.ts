@@ -1,7 +1,9 @@
 import { cleanTranscriptForReading, quotedRanges } from "./transcript-reading";
 
-const BACKCHANNEL =
-  /^(?:hmm+|yeah+|yep|yup|yes|sorry|okay|ok|right|uh-huh|mm+|mhm)\.?$/iu;
+const LEADING =
+  /^(?:yeah|yes|yep|yup|no|hmm+|oh|ah|uh+|um+|so|and|but|well|okay|ok|sorry|like|probably|just)[,.]?\s+/iu;
+const ASIDE =
+  /^(?:yeah|yes|yep|yup|no|hmm+|oh|ah|okay|ok|sorry|snappy|what|hey|huh|right|uh-huh|mm+|mhm|super kind)[.!?]?$/iu;
 
 /** A reading copy for the book. It deletes spoken noise and adds no words. */
 export function cleanStoryBookText(source: string, shaped = false): string {
@@ -11,7 +13,7 @@ export function cleanStoryBookText(source: string, shaped = false): string {
   text = replaceOutsideQuotes(text, (part) =>
     part
       .replace(
-        /(?<![\p{L}\p{N}_’'\-])(?:[Uu]m+|[Uu]h+|[Ee]rm|[Ee]r+)(?:\.{2,}|…)(?![\p{L}\p{N}_’'\-])/gu,
+        /(?<![\p{L}\p{N}_’'\-])(?:[Uu]m+|[Uu]h+|[Ee]rm|[Ee]r+)(?:\.{2,}|…)?(?![\p{L}\p{N}_’'\-])/gu,
         "",
       )
       .replace(/,?\s+you know,/giu, ",")
@@ -25,22 +27,16 @@ export function cleanStoryBookText(source: string, shaped = false): string {
     text = replaceOutsideQuotes(text, (part) =>
       part.replace(/(^|[\s])[\p{L}]{1,2}-\s+/gu, "$1"),
     );
-    text = text
+    const sentences = text
       .split(/\n+/u)
-      .flatMap((paragraph) => {
-        const sentences = paragraph
-          .split(/(?<=[.!?])\s+/u)
-          .map((sentence) => sentence.trim())
-          .filter(
-            (sentence) =>
-              sentence &&
-              !BACKCHANNEL.test(sentence) &&
-              !/^(?:and|but|so)?\s*(?:\.{2,}|…)$/iu.test(sentence),
-          );
-        const next = sentences.join(" ").trim();
-        return next ? [next] : [];
-      })
-      .join("\n\n");
+      .flatMap((paragraph) =>
+        paragraph
+          .replace(/(?:\.{2,}|…)/gu, ".")
+          .split(/(?<=[.!?])\s+/u),
+      )
+      .map((sentence) => polishSentence(sentence))
+      .filter(Boolean);
+    text = flowingParagraphs(sentences);
   }
   text = text
     .replace(/[ \t]{2,}/g, " ")
@@ -63,6 +59,52 @@ export function cleanStoryBookText(source: string, shaped = false): string {
     .trim();
   if (!/[\p{L}\p{N}]/u.test(text)) return original;
   return text;
+}
+
+function polishSentence(raw: string) {
+  let text = raw.replace(/\s+/g, " ").trim().replace(/^[,.\s]+|[,:\s]+$/gu, "");
+  for (let pass = 0; pass < 5 && LEADING.test(text); pass++) {
+    const next = text.replace(LEADING, "").trim();
+    if (wordCount(next) < 3 || next.length < 12) break;
+    text = next;
+  }
+  text = text
+    .replace(/\s+(?:yeah|yes|yep|hmm+)\.?$/iu, "")
+    .replace(/[,:]?\s+\b(?:and|but|or|so)\b$/iu, "")
+    .trim();
+  if (!text || ASIDE.test(text) || /^(?:what|snappy|hey|huh)\b/iu.test(text))
+    return "";
+  if (!/[\p{L}\p{N}]/u.test(text))
+    return /[^\s.!?…,;:'"“”‘’\-]/u.test(text) ? text : "";
+  if (/\b(?:big question|good question)\b/iu.test(text) && wordCount(text) <= 6)
+    return "";
+  const words = wordCount(text);
+  const letters = [...text].filter((character) => /\p{L}/u.test(character))
+    .length;
+  const ended = /[.!?]$/u.test(text);
+  const personal = /\b(?:i|i['’]m|we|she|he|it|my|that|you)\b/iu.test(text);
+  if (words < 3 && letters < 18 && !personal) return "";
+  if (!ended && text.length < 24) return "";
+  if (!ended && words >= 4) text = `${text}.`;
+  return text.charAt(0).toLocaleUpperCase() + text.slice(1);
+}
+
+function wordCount(text: string) {
+  return text.split(/\s+/u).filter(Boolean).length;
+}
+
+function flowingParagraphs(sentences: string[]) {
+  const paragraphs: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (current && next.length > 420) {
+      paragraphs.push(current);
+      current = sentence;
+    } else current = next;
+  }
+  if (current) paragraphs.push(current);
+  return paragraphs.join("\n\n");
 }
 
 function replaceOutsideQuotes(

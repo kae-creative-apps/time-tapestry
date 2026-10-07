@@ -106,7 +106,7 @@ test("the printable book contains the cover and all four complete approved chapt
   const bytes = await renderStoryBook(snapshot);
   assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), "%PDF-");
   const { document, text } = await readPdf(bytes);
-  assert.equal(document.getPageCount(), 6);
+  assert.equal(document.getPageCount(), 4);
   assert.match(text, /From Élodie O’Connor/);
   assert.match(text, /For André Example/);
   for (const chapter of c.chapters) {
@@ -139,7 +139,7 @@ test("long stories paginate completely, including the last paragraph", async () 
   const { document, text } = await readPdf(
     await renderStoryBook(storyBookSnapshot(c, c.recipient.name)),
   );
-  assert.ok(document.getPageCount() > 8);
+  assert.ok(document.getPageCount() > 4);
   assert.equal(text.split(paragraph).length - 1, 75);
   assert.match(text, /The last memory stays here too\./);
   for (const chapter of c.chapters.slice(1))
@@ -362,7 +362,7 @@ test("mixed Chinese, Japanese, Korean and Latin names and story text remain comp
     c.chapters[0].content,
   ])
     assert.ok(compact.includes(value.replace(/\s/g, "")), value);
-  assert.equal(document.getPageCount(), 6);
+  assert.equal(document.getPageCount(), 4);
 });
 
 test("new editions append only published stories, retain real quotes, and keep the original book available", async () => {
@@ -443,5 +443,5 @@ test("new editions append only published stories, retain real quotes, and keep t
   assert.ok(text.includes(c.livingStory.moments[0].sourceQuote!));
   assert.ok(text.includes(c.livingStory.moments[0].content!));
   assert.equal(text.includes("PRIVATE DRAFT"), false);
-  assert.equal(document.getPageCount(), 8);
+  assert.equal(document.getPageCount(), 5);
 });
