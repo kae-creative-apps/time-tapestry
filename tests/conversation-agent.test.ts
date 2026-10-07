@@ -498,7 +498,7 @@ test("mocked provider session returns only a short-lived token and actual durati
     );
     assert.equal(
       result.overrides.agent.firstMessage,
-      "Take your time. Tell me about a moment when someone's kindness made a difference in your life.",
+      "What made you become so generous?",
     );
     assert.equal(result.overrides.agent.prompt.prompt, INTERVIEW_AGENT_PROMPT);
     assert.equal(
@@ -647,7 +647,10 @@ test("a scoped re-record starts with its own question and preserves the four-par
     provider,
   );
   assert.equal(session.currentThemeId, "q3");
-  assert.match(session.overrides.agent.firstMessage, /helping others/);
+  assert.match(
+    session.overrides.agent.firstMessage,
+    /Why did you fall in love with these ministries you give to\?/,
+  );
   assert.match(session.overrides.agent.prompt.prompt, /ONLY for q3/);
   scoped.turns.push({
     id: "retake-first-answer",

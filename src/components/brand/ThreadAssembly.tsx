@@ -8,22 +8,22 @@ import styles from "./brand-motion.module.css";
 
 const threads = [
   {
-    label: "Kindness received",
+    label: "Roots of generosity",
     color: "#e5d4be",
     path: "M0 25 C105 25 92 151 210 151 S330 108 440 108",
   },
   {
-    label: "Faith lived",
+    label: "Why I give",
     color: "#bcc1a6",
     path: "M0 87 C106 87 147 40 225 96 S336 126 440 126",
   },
   {
-    label: "Generosity sowed",
+    label: "Lives I’ve seen flourish",
     color: "#d6af9c",
     path: "M0 149 C89 149 118 225 224 175 S336 144 440 144",
   },
   {
-    label: "Wisdom carried forward",
+    label: "What I hope you carry",
     color: "#fbfaf8",
     path: "M0 211 C83 211 155 116 247 139 S345 162 440 162",
   },

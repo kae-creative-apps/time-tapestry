@@ -65,12 +65,12 @@ export function OrganizationShell({ children }: { children: ReactNode }) {
           href="/"
           className="inline-flex min-h-11 items-center gap-2 text-sm font-medium sm:text-base"
         >
-          For families <AppIcon name="arrowUpRight" size={18} />
+          Home <AppIcon name="arrowUpRight" size={18} />
         </Link>
       </header>
       {children}
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-10 text-sm text-ink-500 sm:px-8">
-        <p>Time Tapestry · Free group gifting pilot</p>
+        <p>Time Tapestry · Donor legacy pilot</p>
         <Link
           href="/privacy"
           className="inline-flex min-h-11 items-center underline underline-offset-4"
