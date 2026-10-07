@@ -346,6 +346,59 @@ test("daily versions are bounded but existing job reads do not consume a version
     /film versions per day/,
   );
 });
+test("failed and stale attempts do not burn the daily film allowance", async () => {
+  assert.equal(jobs.storyFilmDailyLimit(undefined, undefined), 10);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, ""), 10);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, "3"), 3);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, "25"), 25);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, "40"), 25);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, "0"), 1);
+  assert.equal(jobs.storyFilmDailyLimit(undefined, "nope"), 10);
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  const failed = await jobs.enqueueAutomaticOriginalFilms(c, {
+    ...original,
+    dailyLimit: 1,
+  });
+  await store.mutateRecord<StoryFilmJob>(failed.id, (job) => ({
+    ...job!,
+    status: "failed",
+  }));
+  c.chapters[0].content += " A correction.";
+  await store.putCollection(c);
+  const afterFailure = await jobs.enqueueAutomaticOriginalFilms(c, {
+    ...original,
+    dailyLimit: 1,
+  });
+  assert.notEqual(afterFailure.id, failed.id);
+  await store.mutateRecord<StoryFilmJob>(afterFailure.id, (job) => ({
+    ...job!,
+    status: "stale",
+  }));
+  c.chapters[0].content += " Another correction.";
+  await store.putCollection(c);
+  const afterStale = await jobs.enqueueAutomaticOriginalFilms(c, {
+    ...original,
+    dailyLimit: 1,
+  });
+  assert.notEqual(afterStale.id, afterFailure.id);
+  c.chapters[0].content += " One more correction.";
+  await store.putCollection(c);
+  await assert.rejects(
+    jobs.enqueueAutomaticOriginalFilms(c, { ...original, dailyLimit: 1 }),
+    /film versions per day/,
+  );
+  const yesterday = new Date(Date.now() - 86400000 - 60000);
+  await store.mutateRecord<StoryFilmJob>(afterStale.id, (job) => ({
+    ...job!,
+    createdAt: yesterday.toISOString(),
+  }));
+  const afterWindow = await jobs.enqueueAutomaticOriginalFilms(c, {
+    ...original,
+    dailyLimit: 1,
+  });
+  assert.notEqual(afterWindow.id, afterStale.id);
+});
 test("only one worker claims a job, expired original leases resume with bounded retry", async () => {
   const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);

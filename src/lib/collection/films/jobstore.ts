@@ -35,6 +35,30 @@ const indexKey = (id: string) => `film-index-${id}`;
 type Index = { ids: string[] };
 const nowIso = () => new Date().toISOString();
 export const FILM_LEASE_MS = 120000;
+const STORY_FILM_DAILY_WINDOW_MS = 86400000;
+export const STORY_FILM_DAILY_LIMIT_DEFAULT = 10;
+export const STORY_FILM_DAILY_LIMIT_MAX = 25;
+
+/** Versions still in progress or ready. Failed and stale attempts do not burn a slot. */
+export function storyFilmDailyLimit(
+  override?: number,
+  configured = process.env.STORY_FILM_DAILY_LIMIT,
+) {
+  if (override !== undefined) return override;
+  const parsed = Number(configured || STORY_FILM_DAILY_LIMIT_DEFAULT);
+  return Number.isInteger(parsed)
+    ? Math.max(1, Math.min(STORY_FILM_DAILY_LIMIT_MAX, parsed))
+    : STORY_FILM_DAILY_LIMIT_DEFAULT;
+}
+
+function countsTowardDailyFilmLimit(job: StoryFilmJob | null, now: Date) {
+  return (
+    !!job &&
+    job.status !== "failed" &&
+    job.status !== "stale" &&
+    Date.parse(job.createdAt) >= now.getTime() - STORY_FILM_DAILY_WINDOW_MS
+  );
+}
 
 export const getFilmJob = (id: string) => {
   if (!/^film_[a-f0-9]{64}$/.test(id)) throw new Error("Invalid film job.");
@@ -215,12 +239,7 @@ async function enqueuePreparedJob(
   options: EnqueueOptions = {},
 ) {
   const now = options.now ?? new Date();
-  const configuredLimit = Number(process.env.STORY_FILM_DAILY_LIMIT || 3);
-  const dailyLimit =
-    options.dailyLimit ??
-    (Number.isInteger(configuredLimit)
-      ? Math.max(1, Math.min(10, configuredLimit))
-      : 3);
+  const dailyLimit = storyFilmDailyLimit(options.dailyLimit);
   let result: StoryFilmJob | null = null;
   await mutateRecord<Index>(indexKey(job.collectionId), async (index) => {
     const ids = index?.ids ?? [];
@@ -247,10 +266,8 @@ async function enqueuePreparedJob(
     }
     const jobs = await Promise.all(ids.map(getFilmJob));
     if (
-      jobs.filter(
-        (item) =>
-          item && Date.parse(item.createdAt) >= now.getTime() - 86400000,
-      ).length >= dailyLimit
+      jobs.filter((item) => countsTowardDailyFilmLimit(item, now)).length >=
+      dailyLimit
     )
       throw new Error(
         `This collection has reached its ${dailyLimit} film versions per day. Existing films and originals are preserved.`,
