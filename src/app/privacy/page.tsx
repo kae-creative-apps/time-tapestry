@@ -88,9 +88,14 @@ export default function Privacy() {
           off postcard follow-up invitations on their story page.
         </p>
       </div>
-      <Link className="mt-10 inline-block text-oxblood underline" href="/">
-        Return home
-      </Link>
+      <p className="mt-10 flex flex-wrap gap-x-6 gap-y-3">
+        <Link className="text-oxblood underline" href="/terms">
+          Pilot terms
+        </Link>
+        <Link className="text-oxblood underline" href="/">
+          Return home
+        </Link>
+      </p>
     </main>
   );
 }
