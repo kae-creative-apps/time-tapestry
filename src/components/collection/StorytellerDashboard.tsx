@@ -418,11 +418,13 @@ function GiftPreview({
               return (
                 <article key={chapter.id} className={styles.tile}>
                   {artwork ? (
-                    <PostcardFace
-                      html={artwork.front}
-                      title={`${STORY_THEMES[chapter.id] || chapter.title} postcard`}
-                      trim
-                    />
+                    <div className={styles.face}>
+                      <PostcardFace
+                        html={artwork.front}
+                        title={`${STORY_THEMES[chapter.id] || chapter.title} postcard`}
+                        trim
+                      />
+                    </div>
                   ) : (
                     <div className={styles.filmStage}>
                       <SiriOrb

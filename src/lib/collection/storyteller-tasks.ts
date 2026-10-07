@@ -116,7 +116,9 @@ export function storytellerTasks(input: {
           ? "Preparation needs another look. Your recording is kept."
           : preparing
             ? "Your stories, videos, and postcard drafts are being prepared."
-            : "Submit your interview so your gift can be prepared.",
+            : input.chapters.length
+              ? "Your written stories are saved. The videos finish before you approve."
+              : "Submit your interview so your gift can be prepared.",
       state: stateFor("prepared", prepared),
     },
     {
