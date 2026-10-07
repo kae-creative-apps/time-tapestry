@@ -34,10 +34,11 @@ export default function LivingStoriesPage({
   id: string;
   accessKey: string;
 }) {
-  const { collection: c, error: collectionError, load: reloadCollection } = useCollection(
-    id,
-    accessKey,
-  );
+  const {
+    collection: c,
+    error: collectionError,
+    load: reloadCollection,
+  } = useCollection(id, accessKey);
   const [living, setLiving] = useState<LivingStory>(empty);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -220,6 +221,12 @@ export default function LivingStoriesPage({
   const pendingStories = living.moments.filter((m) =>
     ["draft", "processing", "needs_attention"].includes(m.status),
   );
+  useEffect(() => {
+    if (c?.status !== "approved" || recordId) return;
+    const hash = window.location.hash;
+    if (hash !== "#new-moments" && hash !== "#story-library") return;
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [c?.status, recordId, loaded, pendingStories.length]);
   const prompts = FLOURISHING_PROMPTS.filter(
     (p) =>
       (promptCategory === "all" || p.category === promptCategory) &&
@@ -309,7 +316,10 @@ export default function LivingStoriesPage({
         {!collectionError && <p role="status">Opening your story library…</p>}
         <PortalError message={collectionError} />
         {collectionError && (
-          <button className={`${portalPrimary} mt-4`} onClick={() => void reloadCollection()}>
+          <button
+            className={`${portalPrimary} mt-4`}
+            onClick={() => void reloadCollection()}
+          >
             Try again
           </button>
         )}
@@ -680,236 +690,245 @@ export default function LivingStoriesPage({
           </button>
         </section>
       )}
-      {!recordId && pendingStories.length > 0 && (
-        <section className="mb-8">
-          <h2 className="mb-4 font-display text-2xl">
-            {owner ? "Your next stories" : "Questions sent"}
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {pendingStories.map((m) => (
-              <article
-                key={m.id}
-                className="rounded-2xl border border-warmgray-200 bg-white p-5"
-              >
-                <p className="text-sm text-ink-500">
-                  {categoryName(m.category)}
-                </p>
-                <h3 className="my-3 text-xl leading-8">{m.question}</h3>
-                <p className="text-base leading-7">
-                  {m.status === "processing"
-                    ? "Preparing the film and book chapter…"
-                    : m.status === "needs_attention"
-                      ? "This story needs attention. The original recording is saved."
-                      : owner
-                        ? "Ready whenever you are."
-                        : "Waiting for a story."}
-                </p>
-                {owner && m.processingError && (
-                  <p
-                    role="alert"
-                    className="mt-3 rounded-xl bg-clay-50 p-4 text-base leading-7"
-                  >
-                    {m.processingError}
-                  </p>
-                )}
-                {owner && m.status !== "processing" && (
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      disabled={busy}
-                      className={portalPrimary}
-                      id={`record-moment-${m.id}`}
-                      onClick={() => {
-                        returnFocus.current = `record-moment-${m.id}`;
-                        setPendingRecording(true);
-                        setRecordId(m.id);
-                        setKind(m.kind || "video");
-                        setConsent(false);
-                        setNotice("");
-                        setChoosing(false);
-                        setUnattached(undefined);
-                        player.current?.pause();
-                        setWatchAll(false);
-                      }}
-                    >
-                      {" "}
-                      {m.sourceMediaId
-                        ? "Open saved recording"
-                        : "Record this story"}
-                    </button>
-                    <button
-                      className={portalSecondary}
-                      disabled={busy}
-                      onClick={() =>
-                        void act({ action: "decline", momentId: m.id })
-                      }
-                    >
-                      Pass on this question
-                    </button>
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
       {!recordId && (
-        <section aria-label="Story library">
-          <h2 className="font-display text-3xl">Your story library</h2>
-          <div className="my-5 grid gap-4 sm:grid-cols-2">
-            <label className="font-medium">
-              Search your stories
-              <input
-                className={`${portalField} mt-2`}
-                type="search"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setWatchAll(false);
-                }}
-                placeholder="A person, place, or memory"
-              />
-            </label>
-            <label className="font-medium">
-              Show stories
-              <select
-                className={`${portalField} mt-2`}
-                value={category}
-                onChange={(e) => {
-                  setCategory(e.target.value);
-                  setWatchAll(false);
-                }}
-              >
-                <option value="all">Every part of life</option>
-                <option value="original">The original gift</option>
-                {FLOURISHING_CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {playlist.length > 1 && (
-            <button
-              className={`${portalSecondary} mb-5`}
-              onClick={() => {
-                setWatchAll(true);
-                setActiveId(playlist[0].id);
-              }}
-            >
-              Watch all {playlist.length} films
-            </button>
-          )}
-          {active && (
-            <article className="mb-7 overflow-hidden rounded-[28px] border border-warmgray-200 bg-white">
-              <div className="p-5 sm:p-7">
-                <p className="text-sm font-medium">
-                  {categoryName(active.category)}
-                  {watchAll
-                    ? ` · Film ${playlist.findIndex((p) => p.id === active.id) + 1} of ${playlist.length}`
-                    : ""}
-                </p>
-                <h3 className="mt-2 font-display text-2xl">{active.title}</h3>
-              </div>
-              {active.videoMediaId && (
-                <video
-                  ref={player}
-                  key={active.id}
-                  controls
-                  playsInline
-                  autoPlay={watchAll}
-                  preload="metadata"
-                  className="aspect-video w-full bg-espresso"
-                  src={mediaUrl(active.videoMediaId)}
-                  onEnded={() => {
-                    if (!watchAll) return;
-                    const index = playlist.findIndex((p) => p.id === active.id);
-                    const next = index >= 0 ? playlist[index + 1] : undefined;
-                    if (next) setActiveId(next.id);
-                    else {
-                      setWatchAll(false);
-                      setNotice("You’ve reached the end of these stories.");
-                    }
-                  }}
-                />
-              )}
-              <div className="p-5 sm:p-7">
-                {active.videoMediaId && (
-                  <a
-                    className={portalSecondary}
-                    href={mediaUrl(active.videoMediaId, true)}
-                    download
+        <>
+          {pendingStories.length > 0 && (
+            <section id="new-moments" className="mb-8 scroll-mt-5">
+              <h2 className="mb-4 font-display text-2xl">
+                {owner ? "Your next stories" : "Questions sent"}
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {pendingStories.map((m) => (
+                  <article
+                    key={m.id}
+                    className="rounded-2xl border border-warmgray-200 bg-white p-5"
                   >
-                    Download this film
-                  </a>
-                )}
-                <details className="mt-5">
-                  <summary className="min-h-12 cursor-pointer text-lg font-medium">
-                    Read this chapter
-                  </summary>
-                  <div className="mt-3 whitespace-pre-line text-lg leading-8">
-                    {active.content}
-                  </div>
-                </details>
+                    <p className="text-sm text-ink-500">
+                      {categoryName(m.category)}
+                    </p>
+                    <h3 className="my-3 text-xl leading-8">{m.question}</h3>
+                    <p className="text-base leading-7">
+                      {m.status === "processing"
+                        ? "Preparing the film and book chapter…"
+                        : m.status === "needs_attention"
+                          ? "This story needs attention. The original recording is saved."
+                          : owner
+                            ? "Ready whenever you are."
+                            : "Waiting for a story."}
+                    </p>
+                    {owner && m.processingError && (
+                      <p
+                        role="alert"
+                        className="mt-3 rounded-xl bg-clay-50 p-4 text-base leading-7"
+                      >
+                        {m.processingError}
+                      </p>
+                    )}
+                    {owner && m.status !== "processing" && (
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          disabled={busy}
+                          className={portalPrimary}
+                          id={`record-moment-${m.id}`}
+                          onClick={() => {
+                            returnFocus.current = `record-moment-${m.id}`;
+                            setPendingRecording(true);
+                            setRecordId(m.id);
+                            setKind(m.kind || "video");
+                            setConsent(false);
+                            setNotice("");
+                            setChoosing(false);
+                            setUnattached(undefined);
+                            player.current?.pause();
+                            setWatchAll(false);
+                          }}
+                        >
+                          {" "}
+                          {m.sourceMediaId
+                            ? "Open saved recording"
+                            : "Record this story"}
+                        </button>
+                        <button
+                          className={portalSecondary}
+                          disabled={busy}
+                          onClick={() =>
+                            void act({ action: "decline", momentId: m.id })
+                          }
+                        >
+                          Pass on this question
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
               </div>
-            </article>
+            </section>
           )}
-          <p role="status" className="mb-4 text-base text-ink-500">
-            {filtered.length} {filtered.length === 1 ? "story" : "stories"}
-            {query ? " found" : " saved"}
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((entry) => (
-              <button
-                key={entry.id}
-                aria-pressed={activeId === entry.id}
-                onClick={() => {
-                  setWatchAll(false);
-                  setActiveId(entry.id);
-                }}
-                className={`min-h-44 rounded-2xl border p-6 text-left ${activeId === entry.id ? "border-espresso bg-paper-100" : "border-warmgray-200 bg-white hover:border-espresso"}`}
-              >
-                <span className="text-sm text-ink-500">
-                  {categoryName(entry.category)}
-                </span>
-                <span className="my-3 block font-display text-2xl leading-8">
-                  {entry.title}
-                </span>
-                <span className="text-base font-medium">
-                  {entry.videoMediaId ? "Watch and read" : "Read this story"} →
-                </span>
-              </button>
-            ))}
-          </div>
-          {!filtered.length && (
-            <p className="rounded-2xl border border-warmgray-200 p-6 text-lg">
-              No stories match yet. Try another word or choose Every part of
-              life.
-            </p>
-          )}
-          <details className="mt-6">
-            <summary className="min-h-12 cursor-pointer text-base font-medium">
-              Earlier book editions
-            </summary>
-            <a
-              className="flex min-h-12 items-center underline"
-              href={`/api/collection/${encodeURIComponent(id)}/book?${new URLSearchParams({ edition: "original", ...(accessKey ? { key: accessKey } : {}) })}`}
-            >
-              Download the original four-chapter book
-            </a>
-            {living.moments
-              .filter((m) => m.status === "published" && m.publishedAt)
-              .map((m) => (
-                <a
-                  key={m.id}
-                  className="flex min-h-12 items-center underline"
-                  href={`/api/collection/${encodeURIComponent(id)}/book?${new URLSearchParams({ through: m.publishedAt!, ...(accessKey ? { key: accessKey } : {}) })}`}
+          <section
+            id="story-library"
+            aria-label="Story library"
+            className="scroll-mt-5"
+          >
+            <h2 className="font-display text-3xl">Your story library</h2>
+            <div className="my-5 grid gap-4 sm:grid-cols-2">
+              <label className="font-medium">
+                Search your stories
+                <input
+                  className={`${portalField} mt-2`}
+                  type="search"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setWatchAll(false);
+                  }}
+                  placeholder="A person, place, or memory"
+                />
+              </label>
+              <label className="font-medium">
+                Show stories
+                <select
+                  className={`${portalField} mt-2`}
+                  value={category}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    setWatchAll(false);
+                  }}
                 >
-                  Book through “{m.title}”
-                </a>
+                  <option value="all">Every part of life</option>
+                  <option value="original">The original gift</option>
+                  {FLOURISHING_CATEGORIES.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {playlist.length > 1 && (
+              <button
+                className={`${portalSecondary} mb-5`}
+                onClick={() => {
+                  setWatchAll(true);
+                  setActiveId(playlist[0].id);
+                }}
+              >
+                Watch all {playlist.length} films
+              </button>
+            )}
+            {active && (
+              <article className="mb-7 overflow-hidden rounded-[28px] border border-warmgray-200 bg-white">
+                <div className="p-5 sm:p-7">
+                  <p className="text-sm font-medium">
+                    {categoryName(active.category)}
+                    {watchAll
+                      ? ` · Film ${playlist.findIndex((p) => p.id === active.id) + 1} of ${playlist.length}`
+                      : ""}
+                  </p>
+                  <h3 className="mt-2 font-display text-2xl">{active.title}</h3>
+                </div>
+                {active.videoMediaId && (
+                  <video
+                    ref={player}
+                    key={active.id}
+                    controls
+                    playsInline
+                    autoPlay={watchAll}
+                    preload="metadata"
+                    className="aspect-video w-full bg-espresso"
+                    src={mediaUrl(active.videoMediaId)}
+                    onEnded={() => {
+                      if (!watchAll) return;
+                      const index = playlist.findIndex(
+                        (p) => p.id === active.id,
+                      );
+                      const next = index >= 0 ? playlist[index + 1] : undefined;
+                      if (next) setActiveId(next.id);
+                      else {
+                        setWatchAll(false);
+                        setNotice("You’ve reached the end of these stories.");
+                      }
+                    }}
+                  />
+                )}
+                <div className="p-5 sm:p-7">
+                  {active.videoMediaId && (
+                    <a
+                      className={portalSecondary}
+                      href={mediaUrl(active.videoMediaId, true)}
+                      download
+                    >
+                      Download this film
+                    </a>
+                  )}
+                  <details className="mt-5">
+                    <summary className="min-h-12 cursor-pointer text-lg font-medium">
+                      Read this chapter
+                    </summary>
+                    <div className="mt-3 whitespace-pre-line text-lg leading-8">
+                      {active.content}
+                    </div>
+                  </details>
+                </div>
+              </article>
+            )}
+            <p role="status" className="mb-4 text-base text-ink-500">
+              {filtered.length} {filtered.length === 1 ? "story" : "stories"}
+              {query ? " found" : " saved"}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((entry) => (
+                <button
+                  key={entry.id}
+                  aria-pressed={activeId === entry.id}
+                  onClick={() => {
+                    setWatchAll(false);
+                    setActiveId(entry.id);
+                  }}
+                  className={`min-h-44 rounded-2xl border p-6 text-left ${activeId === entry.id ? "border-espresso bg-paper-100" : "border-warmgray-200 bg-white hover:border-espresso"}`}
+                >
+                  <span className="text-sm text-ink-500">
+                    {categoryName(entry.category)}
+                  </span>
+                  <span className="my-3 block font-display text-2xl leading-8">
+                    {entry.title}
+                  </span>
+                  <span className="text-base font-medium">
+                    {entry.videoMediaId ? "Watch and read" : "Read this story"}{" "}
+                    →
+                  </span>
+                </button>
               ))}
-          </details>
-        </section>
+            </div>
+            {!filtered.length && (
+              <p className="rounded-2xl border border-warmgray-200 p-6 text-lg">
+                No stories match yet. Try another word or choose Every part of
+                life.
+              </p>
+            )}
+            <details className="mt-6">
+              <summary className="min-h-12 cursor-pointer text-base font-medium">
+                Earlier book editions
+              </summary>
+              <a
+                className="flex min-h-12 items-center underline"
+                href={`/api/collection/${encodeURIComponent(id)}/book?${new URLSearchParams({ edition: "original", ...(accessKey ? { key: accessKey } : {}) })}`}
+              >
+                Download the original four-chapter book
+              </a>
+              {living.moments
+                .filter((m) => m.status === "published" && m.publishedAt)
+                .map((m) => (
+                  <a
+                    key={m.id}
+                    className="flex min-h-12 items-center underline"
+                    href={`/api/collection/${encodeURIComponent(id)}/book?${new URLSearchParams({ through: m.publishedAt!, ...(accessKey ? { key: accessKey } : {}) })}`}
+                  >
+                    Book through “{m.title}”
+                  </a>
+                ))}
+            </details>
+          </section>
+        </>
       )}
     </PortalShell>
   );
