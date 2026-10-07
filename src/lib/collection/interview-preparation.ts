@@ -25,11 +25,13 @@ import {
   automaticFilmTemplateCurrent,
   filmJobInputsCurrent,
   getFilmJob,
+  latestFilmJob,
   retryStoryFilms,
   attachReadyFilms,
 } from "./films/jobstore";
 import { queuePreparationAttention } from "./recovery-notifications";
 import type { ChapterPackage, Collection, StoredMedia } from "./types";
+import type { StoryFilmJob } from "./films/types";
 import type {
   InterviewPreparationJob,
   InterviewPreparationView,
@@ -805,46 +807,11 @@ export async function runInterviewPreparationOnce(
   }
 }
 
-export async function getInterviewPreparationView(c: Collection) {
-  if (!c.interviewPreparation) return null;
-  const job = await getInterviewPreparationJob(c.interviewPreparation.id);
-  if (!job || job.collectionId !== c.id) return null;
-  const view = interviewPreparationJobView(job);
-  if (!job.filmJobId) return view;
-  const films = await getFilmJob(job.filmJobId);
-  if (!films || !(await filmJobInputsCurrent(films, c))) {
-    const updatedEdit = Boolean(
-      films &&
-      films.mode === "original" &&
-      films.preparation === "automatic" &&
-      films.status !== "ready" &&
-      !automaticFilmTemplateCurrent(films),
-    );
-    return {
-      ...view,
-      status: "needs_attention" as const,
-      canRetry: true,
-      error: updatedEdit
-        ? "Film preparation can use an updated edit of your saved interview. Your written stories and original recordings are kept."
-        : "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
-    };
-  }
-  if (films.status === "failed" || films.status === "stale")
-    return {
-      ...view,
-      status: "needs_attention" as const,
-      canRetry: films.status === "failed" && films.attempts < MAX_ATTEMPTS,
-      error:
-        films.attempts >= MAX_ATTEMPTS
-          ? "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your stories and recordings are saved."
-          : "Film preparation needs attention. Your written stories and original recordings are saved.",
-    };
-  if (films.outputMode === "interactive") {
-    view.ready = await playbackReady(c, films);
-    return view;
-  }
-  view.ready =
-    films.status === "ready" &&
+async function attachedOriginalFilmReady(c: Collection, films: StoryFilmJob) {
+  if (films.status !== "ready" || !(await filmJobInputsCurrent(films, c)))
+    return false;
+  if (films.outputMode === "interactive") return playbackReady(c, films);
+  const attached =
     c.chapters.length === 4 &&
     CHAPTERS.every(({ id }) => {
       const chapter = c.chapters.find((item) => item.id === id);
@@ -859,19 +826,79 @@ export async function getInterviewPreparationView(c: Collection) {
         chapter.film.outputSha256 === completed.artifact.outputSha256
       );
     });
-  if (view.ready)
-    for (const chapter of c.chapters) {
-      const media =
-        chapter.videoMediaId && (await getMedia(chapter.videoMediaId));
-      if (
-        !media ||
-        media.collectionId !== c.id ||
-        media.role !== "owner" ||
-        !media.mimeType.startsWith("video/") ||
-        media.bytes <= 0 ||
-        !(media.localPath || media.url)
-      )
-        view.ready = false;
-    }
+  if (!attached) return false;
+  for (const chapter of c.chapters) {
+    const media =
+      chapter.videoMediaId && (await getMedia(chapter.videoMediaId));
+    if (
+      !media ||
+      media.collectionId !== c.id ||
+      media.role !== "owner" ||
+      !media.mimeType.startsWith("video/") ||
+      media.bytes <= 0 ||
+      !(media.localPath || media.url)
+    )
+      return false;
+  }
+  return true;
+}
+
+function readyFilmView(
+  view: InterviewPreparationView,
+  films: StoryFilmJob,
+): InterviewPreparationView {
+  return {
+    ...view,
+    filmJobId: films.id,
+    status: "films_queued",
+    error: undefined,
+    canRetry: false,
+    missingAreas: undefined,
+    ready: true,
+  };
+}
+
+export async function getInterviewPreparationView(c: Collection) {
+  if (!c.interviewPreparation) return null;
+  const job = await getInterviewPreparationJob(c.interviewPreparation.id);
+  if (!job || job.collectionId !== c.id) return null;
+  const view = interviewPreparationJobView(job);
+  const linked = job.filmJobId ? await getFilmJob(job.filmJobId) : null;
+  if (linked && (await attachedOriginalFilmReady(c, linked)))
+    return readyFilmView(view, linked);
+  const latest = await latestFilmJob(c.id);
+  if (
+    latest &&
+    latest.id !== linked?.id &&
+    (await attachedOriginalFilmReady(c, latest))
+  )
+    return readyFilmView(view, latest);
+  if (!linked) return view;
+  if (!(await filmJobInputsCurrent(linked, c))) {
+    const updatedEdit = Boolean(
+      linked.mode === "original" &&
+      linked.preparation === "automatic" &&
+      linked.status !== "ready" &&
+      !automaticFilmTemplateCurrent(linked),
+    );
+    return {
+      ...view,
+      status: "needs_attention" as const,
+      canRetry: true,
+      error: updatedEdit
+        ? "Film preparation can use an updated edit of your saved interview. Your written stories and original recordings are kept."
+        : "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
+    };
+  }
+  if (linked.status === "failed" || linked.status === "stale")
+    return {
+      ...view,
+      status: "needs_attention" as const,
+      canRetry: linked.status === "failed" && linked.attempts < MAX_ATTEMPTS,
+      error:
+        linked.attempts >= MAX_ATTEMPTS
+          ? "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your stories and recordings are saved."
+          : "Film preparation needs attention. Your written stories and original recordings are saved.",
+    };
   return view;
 }
