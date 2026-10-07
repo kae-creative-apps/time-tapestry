@@ -71,12 +71,20 @@ export function OrganizationShell({ children }: { children: ReactNode }) {
       {children}
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-10 text-sm text-ink-500 sm:px-8">
         <p>Time Tapestry · Free group gifting pilot</p>
-        <Link
-          href="/privacy"
-          className="inline-flex min-h-11 items-center underline underline-offset-4"
-        >
-          Privacy
-        </Link>
+        <span className="inline-flex flex-wrap gap-x-5">
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-11 items-center underline underline-offset-4"
+          >
+            Privacy
+          </Link>
+          <Link
+            href="/terms"
+            className="inline-flex min-h-11 items-center underline underline-offset-4"
+          >
+            Terms
+          </Link>
+        </span>
       </footer>
     </div>
   );

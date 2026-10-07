@@ -12,9 +12,7 @@ export function Footer() {
       <div className="mx-auto flex max-w-[1250px] flex-col justify-between gap-10 sm:flex-row sm:items-end">
         <div>
           <Logo variant="light" />
-          <p className="mt-5 text-base text-paper">
-            What you gave lives on.
-          </p>
+          <p className="mt-5 text-base text-paper">What you gave lives on.</p>
         </div>
         <div>
           <nav
@@ -44,6 +42,12 @@ export function Footer() {
               className="inline-flex items-center hover:underline"
             >
               Privacy
+            </Link>
+            <Link
+              href="/terms"
+              className="inline-flex items-center hover:underline"
+            >
+              Terms
             </Link>
           </nav>
           <p className="mt-5 text-xs text-paper sm:text-right">
