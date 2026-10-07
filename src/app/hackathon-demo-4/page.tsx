@@ -1,14 +1,10 @@
-import type { Metadata } from "next";
-import { HackathonDemoChapter } from "@/components/hackathon/HackathonDemoChapter";
-import { hackathonDemoChapter } from "@/data/hackathon-demo";
+import {
+  HackathonDemoPage,
+  hackathonDemoMetadata,
+} from "@/components/hackathon/HackathonDemoPage";
 
-const chapter = hackathonDemoChapter(4);
-
-export const metadata: Metadata = {
-  title: `${chapter.title} | Time Tapestry demo`,
-  robots: { index: false, follow: false },
-};
+export const metadata = hackathonDemoMetadata(4);
 
 export default function Page() {
-  return <HackathonDemoChapter chapter={chapter} />;
+  return <HackathonDemoPage number={4} />;
 }
