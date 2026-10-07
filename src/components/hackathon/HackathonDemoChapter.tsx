@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { BrandLockup } from "@/components/Logo";
+import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
+import { FadeIn } from "@/components/ui/FadeIn";
+import { Stagger, StaggerItem } from "@/components/ui/Stagger";
 import { SiriOrb } from "@/components/ui/siri-orb";
 import { PostcardPreview } from "@/components/postcard/PostcardPreview";
+import fd from "@/components/marketing/FrontDoor.module.css";
 import {
   HACKATHON_DEMO_PARTNER_NOTE,
   HACKATHON_DEMO_STORYTELLER as GIGI,
@@ -16,37 +20,12 @@ import {
 import type { HackathonDemoFilm } from "@/data/hackathon-demo-films";
 import s from "./HackathonDemo.module.css";
 
+// Same orb palette as the storyteller dashboard.
+const ORB_COLORS = { bg: "#432e23", c1: "#e5c8bb", c2: "#dadecf", c3: "#c18f7b" };
 const SPEAKER = { gigi: "Gigi", interviewer: "Interviewer" } as const;
 
 const runtime = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}`;
-
-/** Fade sections up as they scroll in. Content already on screen, and every
- * section before hydration or with reduced motion, is never hidden. */
-function useReveal() {
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const items = [
-      ...(root.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? []),
-    ].filter((item) => item.getBoundingClientRect().top > window.innerHeight);
-    const observer = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          entry.target.classList.add(s.revealed);
-          observer.unobserve(entry.target);
-        }),
-      { rootMargin: "0px 0px -10% 0px" },
-    );
-    items.forEach((item) => {
-      item.classList.add(s.reveal);
-      observer.observe(item);
-    });
-    return () => observer.disconnect();
-  }, []);
-  return root;
-}
 
 export function HackathonDemoChapter({
   chapter,
@@ -59,127 +38,124 @@ export function HackathonDemoChapter({
 }) {
   const [reply, setReply] = useState("");
   const [saved, setSaved] = useState("");
-  const root = useReveal();
-  const cardNumber = String(chapter.number).padStart(2, "0");
   return (
-    <div ref={root} className={s.page}>
-      <p className={s.partnerBand}>
-        <span className={s.partnerTag}>Demo</span>
-        {HACKATHON_DEMO_PARTNER_NOTE}
-      </p>
+    <div className={`${fd.frontDoor} ${s.shell}`}>
+      <div className={s.column}>
+        <header className={s.top}>
+          <Link href="/hackathon-demo-1" aria-label="Gigi's collection, chapter 1">
+            <BrandLockup />
+          </Link>
+        </header>
 
-      <header className={s.header}>
-        <Link href="/hackathon-demo-1" aria-label="Gigi's collection, chapter 1">
-          <BrandLockup className="[&_svg]:h-11" />
-        </Link>
-        <nav aria-label="Gigi's four chapters" className={s.stepper}>
-          {hackathonDemoChapters.map((item) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={s.step}
-              aria-current={item.number === chapter.number ? "page" : undefined}
-            >
-              <span className={s.stepNumber}>0{item.number}</span>
-              <span className={s.stepLabel}>{item.theme}</span>
-            </Link>
-          ))}
-        </nav>
-      </header>
+        <FadeIn>
+          <p className={s.demoNote}>
+            <span className={s.demoTag}>Demo</span>
+            {HACKATHON_DEMO_PARTNER_NOTE}
+          </p>
+        </FadeIn>
 
-      <main>
-        <section className={s.hero} aria-labelledby="chapter-title">
-          <p className={`${s.eyebrow} ${s.enter}`}>
-            Chapter {chapter.number} of 4 · {chapter.theme}
-          </p>
-          <h1 id="chapter-title" className={s.enter}>
-            {chapter.title}
-          </h1>
-          <p className={`${s.heroQuestion} ${s.enter}`}>
-            “{chapter.question}”
-          </p>
-          <p className={`${s.byline} ${s.enter}`}>
-            From <strong>{GIGI.fullName}</strong>, {GIGI.age}, {GIGI.hometown}
-            <br />
-            {GIGI.description}. Recorded for {GIGI.recipient},{" "}
-            {GIGI.recipientDescription}.
-          </p>
-        </section>
-
-        <section className={s.showcase} aria-label="Gigi's interview">
-          <div className={`${s.filmPanel} ${s.enter}`}>
-            <div className={s.filmHead}>
-              <SiriOrb size="28px" />
-              <p>Gigi’s audio interview</p>
-              {film && <span>{runtime(film.seconds)}</span>}
-            </div>
-            {film ? (
-              <video
-                controls
-                playsInline
-                preload="metadata"
-                poster={film.poster}
-                src={film.src}
-                aria-label={`Gigi’s audio interview for ${chapter.title}, with captions`}
-                className={s.video}
-              />
-            ) : (
-              <div className={`${s.video} grid place-items-center text-ink-500`}>
-                This chapter’s film is still being prepared.
+        <FadeIn delay={0.04}>
+          <section className={s.hero} aria-labelledby="chapter-title">
+            <BrandPattern variant="ribbon" className={s.pattern} />
+            <div className={s.heroCopy}>
+              <div className={s.orbRow}>
+                <SiriOrb size={76} animationDuration={16} colors={ORB_COLORS} />
+                <p className={s.eyebrow}>
+                  Chapter {chapter.number} of 4 · {chapter.theme}
+                </p>
               </div>
-            )}
-            <blockquote className={s.excerpt}>“{chapter.transcript}”</blockquote>
-            <details className={s.conversation}>
-              <summary>Read the full conversation</summary>
-              <dl className={s.turns}>
-                {chapter.conversation.map((line, index) => (
-                  <div
-                    key={index}
-                    className={`${s.turn} ${line.speaker === "interviewer" ? s.turnInterviewer : ""}`}
-                  >
-                    <dt>{SPEAKER[line.speaker]}</dt>
-                    <dd>{spokenText(line.text)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          </div>
-          <div className={s.showcaseExtras}>
-            <figure className={s.floatPostcard}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/brand/postcards/designer-2026-10-06-v2/postcard-${cardNumber}-${chapter.theme}-front.webp`}
-                alt={`The ${chapter.theme} postcard Sammie receives.`}
-                width={1500}
-                height={1000}
-              />
-            </figure>
-            <blockquote className={s.floatQuote}>
-              “{chapter.pullQuote}”
-              <cite>Gigi</cite>
-            </blockquote>
-          </div>
-          <p className={s.disclosure}>
-            Illustrative example. Gigi, Sammie and the ministries are fictional,
-            and both voices are generated with AI.
-          </p>
-        </section>
-
-        <section className={`${s.band} ${s.bandSand}`} aria-labelledby="postcard-title">
-          <div className={`${s.inner} ${s.split}`} data-reveal>
-            <div>
-              <p className={s.eyebrow}>
-                Postcard {chapter.postcard.number} of 4 · Mailed on day{" "}
-                {chapter.postcard.sentOnDay}
-              </p>
-              <h2 id="postcard-title" className={s.sectionTitle}>
-                “{chapter.postcard.message}”
-              </h2>
-              <p className={s.sectionNote}>
-                Printed and mailed to {GIGI.recipient}. The QR code on the back
-                opens this chapter, so Gigi’s voice is one scan away.
+              <h1 id="chapter-title" className={s.title}>
+                {chapter.title}
+              </h1>
+              <p className={s.lede}>“{chapter.question}”</p>
+              <p className={s.byline}>
+                From {GIGI.fullName}, {GIGI.age}, {GIGI.hometown}. {GIGI.description}.
               </p>
             </div>
+
+            <div className={s.film}>
+              {film ? (
+                <video
+                  controls
+                  playsInline
+                  preload="metadata"
+                  poster={film.poster}
+                  src={film.src}
+                  aria-label={`Gigi’s audio interview for ${chapter.title}, with captions`}
+                  className={s.video}
+                />
+              ) : (
+                <div className={`${s.video} grid place-items-center text-espresso`}>
+                  This chapter’s film is still being prepared.
+                </div>
+              )}
+              <div className={s.filmMeta}>
+                <span>Gigi’s audio interview</span>
+                {film && <span>{runtime(film.seconds)}</span>}
+              </div>
+            </div>
+            <blockquote className={s.excerpt}>“{chapter.transcript}”</blockquote>
+
+            <Stagger className={s.tasks} stagger={0.06} delay={0.2}>
+              {hackathonDemoChapters.map((item) => {
+                const state =
+                  item.number < chapter.number
+                    ? s.done
+                    : item.number === chapter.number
+                      ? s.current
+                      : "";
+                return (
+                  <StaggerItem key={item.path}>
+                    <Link
+                      href={item.path}
+                      className={`${s.task} ${state}`}
+                      aria-current={item.number === chapter.number ? "page" : undefined}
+                    >
+                      <span className={s.mark} aria-hidden="true">
+                        {item.number < chapter.number ? (
+                          <AppIcon name="check" size={14} />
+                        ) : (
+                          item.number
+                        )}
+                      </span>
+                      <span>
+                        <span className={s.taskTitle}>{item.title}</span>
+                        <span className={s.taskDetail}>{item.question}</span>
+                      </span>
+                    </Link>
+                  </StaggerItem>
+                );
+              })}
+            </Stagger>
+
+            <div className={s.actions}>
+              {chapter.next ? (
+                <Link href={chapter.next.href} className={s.heroPrimary}>
+                  Next: {chapter.next.label} <AppIcon name="arrowRight" size={18} />
+                </Link>
+              ) : (
+                <Link href="/hackathon-demo-1" className={s.heroPrimary}>
+                  Start again <AppIcon name="arrowRight" size={18} />
+                </Link>
+              )}
+              <a href="#reply" className={s.heroSecondary}>
+                Reply to Gigi
+              </a>
+            </div>
+          </section>
+        </FadeIn>
+
+        <FadeIn delay={0.08}>
+          <section className={s.callout} aria-labelledby="postcard-title">
+            <p className={s.kicker}>
+              Postcard {chapter.postcard.number} of 4 · Mailed on day{" "}
+              {chapter.postcard.sentOnDay}
+            </p>
+            <h2 id="postcard-title">“{chapter.postcard.message}”</h2>
+            <p>
+              Printed and mailed to {GIGI.recipient}. The QR code on the back
+              opens this chapter, so Gigi’s voice is one scan away.
+            </p>
             <div className={s.postcardFrame}>
               <PostcardPreview
                 front={postcard.front}
@@ -187,62 +163,83 @@ export function HackathonDemoChapter({
                 title={`Postcard ${chapter.postcard.number}`}
               />
             </div>
-          </div>
-        </section>
+          </section>
+        </FadeIn>
 
-        <section className={s.band} aria-labelledby="story-title">
-          <div className={`${s.inner} ${s.story}`}>
-            <div className={s.storyText} data-reveal>
-              <h2 className={s.eyebrow} id="story-title">
-                In Gigi’s voice
-              </h2>
+        <FadeIn delay={0.12}>
+          <section className={s.card} aria-labelledby="story-title">
+            <p className={s.kicker}>In Gigi’s voice</p>
+            <h2 id="story-title">Her story</h2>
+            <div className={s.story}>
               {chapter.story.split("\n\n").map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
-            <aside className={s.storyAside} data-reveal>
-              <blockquote className={s.pullQuote}>“{chapter.pullQuote}”</blockquote>
-              <div className={s.scripture}>
-                <p className={s.eyebrow}>Scripture</p>
-                <blockquote>“{chapter.scripture.text}”</blockquote>
-                <p>
-                  {chapter.scripture.reference} ({chapter.scripture.translation})
-                </p>
-              </div>
-            </aside>
-          </div>
-        </section>
+            <blockquote className={s.pullQuote}>“{chapter.pullQuote}”</blockquote>
+            <div className={s.scripture}>
+              <p className={s.kicker}>Scripture</p>
+              <blockquote>“{chapter.scripture.text}”</blockquote>
+              <p>
+                {chapter.scripture.reference} ({chapter.scripture.translation})
+              </p>
+            </div>
+          </section>
+        </FadeIn>
 
-        <section className={`${s.band} ${s.bandSand}`} aria-labelledby="moments-title">
-          <div className={s.inner}>
-            <h2 id="moments-title" className={s.sectionTitle} data-reveal>
-              {chapter.momentsTitle}
-            </h2>
-            <ol className={s.moments}>
+        <FadeIn delay={0.16}>
+          <section className={s.card} aria-labelledby="moments-title">
+            <p className={s.kicker}>Key moments</p>
+            <h2 id="moments-title">{chapter.momentsTitle}</h2>
+            <Stagger
+              className={`${s.strip} ${chapter.moments.length === 3 ? s.strip3 : ""}`}
+              stagger={0.06}
+              delay={0.25}
+            >
               {chapter.moments.map((moment, index) => (
-                <li
-                  key={moment.title}
-                  className={s.moment}
-                  data-reveal
-                  style={{ "--delay": `${index * 0.08}s` } as CSSProperties}
-                >
-                  <p className={s.momentNumber}>0{index + 1}</p>
-                  <h3>{moment.title}</h3>
-                  <p>{moment.text}</p>
-                </li>
+                <StaggerItem key={moment.title} className={s.tile}>
+                  <div className={s.tileBody}>
+                    <p className={s.momentNumber}>0{index + 1}</p>
+                    <h3 className={s.tileTitle}>{moment.title}</h3>
+                    <p className={s.tileNote}>{moment.text}</p>
+                  </div>
+                </StaggerItem>
               ))}
-            </ol>
-          </div>
-        </section>
+            </Stagger>
+          </section>
+        </FadeIn>
 
-        <section className={s.band} aria-labelledby="reply-title">
-          <div className={s.reply} data-reveal>
-            <p className={s.eyebrow}>Reply to Gigi</p>
-            <h2 id="reply-title" className={s.sectionTitle}>
-              {chapter.replyPrompt}
-            </h2>
+        <FadeIn delay={0.2}>
+          <section className={s.card}>
+            <details className={s.conversation}>
+              <summary>
+                <h2>
+                  <span className={`${s.kicker} block`}>The full conversation</span>
+                  Read what Gigi said
+                </h2>
+                <span className={s.toggle} aria-hidden="true">
+                  +
+                </span>
+              </summary>
+              <dl className={s.turns}>
+                {chapter.conversation.map((line, index) => (
+                  <div
+                    key={index}
+                    className={`${s.turn} ${line.speaker === "interviewer" ? s.interviewer : ""}`}
+                  >
+                    <dt>{SPEAKER[line.speaker]}</dt>
+                    <dd>{spokenText(line.text)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          </section>
+        </FadeIn>
+
+        <FadeIn delay={0.24}>
+          <section id="reply" className={`${s.card} ${s.reply}`} aria-labelledby="reply-title">
+            <p className={s.kicker}>Reply to Gigi</p>
+            <h2 id="reply-title">{chapter.replyPrompt}</h2>
             <form
-              className={s.replyForm}
               onSubmit={(event) => {
                 event.preventDefault();
                 const text = reply.trim();
@@ -263,7 +260,7 @@ export function HackathonDemoChapter({
               />
               <div className={s.replyRow}>
                 <p>This demo reply stays on this page. It is not sent or saved.</p>
-                <button type="submit" className={s.primaryButton}>
+                <button type="submit" className={fd.primaryButton}>
                   Save demo reply
                 </button>
               </div>
@@ -273,35 +270,52 @@ export function HackathonDemoChapter({
                 {saved}
               </p>
             )}
-          </div>
-        </section>
+          </section>
+        </FadeIn>
 
-        <section className={s.next} data-reveal>
-          {chapter.next ? (
-            <>
-              <p className={s.eyebrow}>Next chapter</p>
-              <h2>{chapter.next.label}</h2>
-              <p>{chapter.next.teaser}</p>
-              <Link href={chapter.next.href} className={s.lightButton}>
-                Open the next chapter <AppIcon name="arrowUpRight" size={20} />
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className={s.eyebrow}>The whole collection</p>
-              <h2>You’ve opened every chapter.</h2>
-              <p>Return to the whole collection anytime.</p>
-              <Link href="/hackathon-demo-1" className={s.lightButton}>
-                Start again with Kindness received{" "}
-                <AppIcon name="arrowUpRight" size={20} />
-              </Link>
-            </>
-          )}
-        </section>
-      </main>
-      <footer className={s.footer}>
-        Time Tapestry · A legacy of generosity, passed down in their own voice.
-      </footer>
+        <FadeIn delay={0.28}>
+          <section className={s.card} aria-labelledby="collection-title">
+            <p className={s.kicker}>The whole collection</p>
+            <h2 id="collection-title">
+              {chapter.next ? "Gigi’s four stories" : "You’ve opened every chapter."}
+            </h2>
+            <p className={s.cardNote}>
+              {chapter.next
+                ? `Next: ${chapter.next.label}. ${chapter.next.teaser}`
+                : "Return to the whole collection anytime."}
+            </p>
+            <div className={`${s.strip} ${s.strip4}`}>
+              {hackathonDemoChapters.map((item) => {
+                const here = item.number === chapter.number;
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    className={`${s.tile} ${here ? s.tileHere : ""}`}
+                    aria-current={here ? "page" : undefined}
+                  >
+                    <div className={s.filmStage}>
+                      <SiriOrb size={56} animationDuration={18} colors={ORB_COLORS} />
+                    </div>
+                    <div className={s.tileBody}>
+                      <p className={s.tileLabel}>{item.theme}</p>
+                      <h3 className={s.tileTitle}>{item.title}</h3>
+                      <span className={s.tileLink}>
+                        {here ? "You are here" : "Open this story"}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        </FadeIn>
+
+        <p className={s.footer}>
+          Illustrative example. Gigi, Sammie and the ministries are fictional,
+          and both voices are generated with AI.
+        </p>
+      </div>
     </div>
   );
 }
