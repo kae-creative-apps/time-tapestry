@@ -152,7 +152,10 @@ export async function createOrganization(value: unknown) {
     b.quantity < 1 ||
     b.quantity > 100
   )
-    throw new OrganizationError("Choose between 1 and 100 family gifts.", 400);
+    throw new OrganizationError(
+      "Choose between 1 and 100 donor invitations.",
+      400,
+    );
   const purchaser = contact(b.contactName, b.contactEmail);
   const now = new Date().toISOString();
   const organization: OrganizationRecord = {

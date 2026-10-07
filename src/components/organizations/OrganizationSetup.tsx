@@ -50,17 +50,18 @@ export function OrganizationSetup() {
 
   return (
     <form
+      id="start-pilot"
+      className="scroll-mt-8 rounded-[28px] border border-warmgray-200 bg-white p-6 shadow-sm sm:p-9"
       onSubmit={submit}
       aria-busy={busy}
-      className="rounded-[28px] border border-warmgray-200 bg-white p-6 shadow-sm sm:p-9"
     >
       <div className="mb-7 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold sm:text-3xl">
-            Set up your group.
+            Start a pilot.
           </h2>
           <p className="mt-2 text-base leading-7 text-ink-500">
-            Choose how many people you’d like to invite.
+            Tell us about your organization and how many donors you’d like to invite.
           </p>
         </div>
         <span className="rounded-full bg-sage-100 px-3 py-1.5 text-sm font-medium text-sage-700">
@@ -90,11 +91,11 @@ export function OrganizationSetup() {
             required
             className={inputClass}
           >
-            <option value="church">Church</option>
-            <option value="nonprofit">Nonprofit</option>
+            <option value="church">Church or ministry</option>
+            <option value="nonprofit">Nonprofit or foundation</option>
+            <option value="other">Advancement team or donor advisor</option>
             <option value="retirement_community">Retirement community</option>
             <option value="family">Family</option>
-            <option value="other">Other organization</option>
           </select>
         </label>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -125,7 +126,7 @@ export function OrganizationSetup() {
             htmlFor="gift-quantity"
             className="block text-base font-medium"
           >
-            Number of free gifts
+            Donor invitations
           </label>
           <div className="mt-2 flex items-center gap-4">
             <input
@@ -142,9 +143,9 @@ export function OrganizationSetup() {
               className="min-h-12 w-24 rounded-xl border border-warmgray-300 bg-white px-4 py-3 text-lg font-medium"
             />
             <p id="quantity-help" className="text-sm leading-6 text-ink-500">
-              1 to 100 gifts.
+              1 to 100 invitations.
               <br />
-              One storyteller per gift.
+              One donor per invitation.
             </p>
           </div>
         </div>
@@ -159,16 +160,16 @@ export function OrganizationSetup() {
           className={`${primaryClass} w-full`}
           type="submit"
         >
-          {busy ? "Creating your group…" : "Create free group"}
+          {busy ? "Starting your pilot…" : "Start a pilot"}
           {!busy && <AppIcon name="arrowRight" size={20} />}
         </button>
       </fieldset>
       <p className="mt-4 text-sm leading-6 text-ink-500">
-        No payment details needed. You’ll add names and share individual gift
-        links from your private dashboard.
+        No payment details needed. You’ll add donors and share each invitation
+        from your private dashboard.
       </p>
       <p className="sr-only" role="status">
-        {busy ? "Creating your group. Please wait." : ""}
+        {busy ? "Starting your pilot. Please wait." : ""}
       </p>
     </form>
   );

@@ -82,7 +82,7 @@ export default function Privacy() {
         <p>
           Postcard and email delivery depend on a configured delivery service
           and job runner. Queued messages have not necessarily been sent. In the
-          free group gifting flow, organizers copy and share invitation links
+          organization pilot, organizers copy and share donor invitation links
           themselves. The planned first postcard introduces the gift, with a
           follow-up email two weeks after confirmed mailing. Recipients can turn
           off postcard follow-up invitations on their story page.

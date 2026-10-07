@@ -37,10 +37,10 @@ export function FrontDoorNav() {
         </nav>
         <div className={styles.navActions}>
           <Link href="/account" className={styles.accountLink}>
-            My stories
+            Donor sign-in
           </Link>
-          <Link href="#begin" className={styles.navStart}>
-            Start a story <AppIcon name="arrowUpRight" size={18} />
+          <Link href="/for-organizations" className={styles.navStart}>
+            Start a pilot <AppIcon name="arrowUpRight" size={18} />
           </Link>
         </div>
         <button
@@ -76,14 +76,14 @@ export function FrontDoorNav() {
             </Link>
           ))}
           <Link href="/account" onClick={() => setOpen(false)}>
-            My stories <AppIcon name="arrowUpRight" size={18} />
+            Donor sign-in <AppIcon name="arrowUpRight" size={18} />
           </Link>
           <Link
-            href="#begin"
+            href="/for-organizations"
             className={styles.mobileStart}
             onClick={() => setOpen(false)}
           >
-            Start a story <AppIcon name="arrowUpRight" size={18} />
+            Start a pilot <AppIcon name="arrowUpRight" size={18} />
           </Link>
         </nav>
       )}

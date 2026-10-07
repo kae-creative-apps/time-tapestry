@@ -13,7 +13,7 @@ export function Footer() {
         <div>
           <Logo variant="light" />
           <p className="mt-5 text-base text-paper">
-            What you gave lives on.
+            A donor’s generosity, passed on.
           </p>
         </div>
         <div>
@@ -25,7 +25,7 @@ export function Footer() {
               href="/for-organizations"
               className="inline-flex items-center hover:underline"
             >
-              Group gifting
+              For organizations
             </Link>
             <Link
               href="/about"

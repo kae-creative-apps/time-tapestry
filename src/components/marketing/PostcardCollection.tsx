@@ -9,36 +9,36 @@ const postcards = [
     name: "Kindness",
     slug: "kindness",
     color: "#f1e6db",
-    heading: "The afternoons they gave you.",
+    heading: "Who first showed them generosity.",
     description:
-      "A reminder of the people who made time for you, and the kindness you hope your family will carry forward.",
+      "A reminder of the people who modeled a life of giving, and the kindness a donor hopes their family will carry.",
     appearance: "warm cream with a sand-colored woven pattern",
   },
   {
     name: "Faith",
     slug: "faith",
     color: "#fbfaf8",
-    heading: "What carried you through.",
+    heading: "Why giving became a way of life.",
     description:
-      "The faith that met you in a hard season, shared in words your family can return to.",
+      "The faith and values behind a donor’s generosity, in words their children and grandchildren can return to.",
     appearance: "soft white with a warm gray woven pattern",
   },
   {
     name: "Generosity",
     slug: "generosity",
     color: "#dadecf",
-    heading: "The good that keeps growing.",
+    heading: "Lives they have seen flourish.",
     description:
-      "A small act of generosity can become part of someone else's story. Pass on what giving has meant in yours.",
+      "The ministries they love, and the people whose stories became part of their own because they gave.",
     appearance: "sage with an oversized woven pattern",
   },
   {
     name: "Encouragement",
     slug: "encouragement",
     color: "#e5c8bb",
-    heading: "There is room for one more.",
+    heading: "What they hope you carry.",
     description:
-      "Words of welcome and encouragement, drawn from your story and offered to someone you love.",
+      "A blessing for the next generation, drawn from a donor’s story and offered to their children and grandchildren.",
     appearance: "soft clay with a woven pattern",
   },
 ] as const;
@@ -61,13 +61,14 @@ export function PostcardCollection() {
       <div className={styles.inner}>
         <header className={styles.header}>
           <p className={styles.eyebrow}>
-            A little of your story, in their hands
+            From a donor’s story, into a family’s hands
           </p>
           <h2 id={headingId} className={styles.heading}>
-            Four little reminders. So much to pass on.
+            Four reminders of a generous life.
           </h2>
           <p className={styles.introduction}>
-            Each postcard carries a thought from your story to someone you love.
+            Each postcard carries a thought from a donor’s story to their
+            children or grandchildren. The sample is from Gigi, for Sammie.
           </p>
         </header>
 
@@ -102,7 +103,7 @@ export function PostcardCollection() {
           <figure className={styles.figure}>
             <Image
               src={`/brand/postcards/designer-2026-10-06-v2/postcard-${postcardNumber}-${postcard.slug}-front.webp`}
-              alt={`${postcard.name} postcard in ${postcard.appearance}, with the Time Tapestry logo and sample dedication, From Gigi, for Sammie.`}
+              alt={`${postcard.name} postcard in ${postcard.appearance}, with the Time Tapestry logo and sample dedication from Gigi, a donor, for her granddaughter Sammie.`}
               width={1500}
               height={1000}
               loading="lazy"
