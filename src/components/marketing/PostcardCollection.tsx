@@ -68,6 +68,8 @@ export function PostcardCollection() {
           </h2>
           <p className={styles.introduction}>
             Each postcard carries a thought from your story to someone you love.
+            Its QR code opens that chapter after they verify the invited email,
+            so they can reply or ask a follow-up you record as a new chapter.
           </p>
         </header>
 
