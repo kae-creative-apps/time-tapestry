@@ -8,6 +8,7 @@ export type HackathonDemoChapter = {
   story: string;
   transcript: string;
   pullQuote: string;
+  scripture: { reference: string; text: string; translation: "KJV" };
   momentsTitle: string;
   moments: readonly string[];
   next: { href: string; label: string } | null;
@@ -25,7 +26,13 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
     story: kindness,
     transcript:
       "One winter morning, your great-grandmother left a coat on the porch for a girl who walked past our house on her way to school.",
-    pullQuote: "Because she was cold, and we had two.",
+    pullQuote:
+      "Someone once gave me their afternoons when I needed them most. Time is the best gift you can give.",
+    scripture: {
+      reference: "1 Peter 4:10",
+      translation: "KJV",
+      text: "As every man hath received the gift, even so minister the same one to another, as good stewards of the manifold grace of God.",
+    },
     momentsTitle: "Three key moments",
     moments: [
       "One winter morning, your great-grandmother left a coat on the porch for a girl who walked past our house on her way to school.",
@@ -43,7 +50,12 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
     transcript:
       "I believe in our local food pantry, the children's literacy fund at our church, and the missionaries in Honduras we have supported for twenty years.",
     pullQuote:
-      "I give because I was once the child who needed the coat, and someone noticed me.",
+      "When I did not know what came next, prayer helped me take the next small step. I hope you find that kind of peace.",
+    scripture: {
+      reference: "Lam 3:22–23",
+      translation: "KJV",
+      text: "It is of the LORD's mercies that we are not consumed, because his compassions fail not. They are new every morning: great is thy faithfulness.",
+    },
     momentsTitle: "Three key moments",
     moments: [
       "I believe in our local food pantry, the children's literacy fund at our church, and the missionaries in Honduras we have supported for twenty years.",
@@ -59,7 +71,13 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
     theme: "generosity",
     story: table,
     transcript: "In our house, giving started at the supper table.",
-    pullQuote: "The table is long enough if you pull up another chair.",
+    pullQuote:
+      "The good we give has a way of growing in places we may never see. Keep making room for others.",
+    scripture: {
+      reference: "Gal 6:9",
+      translation: "KJV",
+      text: "And let us not be weary in well doing: for in due season we shall reap, if we faint not.",
+    },
     momentsTitle: "Three key moments",
     moments: [
       "In our house, giving started at the supper table.",
@@ -79,7 +97,13 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
     story: hope,
     transcript:
       "Sammie, I hope you remember that a good life does not have to be loud.",
-    pullQuote: "I hope you remember that a good life does not have to be loud.",
+    pullQuote:
+      "There is always room for one more at the table. I hope you carry that welcome wherever life takes you.",
+    scripture: {
+      reference: "Matt 25:40",
+      translation: "KJV",
+      text: "And the King shall answer and say unto them, Verily I say unto you, Inasmuch as ye have done it unto one of the least of these my brethren, ye have done it unto me.",
+    },
     momentsTitle: "What Gigi hopes Sammie carries",
     moments: [
       "Sammie, I hope you remember that a good life does not have to be loud.",
