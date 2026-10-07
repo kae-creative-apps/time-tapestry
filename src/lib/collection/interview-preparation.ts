@@ -21,6 +21,7 @@ import {
 } from "./recording-validation";
 import {
   enqueueAutomaticOriginalFilms,
+  automaticFilmTemplateCurrent,
   filmJobInputsCurrent,
   getFilmJob,
   retryStoryFilms,
@@ -229,32 +230,44 @@ export async function enqueueInterviewPreparation(
             throw new InterviewPreparationError(
               "Preparation identity mismatch.",
             );
+          const linkedFilm = existing.filmJobId
+            ? await getFilmJob(existing.filmJobId)
+            : null;
+          // A newer edit template must be allowed to run once. Earlier attempts
+          // failed against the previous matcher and do not count against it.
+          const staleAutomaticFilm = Boolean(
+            linkedFilm &&
+            linkedFilm.mode === "original" &&
+            linkedFilm.preparation === "automatic" &&
+            linkedFilm.status !== "ready" &&
+            !automaticFilmTemplateCurrent(linkedFilm),
+          );
           if (
             options.retry &&
             existing.status === "needs_attention" &&
-            existing.attempts >= MAX_ATTEMPTS
+            existing.attempts >= MAX_ATTEMPTS &&
+            !staleAutomaticFilm
           )
             throw new InterviewPreparationError(
               "Preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your recordings and completed work are saved.",
               409,
             );
-          const failedFilms =
+          const reviewingFilms =
             options.retry &&
-            existing.status === "films_queued" &&
-            existing.filmJobId
-              ? await getFilmJob(existing.filmJobId)
-              : null;
+            Boolean(existing.filmJobId) &&
+            (existing.status === "films_queued" ||
+              (existing.status === "needs_attention" && staleAutomaticFilm));
+          const failedFilms = reviewingFilms ? linkedFilm : null;
           const retryFilms =
-            options.retry &&
-            existing.status === "films_queued" &&
-            existing.filmJobId &&
+            reviewingFilms &&
             (!failedFilms ||
               ["failed", "stale"].includes(failedFilms.status) ||
               !(await filmJobInputsCurrent(failedFilms, c)));
           if (
             retryFilms &&
             failedFilms?.status === "failed" &&
-            failedFilms.attempts >= MAX_ATTEMPTS
+            failedFilms.attempts >= MAX_ATTEMPTS &&
+            automaticFilmTemplateCurrent(failedFilms)
           )
             throw new InterviewPreparationError(
               "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Completed films and recordings are saved.",
@@ -791,14 +804,23 @@ export async function getInterviewPreparationView(c: Collection) {
   const view = interviewPreparationJobView(job);
   if (!job.filmJobId) return view;
   const films = await getFilmJob(job.filmJobId);
-  if (!films || !(await filmJobInputsCurrent(films, c)))
+  if (!films || !(await filmJobInputsCurrent(films, c))) {
+    const updatedEdit = Boolean(
+      films &&
+      films.mode === "original" &&
+      films.preparation === "automatic" &&
+      films.status !== "ready" &&
+      !automaticFilmTemplateCurrent(films),
+    );
     return {
       ...view,
       status: "needs_attention" as const,
       canRetry: true,
-      error:
-        "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
+      error: updatedEdit
+        ? "Film preparation can use an updated edit of your saved interview. Your written stories and original recordings are kept."
+        : "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
     };
+  }
   if (films.status === "failed" || films.status === "stale")
     return {
       ...view,

@@ -265,6 +265,9 @@ test("rollover edges use matched words once and never split a word", () => {
 });
 
 test("unverified beginning or ending words do not produce partial-thought cuts", () => {
+  const story =
+    "I remember the blue bicycle beside the kitchen window every morning before school and after the long walk home together with everyone who waited there patiently for us each afternoon";
+  assert.equal(story.split(" ").length, 30);
   assert.throws(
     () =>
       matchSourceWords(
@@ -273,6 +276,38 @@ test("unverified beginning or ending words do not produce partial-thought cuts",
           "Always forget how we walked all the way home together that night",
         ),
       ),
+    /boundaries/,
+  );
+  assert.throws(
+    () => matchSourceWords(`Never ${story}`, words(story)),
+    /boundaries/,
+  );
+  assert.throws(
+    () => matchSourceWords(`${story} night`, words(story)),
+    /boundaries/,
+  );
+  assert.throws(
+    () => matchSourceWords(`${story} so`, words(story)),
+    /boundaries/,
+    "a trailing word that can carry meaning is not treated as filler",
+  );
+});
+
+test("filler and backchannel drift at the answer edges keeps the spoken source word", () => {
+  const story =
+    "I remember the blue bicycle beside the kitchen window every morning before school and after the long walk home together with everyone who waited there patiently for us each afternoon";
+  const spoken = words(`Yes ${story} yes`);
+  const swapped = matchSourceWords(`Yeah ${story} yeah`, spoken);
+  assert.equal(swapped.words[0].text, "Yes");
+  assert.equal(swapped.words.at(-1)!.text, "yes");
+  assert.equal(
+    swapped.words.map((word) => word.text).join(" "),
+    `Yes ${story} yes`,
+  );
+  const omitted = matchSourceWords(`Um well ${story} um`, words(story));
+  assert.equal(omitted.words.map((word) => word.text).join(" "), story);
+  assert.throws(
+    () => matchSourceWords(`Um uh well ${story}`, words(story)),
     /boundaries/,
   );
 });
