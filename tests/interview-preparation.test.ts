@@ -1292,11 +1292,17 @@ test("three temporary preparation failures stop bounded retries with originals p
       error instanceof preparation.InterviewPreparationError &&
       error.status === 409,
   );
+  const version = (await store.getCollection(c.id))!.updatedAt;
   assert.equal(
     await preparation.runInterviewPreparationOnce("worker-b", {
       onlyId: queued.preparation.id,
     }),
     null,
+  );
+  assert.equal(
+    (await store.getCollection(c.id))!.updatedAt,
+    version,
+    "scanning a stopped preparation must not change the saved-answer version",
   );
   assert.deepEqual(
     (await store.getCollection(c.id))?.interviews?.[0].segments,
