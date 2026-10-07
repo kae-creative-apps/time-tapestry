@@ -53,8 +53,11 @@ export function HackathonDemoChapter({ chapter }: { chapter: DemoChapter }) {
             </blockquote>
             <aside className="mt-7 rounded-2xl bg-clay-50 p-5">
               <p className="brand-eyebrow text-taupe-600">Scripture</p>
-              <p className="mt-4 text-lg leading-8">
-                Gigi did not choose a Bible passage for this story.
+              <blockquote className="mt-4 text-lg leading-8">
+                {chapter.scripture.text}
+              </blockquote>
+              <p className="mt-3 text-sm text-ink-500">
+                {chapter.scripture.reference} {chapter.scripture.translation}
               </p>
             </aside>
           </div>
