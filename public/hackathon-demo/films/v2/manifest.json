@@ -1,0 +1,49 @@
+{
+  "version": "v2",
+  "films": {
+    "1": {
+      "src": "/hackathon-demo/films/v2/chapter-1.mp4",
+      "poster": "/hackathon-demo/films/v2/chapter-1-poster.jpg",
+      "seconds": 91.5,
+      "voices": {
+        "interviewer": "EXAVITQu4vr4xnSDxMaL",
+        "gigi": "5u41aNhyCU6hXOcjPPv0",
+        "modelId": "eleven_v3"
+      },
+      "sha256": "913f9fb24a061084d8469b18a791bbd7a0d7e7d4e296f02d44ea5957c32fbbaa"
+    },
+    "2": {
+      "src": "/hackathon-demo/films/v2/chapter-2.mp4",
+      "poster": "/hackathon-demo/films/v2/chapter-2-poster.jpg",
+      "seconds": 102.7,
+      "voices": {
+        "interviewer": "EXAVITQu4vr4xnSDxMaL",
+        "gigi": "5u41aNhyCU6hXOcjPPv0",
+        "modelId": "eleven_v3"
+      },
+      "sha256": "af3dc2540902ba628ffe6b36b7e0abc98e9ce678ea696f378c2a45a163fac1fc"
+    },
+    "3": {
+      "src": "/hackathon-demo/films/v2/chapter-3.mp4",
+      "poster": "/hackathon-demo/films/v2/chapter-3-poster.jpg",
+      "seconds": 96.2,
+      "voices": {
+        "interviewer": "EXAVITQu4vr4xnSDxMaL",
+        "gigi": "5u41aNhyCU6hXOcjPPv0",
+        "modelId": "eleven_v3"
+      },
+      "sha256": "5f0e26ff3c9f37d507b00b3c188fe4171eef49a652c630d4cc1507b94283ded1"
+    },
+    "4": {
+      "src": "/hackathon-demo/films/v2/chapter-4.mp4",
+      "poster": "/hackathon-demo/films/v2/chapter-4-poster.jpg",
+      "seconds": 106,
+      "voices": {
+        "interviewer": "EXAVITQu4vr4xnSDxMaL",
+        "gigi": "5u41aNhyCU6hXOcjPPv0",
+        "modelId": "eleven_v3"
+      },
+      "sha256": "cfe2b862dd3bff10b32ff980ec368257092daffd006ca0f6102681165385dd2f"
+    }
+  }
+}

@@ -1,5 +1,5 @@
-// Fictional demo family for the hackathon. Gigi, Sammie and every voice in
-// these films are illustrative; no real interview or recording is used.
+// Fictional demo family for the hackathon. Gigi, Sammie, the ministries and
+// every voice in these films are illustrative; no real interview is used.
 
 export type DemoSpeaker = "interviewer" | "gigi";
 
@@ -29,9 +29,13 @@ export const HACKATHON_DEMO_STORYTELLER = {
   firstName: "Gigi",
   age: 73,
   hometown: "Dayton, Ohio",
+  description: "Major donor, giving for fifty years",
   recipient: "Sammie",
   recipientDescription: "her granddaughter, 16",
 } as const;
+
+export const HACKATHON_DEMO_PARTNER_NOTE =
+  "What a donor’s family receives. Time Tapestry helps ministries and advisors help major donors pass down a legacy of generosity, in their own voice.";
 
 export const HACKATHON_DEMO_ORIGIN = "https://timetapestry.app";
 
@@ -54,43 +58,40 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
       number: 1,
       sentOnDay: 0,
       message:
-        "Someone once gave me their afternoons when I needed them most. Time is the best gift you can give.",
+        "Someone once gave me their afternoons when I needed them most. That's where my giving began.",
     },
-    question:
-      "Tell me about someone whose kindness has stayed with you all these years.",
+    question: "What made you become so generous?",
     conversation: [
       {
         speaker: "interviewer",
-        text: "Gigi, tell me about someone whose kindness has stayed with you all these years. Take your time.",
+        text: "Gigi, what made you become so generous?",
       },
       {
         speaker: "gigi",
-        text: "Oh... [sighs] well, that one's easy. Mrs. Hale. [pause] I was nine, and I was so sick I couldn't get out of bed. Mom was working two shifts. And every afternoon at three o'clock there'd be a knock, and it was Mrs. Hale with a pot of soup. [pause] It was rheumatic fever. Almost three months in that bed. Dad had just lost his job at the mill, so he was out every day looking for work, and that house was so quiet. [chuckles] I counted the cracks in the ceiling. I knew every one of them.",
+        text: "[chuckles] Oh, honey. I didn't decide to be generous. I was loved into it. [pause] I was nine, and I was so sick I couldn't get out of bed. Mom was working two shifts. And every afternoon at three o'clock there'd be a knock, and it was Mrs. Hale with a pot of soup. [pause] All winter long. She'd pull a chair up by my bed and read to me, and when I got well, she taught me to make bread. She never once said what it cost her. [softly] She just stayed.",
       },
       {
         speaker: "interviewer",
-        text: "What do you remember most about those afternoons?",
+        text: "When did giving start to feel like joy for you, instead of duty?",
       },
       {
         speaker: "gigi",
-        text: "Well, she'd just... come right in. Put that pot on our stove like she lived there. Then she'd pull a chair up by my bed and read to me. Every afternoon, all winter. [pause] And when I could finally sit up, she put me on a little stool in the kitchen and taught me to make bread. I still use her recipe. [chuckles] You've had it, honey. [pause] She never once said what it cost her. People bring a casserole and leave, and that's kind. But Mrs. Hale stayed. [softly] That was the gift.",
+        text: "Oh, I remember exactly. [pause] Walt and I had just started the shop. Ellis Tool and Die, in a two-car garage. We didn't have much. And a family at church lost their house in a fire, and Walt looked at me and said, 'What if we did the whole thing?' [laughs] It scared me to death. But we did it. [pause] And I'll tell you, I have never slept better. I felt rich. Like Mrs. Hale must have felt, walking home from our house. [pause] That's the secret nobody tells you, Sammie. Giving doesn't make your life smaller. It makes it so much bigger.",
       },
     ],
-    transcript:
-      "I was nine, and I was so sick I couldn't get out of bed. Mom was working two shifts. And every afternoon at three o'clock there'd be a knock, and it was Mrs. Hale with a pot of soup.",
-    story: `The winter I turned nine, I came down with rheumatic fever. The doctor said bed rest, and he meant it. I was in that bed for almost three months.
+    transcript: "I didn't decide to be generous. I was loved into it.",
+    story: `People ask me what made me so generous. The honest answer is that I didn't decide to be. I was loved into it.
 
-Your great-grandmother was working double shifts at the hospital laundry, and Dad had just lost his job at the paper mill, so he was out every day looking for work. The house was very quiet. I remember counting the cracks in the ceiling.
+The winter I turned nine, I came down with rheumatic fever and spent almost three months in bed. Your great-grandmother was working double shifts at the hospital laundry, and Dad was out every day looking for work. The house was very quiet.
 
-Then one afternoon there was a knock. It was Mrs. Hale from church. She was a widow, older than my mother, and I barely knew her. She came in, put a pot on our stove and started making soup like she lived there. Then she pulled a chair up next to my bed and read to me.
+Then one afternoon there was a knock. It was Mrs. Hale from church, a widow I barely knew, with a pot of soup. She came back every afternoon that winter. She read to me, and when I could sit up, she taught me to make bread. She never once mentioned what it cost her.
 
-She came back the next day, and the day after that. Every afternoon, all winter. When I was well enough to sit up, she put me on a stool in the kitchen and taught me to make bread. I still use her recipe.
+Years later, your grandpa Walt and I were just getting the shop started in a two-car garage. We didn't have much. When a family from church lost their house to a fire, Walt asked, "What if we did the whole thing?" It scared me to death. We did it anyway.
 
-She never once mentioned what it cost her. She had her own life and her own troubles, and I found out much later that she had her own aches too. But she gave me her afternoons, and she stayed.
+I have never slept better than I did that night. I felt rich, the way I imagine Mrs. Hale felt walking home from our house.
 
-I've thought about her my whole life, Sammie. People bring a casserole and leave, and that's kind. But Mrs. Hale stayed. That was the gift.`,
-    pullQuote:
-      "She didn't bring a casserole and leave. She stayed. That was the gift.",
+That's the secret, Sammie. Giving never made our life smaller. It made it so much bigger.`,
+    pullQuote: "I didn't decide to be generous. Somebody loved me into it.",
     scripture: {
       reference: "1 Peter 4:10",
       translation: "NIV",
@@ -99,19 +100,19 @@ I've thought about her my whole life, Sammie. People bring a casserole and leave
     momentsTitle: "Three key moments",
     moments: [
       {
-        title: "The quiet house",
-        text: "Three months in bed, counting the cracks in the ceiling.",
+        title: "The three o'clock knock",
+        text: "Mrs. Hale's soup, and a chair pulled up by the bed.",
       },
       {
-        title: "Three o'clock",
-        text: "Mrs. Hale's knock, and soup on the stove.",
+        title: "Loved into it",
+        text: "A sick nine-year-old learns what it feels like to be cared for.",
       },
       {
-        title: "The kitchen stool",
-        text: "Learning to knead bread as she got well.",
+        title: "The gift that stretched us",
+        text: "A house fire, and Walt's question: what if we did the whole thing?",
       },
     ],
-    replyPrompt: "Who has given you their time when you needed it?",
+    replyPrompt: "Who first showed you what generosity looks like?",
     next: {
       href: "/hackathon-demo-2",
       label: "A life of faith",
@@ -126,66 +127,62 @@ I've thought about her my whole life, Sammie. People bring a casserole and leave
     postcard: {
       number: 2,
       sentOnDay: 14,
-      message:
-        "Hard seasons come. Hold on to this: there is new mercy every morning.",
+      message: "Give to what you love up close. Faces, not causes.",
     },
-    question: "Can you tell me about a time your faith carried you through?",
+    question: "Why did you fall in love with the ministries you give to?",
     conversation: [
       {
         speaker: "interviewer",
-        text: "Can you tell me about a time your faith carried you through something hard?",
+        text: "Why did you fall in love with the ministries you give to?",
       },
       {
         speaker: "gigi",
-        text: "[exhales] Yes. I grew up in church, but I don't think my faith was really mine until nineteen seventy-seven. Walt and I had been married three years. [pause] Your Uncle Danny came eight weeks early. I'd sit at that kitchen table at two in the morning, and I didn't have fancy prayers. I just said, 'Help.' And every morning, somehow, there was enough. [pause] Not enough for the whole week. Just... enough for that day. He was so small. Six weeks in the hospital, and we didn't know if he was coming home.",
+        text: "[exhales] Because they loved us first. [pause] Your Uncle Danny came eight weeks early, in nineteen seventy-seven. Six weeks in the hospital. We lived forty minutes away, and there was this little family house across the street where parents could sleep near their babies. They gave us a room and a key, and a lady named Ruth left coffee out every morning. [pause] I'd sit at that kitchen table at two in the morning, and I didn't have fancy prayers. I just said, 'Help.' And every morning, somehow, there was enough.",
       },
       {
         speaker: "interviewer",
-        text: "Was there anyone who helped carry you through that season?",
+        text: "What made you keep coming back, all those years later?",
       },
       {
         speaker: "gigi",
-        text: "Oh, the church. [chuckles] Families brought us dinner every single night for six weeks. I thought about Mrs. Hale a lot that winter. Now I was the one being carried. [pause] And Danny came home. He's six-foot-two now, so. [laughs] [pause] When we lost your grandpa, I went back to that same table. I'll be honest, it was harder that time. [softly] But I knew where to sit, and I knew what to say. And the mornings kept coming. [pause] Faith hasn't made my life easy, Sammie. It just means I never had to face it alone.",
+        text: "The people. [chuckles] I didn't fall in love with a cause. I fell in love with faces. [pause] When the shop started doing well, Walt and I went back to that house. We started small, and then, well, we kept going. They built a new wing a few years ago, and I'm not going to tell you the number. The number was never the point. [pause] The point is, there's a mom sleeping in that wing tonight, right near her baby. And somebody's leaving her coffee. [softly] God was so generous with us first, Sammie. Giving it back is the most joyful thing I know how to do.",
       },
     ],
     transcript:
-      "Your Uncle Danny came eight weeks early. I'd sit at that kitchen table at two in the morning, and I didn't have fancy prayers. I just said, 'Help.' And every morning, somehow, there was enough.",
-    story: `I grew up in church, but I'm not sure my faith was really mine until 1977.
+      "I didn't fall in love with a cause. I fell in love with faces.",
+    story: `I didn't fall in love with the ministries we support because of a brochure. I fell in love because they loved us first.
 
-Your grandpa Walt and I had been married three years when your Uncle Danny came eight weeks early. He was so small. He spent six weeks in the hospital, and we didn't know if he'd come home.
+Your Uncle Danny came eight weeks early, in 1977. He spent six weeks in the hospital, and we lived forty minutes away. Across the street was a little family house where parents could sleep near their babies. They gave us a room and a key, and a volunteer named Ruth left coffee out every morning.
 
-I'd sit at our kitchen table at two in the morning with a cup of coffee going cold, and I'd pray. Nothing fancy. Mostly just "help." I wasn't strong, and I didn't feel brave. But every morning I woke up and there was enough strength for that day. Not for the whole week, just that day.
+I'd sit at that borrowed kitchen table at two in the morning and pray. Nothing fancy. Mostly just "help." I wasn't strong, and I didn't feel brave. But every morning there was enough for that day.
 
-And people showed up. Families from church brought dinner every night for six weeks. I thought about Mrs. Hale a lot that winter. Now I was the one being carried.
+Danny came home. And when the shop started doing well, your grandpa and I went back to that house. We started small, and then we kept going. A few years ago they opened a new wing. I won't tell you the number. The number was never the point.
 
-Danny came home. He's six-foot-two now, as you know.
+The point is that tonight there's a mom sleeping in that wing, right near her baby, and somebody is leaving her coffee.
 
-When we lost your grandpa in 2015, I went back to that same kitchen table. I'll be honest with you: it was harder that time. But I knew where to sit, and I knew what to say. And the mornings kept coming.
-
-Faith hasn't made my life easy, Sammie. It has meant I never had to face it alone.`,
-    pullQuote:
-      "I didn't always feel strong. But every morning there was enough mercy for that day.",
+God was generous with us first, Sammie. Giving it back is the most joyful thing I know how to do.`,
+    pullQuote: "I didn't fall in love with a cause. I fell in love with faces.",
     scripture: {
-      reference: "Lamentations 3:22–23",
-      translation: "ESV",
-      text: "His mercies never come to an end; they are new every morning; great is your faithfulness.",
+      reference: "2 Corinthians 9:7",
+      translation: "NIV",
+      text: "Each of you should give what you have decided in your heart to give, not reluctantly or under compulsion, for God loves a cheerful giver.",
     },
     momentsTitle: "Three key moments",
     moments: [
       {
         title: "Two in the morning",
-        text: "Prayers at the kitchen table while Danny was in the hospital.",
+        text: "Prayers at a borrowed kitchen table while Danny was in the hospital.",
       },
       {
-        title: "Six weeks of dinners",
-        text: "Church families who carried Gigi the way Mrs. Hale once had.",
+        title: "The house across the street",
+        text: "A room, a key and Ruth's coffee every morning.",
       },
       {
-        title: "The same table",
-        text: "Losing Walt, and the mornings that kept coming.",
+        title: "Coming back as givers",
+        text: "Years later, a new wing, so another mom can sleep near her baby.",
       },
     ],
-    replyPrompt: "What helps you hold on when things are hard?",
+    replyPrompt: "Where have you seen God at work through someone's generosity?",
     next: {
       href: "/hackathon-demo-3",
       label: "What you sowed",
@@ -200,63 +197,60 @@ Faith hasn't made my life easy, Sammie. It has meant I never had to face it alon
     postcard: {
       number: 3,
       sentOnDay: 28,
-      message: "The good you sow can keep growing long after you see it.",
+      message: "The good you sow keeps growing long after you see it.",
     },
-    question: "What's something you gave your time to that you're proud of?",
+    question: "Why was it worth it to you?",
     conversation: [
       {
         speaker: "interviewer",
-        text: "What's something you gave your time to that you're proud of?",
+        text: "Gigi, you and Walt gave so much over the years. Why was it worth it to you?",
       },
       {
         speaker: "gigi",
-        text: "[chuckles] Oh, the Wednesday suppers. Our church started them in nineteen eighty-eight, and somehow I ended up running the whole thing. Thirty-one years of Wednesday suppers. I always set one more chair than we had people. Somebody always came to sit in it. [pause] Soup, bread, and whoever walked in the door. And I kept a list on the refrigerator... anybody who was sick, or just home from the hospital, or having a hard time. I'd make a pot of soup and take it over and sit a while. I learned that from Mrs. Hale. The soup was never really the point.",
+        text: "[laughs] Oh, people think it made us poorer. It made us richer. Not on paper. In friends, in purpose, in a life I wouldn't trade for anything. [pause] When Walt sold the shop, we gave the gift that built the church kitchen. And I ran the Wednesday supper in that kitchen for thirty-one years. Soup, bread, and whoever walked in. I always set one more chair than we had people. Somebody always came to sit in it. [pause] Some of my dearest friends in this world, I met over a bowl of soup on a Wednesday night.",
       },
       {
         speaker: "interviewer",
-        text: "Did you ever get to see what that meant to someone?",
+        text: "Did you ever get to see what it meant to someone?",
       },
       {
         speaker: "gigi",
-        text: "[pause] Once. About ten years ago, a young woman came up to me after supper. She said when she was little, her dad had surgery and couldn't work, and I brought soup to their house every Tuesday that winter. And she said that soup kept her family going. [softly] I didn't even remember her. But she remembered me. [pause] We never had a lot of money, Sammie. Mostly I gave time. Turns out that's the thing people remember. You plant things you'll never see grow. Sometimes God lets you see one.",
+        text: "[pause] Once, I really saw it. About ten years ago, a young woman came up to me after supper. She said when she was little, her dad had surgery and couldn't work, and I brought soup to their house every Tuesday that winter. She said that soup kept her family going. [softly] I didn't even remember her. [pause] She's a nurse now. And she volunteers at the family house, the one by the hospital. [chuckles] So you see? It just keeps going. You plant things you'll never see grow. Sometimes God lets you see one.",
       },
     ],
     transcript:
-      "Thirty-one years of Wednesday suppers. I always set one more chair than we had people. Somebody always came to sit in it.",
-    story: `In 1988, our church started a Wednesday night supper, and somehow I ended up running it. I did it for thirty-one years.
+      "It made us richer. Not on paper. In friends, in purpose, in a life I wouldn't trade for anything.",
+    story: `People assume giving made your grandpa and me poorer. It made us richer. Not on paper. In friends, in purpose, in a life I wouldn't trade for anything.
 
-It was simple: soup, bread and whoever walked in. Members, neighbors, people passing through. I always set one more chair than we had people, and I can't remember a week when nobody came to sit in it.
+When Walt sold the shop, we gave the gift that built our church kitchen. I ran the Wednesday supper in that kitchen for thirty-one years. Soup, bread and whoever walked in. I always set one more chair than we had people, and somebody always came to sit in it. Some of my dearest friends, I met over a bowl of soup on a Wednesday night.
 
-I also kept a list on the refrigerator of anyone in the congregation who was sick, just home from the hospital, or just having a hard time. I'd make a pot of soup, bring it over and stay a while. I learned that from Mrs. Hale. The soup was never really the point.
+About ten years ago, a young woman came up to me after supper. She said that when she was little, her dad had surgery and couldn't work, and I brought soup to their house every Tuesday that winter. She said that soup kept her family going. I didn't even remember her.
 
-We didn't have a lot of money, Sammie. Your grandpa and I gave what we could, and sometimes a little more than we strictly had. But mostly I gave time. It turns out that's the thing people remember.
+She's a nurse now. And she volunteers at the family house by the hospital, the same one that took us in when Danny was born.
 
-About ten years ago, a young woman came up to me after supper. She said that when she was little, her dad had surgery and couldn't work, and I brought soup to their house every Tuesday that winter. She said that soup was the thing that kept her family going. I didn't even remember her. But she remembered me.
-
-You plant things you'll never see grow. Sometimes God lets you see one.`,
-    pullQuote:
-      "You plant things you'll never see grow. Sometimes God lets you see one.",
+That's why it was worth it, Sammie. It keeps going. You plant things you'll never see grow. Sometimes God lets you see one.`,
+    pullQuote: "People think giving made us poorer. It made us richer.",
     scripture: {
-      reference: "Galatians 6:9",
+      reference: "Acts 20:35",
       translation: "NIV",
-      text: "Let us not become weary in doing good, for at the proper time we will reap a harvest if we do not give up.",
+      text: "…remembering the words the Lord Jesus himself said: ‘It is more blessed to give than to receive.’",
     },
     momentsTitle: "Three key moments",
     moments: [
       {
-        title: "Wednesday supper",
-        text: "Soup, bread and one extra chair for 31 years.",
+        title: "The kitchen we built",
+        text: "When Walt sold the shop, the gift that built the church kitchen.",
       },
       {
-        title: "The list",
-        text: "Meals and afternoons for anyone who was sick or struggling.",
+        title: "One extra chair",
+        text: "Thirty-one years of Wednesday suppers, and friends made over soup.",
       },
       {
-        title: "The thank-you",
-        text: "A grown woman who remembered Gigi's Tuesday soup.",
+        title: "The nurse who came back",
+        text: "Tuesday soup, grown into a life of caring for others.",
       },
     ],
-    replyPrompt: "Who could you give an afternoon to this month?",
+    replyPrompt: "What would make your giving feel worth it to you?",
     next: {
       href: "/hackathon-demo-4",
       label: "What I hope you carry",
@@ -271,15 +265,13 @@ You plant things you'll never see grow. Sometimes God lets you see one.`,
     postcard: {
       number: 4,
       sentOnDay: 42,
-      message:
-        "Keep your table open. There is always room for one more chair.",
+      message: "Keep your table open. There's always room for one more chair.",
     },
-    question:
-      "If Sammie could carry one thing from your life with her, what would you want it to be?",
+    question: "What do you hope Sammie carries from your generosity?",
     conversation: [
       {
         speaker: "interviewer",
-        text: "If Sammie could carry one thing from your life with her, what would you want it to be?",
+        text: "What do you hope Sammie carries from your generosity?",
       },
       {
         speaker: "gigi",
@@ -291,55 +283,53 @@ You plant things you'll never see grow. Sometimes God lets you see one.`,
       },
       {
         speaker: "gigi",
-        text: "[softly] Okay. Sammie, this part is just for you. [pause] I told you about Mrs. Hale. About that kitchen table at two in the morning, and all those Wednesday suppers. I didn't tell you so you'd think your Gigi was something special. [chuckles] I told you so you'd know where it all came from. And that it can keep going. [pause] So. Show up, and stay a while. You don't need the right words. Most of the time, people just need somebody to sit with them. [pause] Keep your table open. Whatever kind of table you end up with, make it long enough for one more chair. [pause] When you're scared, take it one morning at a time. You don't have to have the whole road figured out. There'll be enough for today. [pause] And give in your own way. It doesn't have to be loud, and nobody has to know. Quiet counts. [pause] Sammie, you already know how to sit with people. I've watched you do it. Don't ever let anybody tell you that's a small thing. You did it with your little brother. And with me, after Grandpa died. [pause] [softly] I love you. I'm proud of you. [chuckles] Now go make some soup for somebody.",
+        text: "[softly] Okay. Sammie, this part is just for you. [pause] You've heard about Mrs. Hale, and the family house, and all those Wednesday suppers. And someday there'll be some money that comes to you, and that's fine. [pause] But the money was never the inheritance, honey. This is. [pause] So. Give close enough to see faces. Don't just send checks to places you've never visited. Go. Sit down. Learn names. [pause] Give your time before your money. Time is what Mrs. Hale gave me, and it changed everything. [pause] Give with open hands. You don't need your name on anything. Nobody has to know. [pause] And let it make you glad. If giving ever feels heavy, something's wrong. It should feel like the best part of your week. [pause] Now. [chuckles] I've set aside a little fund in your name, and you get to decide where it goes. Not me. You. Start with one afternoon. Go see somebody's work up close, and then come tell me what you found. [pause] [softly] I love you. I'm proud of you. Now go make some soup for somebody.",
       },
     ],
-    transcript:
-      "Sammie, you already know how to sit with people. I've watched you do it. Don't ever let anybody tell you that's a small thing.",
+    transcript: "But the money was never the inheritance, honey. This is.",
     story: `Sammie, this part is just for you.
 
-I've told you about Mrs. Hale, about the kitchen table at two in the morning, and about all those Wednesday suppers. I didn't tell you those stories so you'd think your Gigi was something special. I told you because I want you to know where it all came from, and that it can keep going.
+You've heard about Mrs. Hale, the family house and all those Wednesday suppers. Someday some money will come to you, and that's fine. But the money was never the inheritance. This is.
 
 Here's what I hope you carry:
 
-Show up, and stay a while. You don't need the right words. Most of the time, people just need someone to sit with them. Time is the gift.
+Give close enough to see faces. Don't just send checks to places you've never visited. Go. Sit down. Learn names.
 
-Keep your table open. Whatever kind of table you end up with, make it long enough for one more chair. Somebody will always need it.
+Give your time before your money. Time is what Mrs. Hale gave me, and it changed everything.
 
-When you're scared, take one morning at a time. You don't have to have the whole road figured out. There will be enough mercy for today.
+Give with open hands. You don't need your name on anything. Nobody has to know.
 
-Give in your own way. It doesn't have to be loud or big, and nobody needs to know about it. Quiet counts.
+Let it make you glad. If giving ever feels heavy, something's wrong. It should feel like the best part of your week.
 
-You already know how to sit with people, Sammie. I've watched you do it with your little brother, and with me since Grandpa died. Don't ever let anybody tell you that's a small thing.
+I've set aside a little fund in your name, and you get to decide where it goes. Not me. You. Start with one afternoon. Go see somebody's work up close, and then come tell me what you found.
 
 I love you. I'm proud of you. Now go make some soup for somebody.`,
-    pullQuote:
-      "Sammie, you already know how to sit with people. Don't ever think that's small.",
+    pullQuote: "The money was never the inheritance, Sammie. This is.",
     scripture: {
-      reference: "Matthew 25:40",
+      reference: "Proverbs 11:25",
       translation: "NIV",
-      text: "Truly I tell you, whatever you did for one of the least of these brothers and sisters of mine, you did for me.",
+      text: "A generous person will prosper; whoever refreshes others will be refreshed.",
     },
     momentsTitle: "What Gigi hopes Sammie carries",
     moments: [
       {
-        title: "Show up, and stay a while",
-        text: "You don't need the right words. Time is the gift.",
+        title: "Give close enough to see faces",
+        text: "Visit. Sit down. Learn names.",
       },
       {
-        title: "Keep your table open",
-        text: "Make it long enough for one more chair.",
+        title: "Give your time first",
+        text: "Time is what changed everything for Gigi.",
       },
       {
-        title: "Take one morning at a time",
-        text: "There will be enough mercy for today.",
+        title: "Give with open hands",
+        text: "No name on the wall needed. Quiet counts.",
       },
       {
-        title: "Give in your own way",
-        text: "It doesn't have to be loud. Quiet counts.",
+        title: "Let it make you glad",
+        text: "Giving should feel like the best part of your week.",
       },
     ],
-    replyPrompt: "What do you want to carry forward from Gigi's story?",
+    replyPrompt: "Where would you want your first gift to go, and why?",
     next: null,
   },
 ];

@@ -1,4 +1,4 @@
-import manifest from "../../public/hackathon-demo/films/v1/manifest.json";
+import manifest from "../../public/hackathon-demo/films/v2/manifest.json";
 
 export type HackathonDemoFilm = { src: string; poster: string; seconds: number };
 
