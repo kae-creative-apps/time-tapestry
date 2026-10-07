@@ -152,10 +152,25 @@ export default function InterviewComplete({
     if (busy || !latestFullInterview || !collection || !canUseFullInterview)
       return;
     const sessionId = latestFullInterview.id;
-    const expectedUpdatedAt = collection.updatedAt;
     setBusy(true);
     setError("");
     try {
+      // Read the saved version at click time. A page left open can otherwise
+      // send an older updatedAt after mail or preparation has been saved.
+      const latest = await collectionRequest<{ collection: CollectionView }>(
+        endpoint + query,
+      );
+      if (latest.collection.role !== "owner")
+        throw new Error("Open your private storyteller link to continue.");
+      if (
+        !(latest.collection.interviews ?? []).some(
+          (session) => session.id === sessionId,
+        )
+      )
+        throw new Error(
+          "Your full interview could not be selected. Your recordings are kept.",
+        );
+      setCollection(latest.collection);
       const result = await collectionRequest<{
         collection: CollectionView;
         preparation: InterviewPreparationView;
@@ -165,7 +180,7 @@ export default function InterviewComplete({
         body: JSON.stringify({
           action: "restore_interview",
           sessionId,
-          expectedUpdatedAt,
+          expectedUpdatedAt: latest.collection.updatedAt,
           processingApproved: true,
         }),
       });
