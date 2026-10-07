@@ -15,6 +15,7 @@ import {
   TemplateLogoCloser,
   FONT,
 } from "../templates/StoryTemplate";
+import { QuestionTitleCard } from "./QuestionTitleCard";
 import {
   type ChapterVideoPlan,
   type VideoClip,
@@ -183,14 +184,22 @@ export function ChapterFilm({
         from={0}
         durationInFrames={chapterIntroSeconds(plan) * VIDEO_FPS}
       >
-        <TemplateTitle
-          chapterNumber={plan.chapterNumber}
-          title={plan.title}
-          chapterLabel={plan.promptQuestion ? "A story to keep" : undefined}
-          storytellerName={plan.storytellerName}
-          promptQuestion={plan.promptQuestion}
-          attribution={attribution}
-        />
+        {plan.questionCard ? (
+          <QuestionTitleCard
+            card={plan.questionCard}
+            musicSrc={mediaUrls["question-music"]}
+            fontSrc={mediaUrls["question-font"]}
+          />
+        ) : (
+          <TemplateTitle
+            chapterNumber={plan.chapterNumber}
+            title={plan.title}
+            chapterLabel={plan.promptQuestion ? "A story to keep" : undefined}
+            storytellerName={plan.storytellerName}
+            promptQuestion={plan.promptQuestion}
+            attribution={attribution}
+          />
+        )}
       </Sequence>
       {clips}
       <Sequence
@@ -230,50 +239,74 @@ export function ChapterFilm({
 
 export function VideoRoot() {
   return (
-    <Composition
-      id="ChapterFilm"
-      component={ChapterFilm}
-      fps={30}
-      width={1920}
-      height={1080}
-      durationInFrames={510}
-      defaultProps={{
-        plan: {
-          schemaVersion: 1,
-          id: "synthetic-preview",
-          sessionId: "example",
-          chapterId: "chapter-1",
-          chapterNumber: 1,
-          revision: 1,
-          title: "A story worth sharing",
-          storytellerName: "Sample storyteller",
-          sources: [],
-          approval: null,
-          clips: [
-            {
-              id: "text-preview",
-              sourceAnswerId: "sample-answer",
-              kind: "text",
-              inMs: 0,
-              outMs: 10000,
-              captions: [],
-              text: "This is a layout preview using fictional text. Add the accepted interview takes to render a real chapter.",
-              editorialReason: "Synthetic preview only.",
+    <>
+      <Composition
+        id="ChapterFilm"
+        component={ChapterFilm}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={510}
+        defaultProps={{
+          plan: {
+            schemaVersion: 1,
+            id: "synthetic-preview",
+            sessionId: "example",
+            chapterId: "chapter-1",
+            chapterNumber: 1,
+            revision: 1,
+            title: "A story worth sharing",
+            storytellerName: "Sample storyteller",
+            sources: [],
+            approval: null,
+            clips: [
+              {
+                id: "text-preview",
+                sourceAnswerId: "sample-answer",
+                kind: "text",
+                inMs: 0,
+                outMs: 10000,
+                captions: [],
+                text: "This is a layout preview using fictional text. Add the accepted interview takes to render a real chapter.",
+                editorialReason: "Synthetic preview only.",
+              },
+            ],
+          },
+          mediaUrls: {},
+          draft: true,
+        }}
+        calculateMetadata={({ props }) => {
+          const plan = validateVideoPlan(props.plan, {
+            requireApproval: !props.draft,
+          });
+          return {
+            durationInFrames: chapterDurationFrames(plan),
+            props: { ...props, plan },
+          };
+        }}
+      />
+      <Composition
+        id="QuestionCardPreview"
+        component={QuestionTitleCard}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={150}
+        defaultProps={{
+          card: {
+            question:
+              "Tell me about someone whose kindness has stayed with you.",
+            label: "Kindness",
+            durationMs: 5000,
+            music: {
+              relativePath: "question-card-music.wav",
+              sha256: "0".repeat(64),
             },
-          ],
-        },
-        mediaUrls: {},
-        draft: true,
-      }}
-      calculateMetadata={({ props }) => {
-        const plan = validateVideoPlan(props.plan, {
-          requireApproval: !props.draft,
-        });
-        return {
-          durationInFrames: chapterDurationFrames(plan),
-          props: { ...props, plan },
-        };
-      }}
-    />
+          },
+          musicSrc: "",
+          fontSrc: "",
+        }}
+      />
+    </>
   );
 }

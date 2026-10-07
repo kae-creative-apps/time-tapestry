@@ -4,6 +4,9 @@ export const VIDEO_FPS = 30;
 export const MAX_CHAPTER_SECONDS = 3600;
 export const VIDEO_INTRO_SECONDS = 3;
 export const VIDEO_CLOSER_SECONDS = 4;
+/** Interview question card. Music and the card are both gone when this ends. */
+export const QUESTION_CARD_SECONDS = 5;
+export const QUESTION_CARD_FADE_SECONDS = 0.5;
 
 export type VideoSource = {
   assetId: string;
@@ -63,6 +66,16 @@ export type ChapterVideoPlan = {
   title: string;
   /** Living-story question shown in a readable, silent opening card. */
   promptQuestion?: string;
+  /**
+   * Automatic interview films open on this card for exactly five seconds.
+   * The answer, and only the answer, begins when the card ends.
+   */
+  questionCard?: {
+    question: string;
+    label: string;
+    durationMs: 5000;
+    music: { relativePath: string; sha256: string };
+  };
   storytellerName: string;
   sources: VideoSource[];
   clips: VideoClip[];
@@ -142,8 +155,9 @@ export function clipFrames(clip: VideoClip): number {
 }
 
 export function chapterIntroSeconds(
-  plan: Pick<ChapterVideoPlan, "promptQuestion">,
+  plan: Pick<ChapterVideoPlan, "promptQuestion" | "questionCard">,
 ): number {
+  if (plan.questionCard) return QUESTION_CARD_SECONDS;
   if (!plan.promptQuestion) return VIDEO_INTRO_SECONDS;
   // Allow unhurried reading before the storyteller's own voice begins.
   return Math.min(
@@ -218,6 +232,22 @@ export function validateVideoPlan(
     return fail(
       "promptQuestion is missing, too long, or contains control characters",
     );
+  if (input.questionCard !== undefined) {
+    if (
+      !record(input.questionCard) ||
+      !nonempty(input.questionCard.question, 500) ||
+      /[\x00-\x1f]/.test(String(input.questionCard.question)) ||
+      !nonempty(input.questionCard.label, 40) ||
+      /[\x00-\x1f]/.test(String(input.questionCard.label)) ||
+      input.questionCard.durationMs !== QUESTION_CARD_SECONDS * 1000 ||
+      !record(input.questionCard.music) ||
+      !safeMediaPath(input.questionCard.music.relativePath) ||
+      !digest(input.questionCard.music.sha256)
+    )
+      return fail(
+        "question card needs a short label, the asked question, and a hashed music file",
+      );
+  }
   if (!Number.isInteger(input.revision) || Number(input.revision) < 1)
     return fail("revision must be positive");
   if (!Array.isArray(input.sources) || input.sources.length > 500)
