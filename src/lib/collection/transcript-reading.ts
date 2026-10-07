@@ -3,7 +3,7 @@ export type TranscriptReading = {
   removedFillers: number;
 };
 
-function quotedRanges(source: string) {
+export function quotedRanges(source: string) {
   const ranges: Array<{ start: number; end: number }> = [];
   let open: { start: number; close: string } | undefined;
   const word = (character: string | undefined) =>

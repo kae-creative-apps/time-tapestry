@@ -76,6 +76,7 @@ async function readPdf(bytes: Uint8Array) {
       .filter(
         (line) =>
           !/^TIME TAPESTRY  \/  STORY \d+$/.test(line) &&
+          !/^(?:Kindness|Faith|Generosity|Encouragement)$/.test(line) &&
           !/^\d+ \/ \d+$/.test(line),
       )
       .join(" ")
@@ -158,6 +159,75 @@ test("wrapping preserves long words and unsupported characters fail clearly rath
     (error: unknown) =>
       error instanceof StoryBookError && /U\+1F9F5/.test(error.message),
   );
+});
+
+test("each chapter opens with the question asked for that chapter", () => {
+  const c = syntheticFilmCollection();
+  c.status = "approved";
+  c.interviews = [
+    {
+      id: "session",
+      provider: "guided",
+      status: "completed",
+      startedAt: c.createdAt,
+      turns: [
+        {
+          id: "ask-1",
+          sequence: 1,
+          role: "agent",
+          text: "Tell me about kindness.",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "answer-1",
+          sequence: 2,
+          role: "user",
+          text: "A neighbor helped.",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "follow-1",
+          sequence: 3,
+          role: "agent",
+          text: "What did that help mean to you?",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "ask-2",
+          sequence: 4,
+          role: "agent",
+          text: "Tell me about a decision you made while following Jesus.",
+          chapterId: "q2",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "answer-2",
+          sequence: 5,
+          role: "user",
+          text: "I stayed.",
+          chapterId: "q2",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+      ],
+      segments: [],
+      excludedTurnIds: [],
+    },
+  ];
+  const book = storyBookSnapshot(c, "Sam Example");
+  assert.equal(book.chapters[0].question, "Tell me about kindness.");
+  assert.equal(
+    book.chapters[1].question,
+    "Tell me about a decision you made while following Jesus.",
+  );
+  assert.equal(book.chapters[0].label, "Kindness");
 });
 
 test("draft or incomplete collections cannot become a downloadable book", () => {

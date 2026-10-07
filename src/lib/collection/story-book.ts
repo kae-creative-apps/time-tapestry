@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
+import QRCode from "qrcode";
 import {
   PDFDocument,
   PageSizes,
@@ -10,6 +11,9 @@ import {
 } from "pdf-lib";
 import type { Collection } from "./types";
 import { selectedAnswers } from "./content";
+import { recipientChapterUrl } from "./postcard-artwork";
+import { cleanStoryBookText } from "./story-book-reading";
+import { getChapterQuestion, type ChapterId } from "../interview-state";
 import { BRAND_COLORS } from "../brand-art";
 
 export class StoryBookError extends Error {}
@@ -25,10 +29,68 @@ export type StoryBook = {
     content: string;
     quote?: string;
     question?: string;
+    label?: string;
+    /** Public chapter address. It does not include a sign-in key. */
+    pageUrl?: string;
+    /** Optional film frame. The book still renders when this is absent. */
+    still?: Uint8Array;
     encouragement?: string;
     scripture?: string;
   }>;
 };
+
+const THEME_LABELS: Record<string, string> = {
+  q1: "Kindness",
+  q2: "Faith",
+  q3: "Generosity",
+  q4: "Encouragement",
+};
+
+function openingQuestion(
+  c: Collection,
+  chapterId: string,
+  title: string,
+  recipientName: string,
+) {
+  const asked = (c.interviews ?? [])
+    .flatMap((session) => session.turns)
+    .filter((turn) => turn.role === "agent" && turn.chapterId === chapterId)
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((turn) => turn.text.replace(/\s+/g, " ").trim())
+    .find((text) => text.replace(/[.…]/g, "").trim().length > 12);
+  if (asked) return asked;
+  const saved = selectedAnswers(c, chapterId)
+    .map((answer) => answer.prompt.replace(/\s+/g, " ").trim())
+    .find(
+      (prompt) =>
+        prompt &&
+        prompt !== "Your conversation" &&
+        prompt.toLocaleLowerCase() !== title.trim().toLocaleLowerCase(),
+    );
+  if (saved) return saved;
+  if (
+    chapterId === "q1" ||
+    chapterId === "q2" ||
+    chapterId === "q3" ||
+    chapterId === "q4"
+  )
+    return getChapterQuestion(chapterId, {
+      recipientName,
+      faithFraming: c.faithFraming,
+    });
+  return undefined;
+}
+
+function chapterPageUrl(c: Collection, chapterId: string) {
+  if (!/^q[1-4]$/.test(chapterId)) return undefined;
+  const origin = process.env.NEXT_PUBLIC_APP_URL;
+  if (!origin || !origin.startsWith("https://")) return undefined;
+  try {
+    return recipientChapterUrl(c, chapterId, origin);
+  } catch {
+    return undefined;
+  }
+}
 
 /** Pull only a complete sentence actually spoken by the storyteller. */
 export function storyQuoteFromTranscript(text: string): string | undefined {
@@ -58,13 +120,24 @@ export function storyBookSnapshot(
         "All four approved stories are needed before the book can be downloaded.",
       );
     const blessing = c.chapterBlessings[id];
-    const quote = selectedAnswers(c, id)
-      .map((answer) => storyQuoteFromTranscript(answer.text))
-      .find(Boolean);
+    const content = cleanStoryBookText(
+      chapter.content,
+      chapter.generatedWith === "gloo",
+    );
+    const extracted = storyQuoteFromTranscript(content);
+    const quote =
+      extracted && extracted.length < content.length * 0.72
+        ? extracted
+        : undefined;
+    const question = openingQuestion(c, id, chapter.title, recipientName);
+    const pageUrl = chapterPageUrl(c, id);
     return {
       id,
       title: chapter.title,
-      content: chapter.content,
+      content,
+      ...(THEME_LABELS[id] ? { label: THEME_LABELS[id] } : {}),
+      ...(question ? { question } : {}),
+      ...(pageUrl ? { pageUrl } : {}),
       ...(quote ? { quote } : {}),
       ...(blessing?.encouragement
         ? { encouragement: blessing.encouragement }
@@ -114,7 +187,7 @@ export function storyBookSnapshot(
       chapters.push({
         id: moment.id,
         title: moment.title,
-        content: moment.content!,
+        content: cleanStoryBookText(moment.content!, true),
         question: moment.question,
         ...(moment.sourceQuote ? { quote: moment.sourceQuote } : {}),
       });
@@ -197,9 +270,19 @@ const color = (hex: string) =>
 const ink = color(BRAND_COLORS.espresso);
 const paper = color(BRAND_COLORS.paper);
 const sage = color(BRAND_COLORS.sage);
+const clay = color(BRAND_COLORS.clay);
+const taupe = color(BRAND_COLORS.taupe);
+const chocolate = color("#3c2a22");
 const [width, height] = PageSizes.Letter;
-const margin = 54;
+const margin = 40;
 const textWidth = width - margin * 2;
+const bodySize = 10.75;
+const bodyLeading = 14.8;
+
+async function embedStill(doc: PDFDocument, bytes: Uint8Array) {
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50;
+  return png ? doc.embedPng(bytes) : doc.embedJpg(bytes);
+}
 
 /** Produces bytes only. Nothing is stored publicly or sent to another service. */
 export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
@@ -210,7 +293,9 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
         "public/brand/fonts/quicksand-print-medium-v1.ttf",
       ),
     ),
-    readFile(path.join(process.cwd(), "public/brand/time-tapestry-lockup.png")),
+    readFile(
+      path.join(process.cwd(), "public/brand/time-tapestry-lockup-light.png"),
+    ),
   ]);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -223,6 +308,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
       chapter.content,
       chapter.quote || "",
       chapter.question || "",
+      chapter.label || "",
       chapter.encouragement || "",
       chapter.scripture || "",
     ]),
@@ -274,15 +360,39 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     x: number,
     y: number,
     size: number,
+    fill = ink,
   ) => {
     for (const run of runs(text)) {
-      page.drawText(run.text, { x, y, size, font: run.font, color: ink });
+      page.drawText(run.text, { x, y, size, font: run.font, color: fill });
       x += run.font.widthOfTextAtSize(run.text, size);
     }
   };
+  const drawOrb = (page: PDFPage, x: number, y: number, scale = 1) => {
+    page.drawCircle({
+      x,
+      y,
+      size: 22 * scale,
+      color: clay,
+      opacity: 0.92,
+    });
+    page.drawCircle({
+      x: x + 11 * scale,
+      y: y + 8 * scale,
+      size: 14 * scale,
+      color: sage,
+      opacity: 0.8,
+    });
+    page.drawCircle({
+      x: x - 8 * scale,
+      y: y - 7 * scale,
+      size: 9 * scale,
+      color: paper,
+      opacity: 0.55,
+    });
+  };
   for (const value of values)
     for (const ch of printable(value)) if (ch !== "\n") selectFont(ch);
-  const logo = await doc.embedPng(logoBytes);
+  const logoLight = await doc.embedPng(logoBytes);
   // Metadata deliberately excludes email addresses, member lists, IDs and links.
   doc.setTitle("Time Tapestry | Stories woven together");
   doc.setAuthor("Time Tapestry");
@@ -298,44 +408,52 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   const cover = doc.addPage(PageSizes.Letter);
   cover.drawRectangle({ x: 0, y: 0, width, height, color: paper });
   cover.drawRectangle({
-    x: margin,
-    y: height - 176,
-    width: textWidth,
-    height: 2,
-    color: sage,
+    x: 0,
+    y: height - 188,
+    width,
+    height: 188,
+    color: chocolate,
   });
-  const logoSize = logo.scaleToFit(190, 72);
-  cover.drawImage(logo, {
+  drawOrb(cover, width - 78, height - 96, 1.35);
+  const logoSize = logoLight.scaleToFit(168, 58);
+  cover.drawImage(logoLight, {
     x: margin,
-    y: height - margin - logoSize.height,
+    y: height - 36 - logoSize.height,
     ...logoSize,
   });
-  let coverY = height - 232;
-  const coverBlock = (text: string, size: number, lineHeight: number) => {
+  let coverY = height - 230;
+  const coverBlock = (
+    text: string,
+    size: number,
+    lineHeight: number,
+    fill = ink,
+  ) => {
     for (const line of wrapBookText(text, textWidth, (value) =>
       measure(value, size),
     )) {
-      draw(cover, line, margin, coverY, size);
+      draw(cover, line, margin, coverY, size, fill);
       coverY -= lineHeight;
     }
   };
-  coverBlock("Stories woven together.", 28, 37);
-  if (book.draft) coverBlock("Private draft for your review", 13, 20);
-  coverY -= 30;
+  coverBlock("Stories woven together.", 26, 32);
+  if (book.draft) coverBlock("Private draft for your review", 11, 16, taupe);
+  coverY -= 16;
   // Long names flow without shrinking the book's reading text.
-  coverBlock(`From ${book.storytellerName}`, 21, 29);
-  coverY -= 12;
-  coverBlock(`For ${book.recipientName}`, 21, 29);
-  if (coverY < 115)
+  coverBlock(`From ${book.storytellerName}`, 18, 24);
+  coverY -= 4;
+  coverBlock(`For ${book.recipientName}`, 18, 24);
+  if (coverY < 120)
     throw new StoryBookError(
       "The names are too long for the book cover. Please ask the Time Tapestry team to help format the complete names.",
     );
+  cover.drawRectangle({ x: 0, y: 0, width, height: 78, color: chocolate });
+  drawOrb(cover, 78, 40, 0.7);
   cover.drawText("Stories to keep and return to.", {
-    x: margin,
-    y: 92,
+    x: margin + 56,
+    y: 32,
     font,
-    size: 14,
-    color: ink,
+    size: 12,
+    color: paper,
   });
 
   // Reserve contents pages before chapter layout, then fill in actual page numbers.
@@ -350,22 +468,24 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   const addContentsPage = () => {
     contentsPage = doc.addPage(PageSizes.Letter);
     contentsPage.drawRectangle({ x: 0, y: 0, width, height, color: paper });
-    draw(contentsPage, "The stories inside", margin, height - 85, 27);
+    draw(contentsPage, "The stories inside", margin, height - 58, 18);
     draw(
       contentsPage,
       "A life, remembered in their own words.",
       margin,
-      height - 117,
-      12,
+      height - 78,
+      10.5,
     );
-    contentsY = height - 166;
+    contentsY = height - 108;
   };
   addContentsPage();
   book.chapters.forEach((chapter, chapterIndex) => {
-    const lines = wrapBookText(chapter.title, textWidth - 68, (value) =>
-      measure(value, 14),
+    const lines = wrapBookText(
+      chapter.label ? `${chapter.label}  ·  ${chapter.title}` : chapter.title,
+      textWidth - 68,
+      (value) => measure(value, 11),
     );
-    const entryHeight = lines.length * 22 + 20;
+    const entryHeight = lines.length * 16 + 10;
     if (contentsY - entryHeight < 75) addContentsPage();
     contents.push({ page: contentsPage, y: contentsY, lines, chapterIndex });
     contentsY -= entryHeight;
@@ -375,58 +495,141 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
   for (const [index, chapter] of book.chapters.entries()) {
     let page = doc.addPage(PageSizes.Letter);
     chapterPages.push(doc.getPageCount() - 1);
-    let y = height - 66;
-    const runningHeader = () => {
-      page.drawText(`TIME TAPESTRY  /  STORY ${index + 1}`, {
-        x: margin,
-        y: height - 38,
-        font,
-        size: 9,
-        color: ink,
+    page.drawRectangle({ x: 0, y: 0, width, height, color: paper });
+    const still = chapter.still?.byteLength
+      ? await embedStill(doc, chapter.still)
+      : undefined;
+    const titleLines = wrapBookText(
+      chapter.title,
+      textWidth - (still ? 132 : 56),
+      (value) => measure(value, 16),
+    );
+    const band = Math.max(78, 34 + titleLines.length * 20);
+    page.drawRectangle({
+      x: 0,
+      y: height - band,
+      width,
+      height: band,
+      color: chocolate,
+    });
+    if (still) {
+      const fitted = still.scaleToFit(112, band - 22);
+      page.drawImage(still, {
+        x: width - margin - fitted.width,
+        y: height - band + (band - fitted.height) / 2,
+        ...fitted,
       });
+    } else drawOrb(page, width - 62, height - band / 2, 0.95);
+    if (chapter.label) draw(page, chapter.label, margin, height - 22, 9, paper);
+    titleLines.forEach((line, lineIndex) =>
+      draw(page, line, margin, height - 42 - lineIndex * 20, 16, paper),
+    );
+    let y = height - band - 8;
+    const nextPage = () => {
+      page = doc.addPage(PageSizes.Letter);
+      page.drawRectangle({ x: 0, y: 0, width, height, color: paper });
+      const running = chapter.label || `Story ${index + 1}`;
+      draw(page, running, margin, height - 28, 8, taupe);
       page.drawLine({
-        start: { x: margin, y: height - 48 },
-        end: { x: width - margin, y: height - 48 },
-        thickness: 0.6,
+        start: { x: margin, y: height - 34 },
+        end: { x: width - margin, y: height - 34 },
+        thickness: 0.4,
         color: sage,
       });
+      y = height - 46;
     };
-    runningHeader();
-    const block = (text: string, size = 14, leading = 23) => {
-      for (const line of wrapBookText(text, textWidth, (value) =>
+    const block = (
+      text: string,
+      size = bodySize,
+      leading = bodyLeading,
+      fill = ink,
+      inset = 0,
+    ) => {
+      for (const line of wrapBookText(text, textWidth - inset, (value) =>
         measure(value, size),
       )) {
-        if (y - leading < 63) {
-          page = doc.addPage(PageSizes.Letter);
-          y = height - 78;
-          runningHeader();
-        }
+        if (y - leading < 36) nextPage();
         y -= leading;
-        if (line) draw(page, line, margin, y, size);
+        if (line) draw(page, line, margin + inset, y, size, fill);
       }
     };
-    block(chapter.title, 27, 35);
-    y -= 20;
     if (chapter.question) {
-      block(chapter.question, 12, 20);
-      y -= 16;
+      y -= 8;
+      block(chapter.question, 11, 14.5, taupe);
+      y -= 6;
     }
     if (chapter.quote) {
-      block(`“${chapter.quote}”`, 18, 28);
-      y -= 5;
-      block(`In ${book.storytellerName}’s own words`, 10, 17);
-      y -= 20;
+      const quoteLines = wrapBookText(
+        `“${chapter.quote}”`,
+        textWidth - 18,
+        (value) => measure(value, 11.5),
+      );
+      const boxHeight = quoteLines.length * 15 + 22;
+      if (y - boxHeight < 36) nextPage();
+      y -= 8;
+      page.drawRectangle({
+        x: margin,
+        y: y - boxHeight + 8,
+        width: textWidth,
+        height: boxHeight,
+        color: color("#f3ebe4"),
+      });
+      page.drawRectangle({
+        x: margin,
+        y: y - boxHeight + 8,
+        width: 3,
+        height: boxHeight,
+        color: clay,
+      });
+      for (const line of quoteLines) {
+        y -= 15;
+        draw(page, line, margin + 12, y, 11.5);
+      }
+      y -= 14;
+      draw(
+        page,
+        `In ${book.storytellerName}’s own words`,
+        margin + 12,
+        y,
+        8,
+        taupe,
+      );
+      y -= 8;
     }
+    y -= 4;
     block(chapter.content);
     if (chapter.encouragement || chapter.scripture) {
-      y -= 20;
-      block("A word for you", 18, 29);
-      y -= 7;
+      y -= 10;
+      block("A word for you", 12, 16);
+      y -= 2;
       if (chapter.encouragement) block(chapter.encouragement);
       if (chapter.scripture) {
-        y -= 12;
-        block(chapter.scripture);
+        y -= 6;
+        block(chapter.scripture, 10.5, 14, taupe);
       }
+    }
+    if (chapter.pageUrl) {
+      const qr = await doc.embedPng(
+        await QRCode.toBuffer(chapter.pageUrl, {
+          errorCorrectionLevel: "M",
+          margin: 0,
+          width: 180,
+          color: { dark: BRAND_COLORS.espresso, light: "#fbfaf8" },
+        }),
+      );
+      if (y - 72 < 36) nextPage();
+      y -= 16;
+      const qrSize = qr.scale(0.28);
+      page.drawImage(qr, { x: margin, y: y - qrSize.height, ...qrSize });
+      draw(
+        page,
+        "Open this chapter",
+        margin + qrSize.width + 10,
+        y - 18,
+        9,
+        taupe,
+      );
+      y -= qrSize.height;
     }
   }
   for (const entry of contents) {
@@ -438,7 +641,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
       11,
     );
     entry.lines.forEach((line, i) =>
-      draw(entry.page, line, margin + 30, entry.y - i * 22, 14),
+      draw(entry.page, line, margin + 28, entry.y - i * 16, 11),
     );
     const pageNumber = String(chapterPages[entry.chapterIndex]);
     draw(
@@ -455,7 +658,7 @@ export async function renderStoryBook(book: StoryBook): Promise<Uint8Array> {
     const number = `${index} / ${pages.length - 1}`;
     page.drawText(number, {
       x: width - margin - font.widthOfTextAtSize(number, 10),
-      y: 35,
+      y: 22,
       font,
       size: 10,
       color: ink,
