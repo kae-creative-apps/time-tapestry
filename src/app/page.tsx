@@ -13,24 +13,24 @@ import styles from "@/components/marketing/FrontDoor.module.css";
 const steps = [
   {
     number: "01",
-    title: "Start with a conversation.",
+    title: "Open a pilot.",
     description:
-      "Gentle questions help you find the stories you want to share. Record with your voice or camera, and take it at your own pace.",
-    icon: "conversation",
+      "Tell us about your ministry, nonprofit, foundation, or advancement team. Choose how many donors to invite. The pilot is free.",
+    icon: "handHeart",
   },
   {
     number: "02",
-    title: "See your stories take shape.",
+    title: "Invite a donor by name.",
     description:
-      "Your recordings become four short films, in your own voice, and a four-chapter story book you can download and print.",
-    icon: "collection",
+      "Send a personal invitation. A guided conversation helps them talk about why they give, in their own voice, at their own pace.",
+    icon: "conversation",
   },
   {
     number: "03",
-    title: "Give them to your people.",
+    title: "Their family receives the story.",
     description:
-      "Invite the people you love to a private collection. They can watch, read, and reply with a memory of their own.",
-    icon: "heart",
+      "Children and grandchildren get four short films, a story book, and postcards: the joy, faith, and lives behind a legacy of generosity.",
+    icon: "collection",
   },
 ] satisfies {
   number: string;
@@ -40,10 +40,25 @@ const steps = [
 }[];
 
 const chapters = [
-  ["01", "Kindness received", "The people who made a difference."],
-  ["02", "A life of faith", "What carried you, if you want to share."],
-  ["03", "What you sowed", "The ways you gave to others."],
-  ["04", "What I hope you carry", "Words for someone you love."],
+  ["01", "Roots of generosity", "Who first showed them what giving looks like."],
+  ["02", "Why I give", "The faith and values that moved them."],
+  ["03", "Lives I’ve seen flourish", "The ministries and people their generosity has touched."],
+  ["04", "What I hope you carry", "A blessing for their children and grandchildren."],
+];
+
+const benefits = [
+  {
+    title: "Easy for the donor",
+    text: "They answer gentle questions out loud. No memoir to write, and no one asks what they gave.",
+  },
+  {
+    title: "A keepsake for their family",
+    text: "Four films in their voice, a printable story book, and postcards their children and grandchildren can return to.",
+  },
+  {
+    title: "Private by design",
+    text: "The donor chooses who can open the collection. Your team sees progress, not the private story.",
+  },
 ];
 
 function BookCover({ large = false }: { large?: boolean }) {
@@ -59,7 +74,7 @@ function BookCover({ large = false }: { large?: boolean }) {
           <br />
           from Gigi
         </p>
-        <p className={styles.bookDedication}>For Sammie, with love.</p>
+        <p className={styles.bookDedication}>For Sammie, her granddaughter.</p>
         <span className={styles.bookRule} />
         <p className={styles.bookImprint}>TIME TAPESTRY</p>
       </div>
@@ -76,27 +91,28 @@ export default function Home() {
         <section className={styles.hero} aria-labelledby="hero-heading">
           <div className={styles.heroIntro}>
             <p className={styles.eyebrow}>
-              A little of your life. A gift for theirs.
+              For ministries, nonprofits, and advancement teams
             </p>
             <h1 id="hero-heading">
-              Give them the stories
-              <br className={styles.heroBreak} /> only you can tell.
+              Help your donors pass on
+              <br className={styles.heroBreak} /> a legacy of generosity.
             </h1>
             <p className={styles.heroDescription}>
-              The neighbor who showed up. The faith that carried you. The reason
-              you always set another place at the table. Share those stories, in
-              your own voice, with the people you love.
+              The easiest way for a major donor to share why they give — the
+              joy, the faith, the relationships, the lives changed — with their
+              children and grandchildren.
             </p>
             <div className={styles.actions}>
-              <Link href="/share" className={styles.primaryButton}>
-                Share my story <AppIcon name="arrowUpRight" size={20} />
+              <Link href="/for-organizations" className={styles.primaryButton}>
+                Bring Time Tapestry to your donors{" "}
+                <AppIcon name="arrowUpRight" size={20} />
               </Link>
-              <Link href="/request" className={styles.secondaryButton}>
-                Ask someone for theirs <AppIcon name="arrowUpRight" size={20} />
+              <Link href="/for-organizations#start-pilot" className={styles.secondaryButton}>
+                Start a pilot <AppIcon name="arrowUpRight" size={20} />
               </Link>
             </div>
             <p className={styles.pilotNote}>
-              Free during our pilot. No payment required.
+              Free during the pilot. Donors are never asked about gift size.
             </p>
           </div>
           <div className={styles.showcase}>
@@ -104,7 +120,7 @@ export default function Home() {
               <div className={styles.postcardArtwork}>
                 <Image
                   src="/brand/postcards/designer-2026-10-06-v2/postcard-01-kindness-front.webp"
-                  alt="Sample kindness postcard from Gigi to Sammie, with a warm woven pattern."
+                  alt="Sample postcard from Gigi, a donor, for her granddaughter Sammie."
                   width={1500}
                   height={1000}
                   sizes="(max-width: 700px) 44vw, (max-width: 1100px) 26vw, 340px"
@@ -113,30 +129,30 @@ export default function Home() {
                 />
               </div>
               <figcaption>
-                A little encouragement
+                A reminder of her generosity
                 <br />
-                <span>Sample postcard design</span>
+                <span>Sample postcard for Sammie</span>
               </figcaption>
             </figure>
             <div className={styles.conversationPanel}>
-              <p className={styles.panelEyebrow}>It begins with one question</p>
+              <p className={styles.panelEyebrow}>A question for your donors</p>
               <div className={styles.heroOrb}>
                 <SiriOrb size="144px" />
               </div>
               <p className={styles.previewQuestion}>
-                “Tell me about someone whose kindness has stayed with you.”
+                “What made you become so generous?”
               </p>
               <InterviewPreview />
               <p className={styles.previewNote}>
-                Listen to a sample. No microphone needed.
+                Preview the questions. Nothing is recorded here.
               </p>
             </div>
             <figure className={styles.bookFloat}>
               <BookCover />
               <figcaption>
-                A story book to keep
+                Gigi’s story, for Sammie
                 <br />
-                <span>Book cover illustration</span>
+                <span>A donor’s keepsake for her granddaughter</span>
               </figcaption>
             </figure>
           </div>
@@ -145,13 +161,13 @@ export default function Home() {
             aria-label="Your story collection includes"
           >
             <span>
-              <AppIcon name="video" size={21} /> Four films in your voice
+              <AppIcon name="video" size={21} /> Four films in the donor’s voice
             </span>
             <span>
-              <AppIcon name="collection" size={21} /> A printable story book
+              <AppIcon name="collection" size={21} /> A story book for their family
             </span>
             <span>
-              <AppIcon name="shield" size={21} /> Shared privately
+              <AppIcon name="shield" size={21} /> Never about gift size
             </span>
           </div>
         </section>
@@ -161,12 +177,11 @@ export default function Home() {
           aria-labelledby="how-heading"
         >
           <div className={styles.sectionHeading}>
-            <p className={styles.eyebrow}>You already have the stories</p>
-            <h2 id="how-heading">We help you share them.</h2>
+            <p className={styles.eyebrow}>How it works</p>
+            <h2 id="how-heading">From an invitation to a family keepsake.</h2>
             <p>
-              You don’t need to write a memoir or know where to start.
-              <br className={styles.desktopBreak} /> Just begin with what you
-              remember.
+              Your donors already carry the story. Time Tapestry helps them
+              tell it to the people who will inherit their example.
             </p>
           </div>
           <div className={styles.steps}>
@@ -193,7 +208,7 @@ export default function Home() {
                 <BookCover large />
               </div>
               <div className={styles.chapterSheet}>
-                <p className={styles.sheetEyebrow}>A life in four chapters</p>
+                <p className={styles.sheetEyebrow}>A legacy in four chapters</p>
                 {chapters.map(([number, title, note]) => (
                   <div className={styles.chapter} key={number}>
                     <span>{number}</span>
@@ -204,33 +219,36 @@ export default function Home() {
                   </div>
                 ))}
                 <span className={styles.sheetFooter}>
-                  Stories woven together
+                  For the next generation
                 </span>
               </div>
               <p className={styles.visualCaption}>
-                Sample collection illustration
+                Sample: Gigi’s collection for her granddaughter, Sammie
               </p>
             </div>
             <div className={styles.collectionCopy}>
-              <p className={styles.eyebrow}>More than the words alone</p>
+              <p className={styles.eyebrow}>What your donors’ families receive</p>
               <h2 id="collection-heading">
-                The story matters.
+                The voice they know.
                 <br />
-                So does the way
-                <br className={styles.desktopBreak} /> you tell it.
+                The reason they give.
               </h2>
               <p>
-                Your laugh in the middle of a memory. The way you say someone’s
-                name. Your films keep the voice your family knows, using your
-                original audio or video.
+                Films keep a donor’s laugh, the way they say a name, and the
+                stories of people whose lives flourished because of their
+                generosity. The story book gathers that into four chapters their
+                children and grandchildren can hold.
               </p>
-              <p>
-                Alongside them, a written story book gathers your memories into
-                four chapters. Download it, print a copy, and leave room on the
-                shelf for a little of your life.
-              </p>
-              <Link href="/share" className={styles.textLink}>
-                Start with your first story{" "}
+              <ul className={styles.benefitList}>
+                {benefits.map((benefit) => (
+                  <li key={benefit.title}>
+                    <h3>{benefit.title}</h3>
+                    <p>{benefit.text}</p>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/for-organizations" className={styles.textLink}>
+                Bring this to your donors{" "}
                 <AppIcon name="arrowRight" size={20} />
               </Link>
             </div>
@@ -239,52 +257,51 @@ export default function Home() {
         <PostcardCollection />
         <section className={styles.moreSection} aria-labelledby="more-heading">
           <div className={styles.moreCopy}>
-            <p className={styles.eyebrow}>Keep the conversation going</p>
+            <p className={styles.eyebrow}>Examples</p>
             <h2 id="more-heading">
-              There’s always
+              A donor’s generosity,
               <br />
-              another story.
+              told to their family.
             </h2>
             <p>
-              Once your first collection is complete, come back when another
-              memory finds you. Add a new recording, or let your family choose a
-              few questions they’d love to hear you answer.
+              Gigi is a sample donor. She records why she gives, the ministries
+              she loves, and what she hopes her granddaughter Sammie will carry.
+              The collection is Gigi’s story of generosity, passed to the next
+              generation.
             </p>
             <p>
-              Explore 100 prompts about the people, choices, joys, and beliefs
-              that shaped your life. Each new story becomes another film and a
-              chapter in your growing book.
+              Ministries, foundations, and donor advisors can offer the same
+              conversation. An advancement team can leave it with a major donor
+              as a family keepsake: the human side of a life of giving.
             </p>
             <p className={styles.faithNote}>
-              Christian faith questions are always optional. Share what feels
-              true to your life.
+              Faith questions stay optional. Donors share what is true for them,
+              and they are never asked how much they give.
             </p>
-            <Link href="#begin" className={styles.textLink}>
-              Make a place for your stories{" "}
+            <Link href="/for-organizations" className={styles.textLink}>
+              Start a pilot for your donors{" "}
               <AppIcon name="arrowRight" size={20} />
             </Link>
           </div>
           <div className={styles.promptDisplay}>
             <div className={styles.promptDisplayHeader}>
               <AppIcon name="conversation" size={23} />
-              <span>A question can open a whole story.</span>
+              <span>Questions a donor might hear.</span>
             </div>
             <div className={styles.promptCard}>
-              <span>Relationships</span>
-              <p>“Tell me how one of your lasting friendships began.”</p>
+              <span>Sample · Gigi for Sammie</span>
+              <p>“Why did you fall in love with these ministries?”</p>
             </div>
             <div className={`${styles.promptCard} ${styles.promptCardSage}`}>
-              <span>Character</span>
-              <p>“Tell me about a time keeping a promise mattered to you.”</p>
+              <span>Example · Advancement team</span>
+              <p>“Why was it worth it to you?”</p>
             </div>
             <div className={`${styles.promptCard} ${styles.promptCardClay}`}>
-              <span>Health</span>
-              <p>
-                “What meal do you remember as an expression of someone’s care?”
-              </p>
+              <span>Example · A ministry</span>
+              <p>“What do you hope your grandchildren carry from this?”</p>
             </div>
             <p className={styles.promptCaption}>
-              A few questions from the prompt library
+              Sample questions. Not a record of a real interview.
             </p>
           </div>
         </section>
@@ -297,16 +314,17 @@ export default function Home() {
           </div>
           <div>
             <h2 id="privacy-heading">
-              Your stories belong with the people you choose.
+              A donor’s story stays with the family they choose.
             </h2>
             <p>
-              Invite family by email to your private collection. Each viewer
-              verifies their email before opening your stories, and you can
-              remove access when you need to.
+              Donors invite children and grandchildren by email. Each person
+              verifies their email before opening the collection, and access can
+              be removed. Your organization does not receive the private
+              recordings.
             </p>
           </div>
           <Link href="/privacy" className={styles.textLink}>
-            How we protect your stories{" "}
+            How stories are protected{" "}
             <AppIcon name="arrowUpRight" size={19} />
           </Link>
         </section>
@@ -316,46 +334,47 @@ export default function Home() {
           aria-labelledby="begin-heading"
         >
           <div className={styles.sectionHeading}>
-            <p className={styles.eyebrow}>Someone will be glad you began</p>
-            <h2 id="begin-heading">Every family has a place to start.</h2>
+            <p className={styles.eyebrow}>For your organization</p>
+            <h2 id="begin-heading">Offer this to the donors you serve.</h2>
             <p>
-              Tell a story of your own, or invite someone whose stories you
-              love.
+              Start a pilot, or read how the free pilot works for ministries,
+              nonprofits, foundations, and advancement teams.
             </p>
           </div>
           <div className={styles.beginChoices}>
             <div className={styles.beginChoice}>
-              <AppIcon name="conversation" size={30} />
-              <h3>“I have a story to share.”</h3>
+              <AppIcon name="handHeart" size={30} />
+              <h3>Bring it to your donors.</h3>
               <p>
-                Start with a memory. We’ll help you find the words and turn your
-                recordings into something your family can return to.
+                Set up a pilot and invite major donors to record the story of
+                their generosity for their children and grandchildren.
               </p>
-              <Link href="/share" className={styles.primaryButton}>
-                Share my story <AppIcon name="arrowUpRight" size={20} />
+              <Link href="/for-organizations" className={styles.primaryButton}>
+                Start a pilot <AppIcon name="arrowUpRight" size={20} />
               </Link>
             </div>
             <div className={`${styles.beginChoice} ${styles.inviteChoice}`}>
-              <AppIcon name="heart" size={30} />
-              <h3>“I’d love to hear theirs.”</h3>
+              <AppIcon name="conversation" size={30} />
+              <h3>Talk with us.</h3>
               <p>
-                Send someone a personal invitation. Let them know you’d love to
-                hear about the people and moments that made them who they are.
+                The pilot is free, with room for up to 100 donor invitations.
+                Physical postcards are still being tested. Share your
+                organization on the pilot form to begin.
               </p>
-              <Link href="/request" className={styles.secondaryButton}>
-                Request their story <AppIcon name="arrowUpRight" size={20} />
+              <Link href="/pricing" className={styles.secondaryButton}>
+                About the pilot <AppIcon name="arrowUpRight" size={20} />
               </Link>
             </div>
           </div>
           <p className={styles.beginPilot}>
-            Time Tapestry is free during our pilot. Physical postcard mailing is
-            still being tested. <Link href="/pricing">About the pilot</Link>
+            Time Tapestry is free during the pilot. No payment details. Donors
+            are never asked about gift size.{" "}
+            <Link href="/pricing">Pilot details</Link>
           </p>
           <div className={styles.organizationLine}>
-            <p>Good stories belong in communities, too.</p>
-            <Link href="/for-organizations" className={styles.textLink}>
-              For churches & organizations{" "}
-              <AppIcon name="arrowUpRight" size={20} />
+            <p>A legacy of generosity, in their own voice.</p>
+            <Link href="/for-organizations#start-pilot" className={styles.textLink}>
+              Talk with us <AppIcon name="arrowUpRight" size={20} />
             </Link>
           </div>
         </section>
