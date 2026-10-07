@@ -156,7 +156,7 @@ export async function mutateRecord<T>(
 }
 
 /** Full-interview restoration treats updatedAt as the saved-answer version. */
-function sameSavedCollection(before: Collection, next: Collection) {
+export function sameSavedCollection(before: Collection, next: Collection) {
   return (
     JSON.stringify({ ...before, updatedAt: "" }) ===
     JSON.stringify({ ...next, updatedAt: "" })

@@ -13,6 +13,7 @@ import {
   mutateCollection,
   mutateRecord,
   readRecord,
+  sameSavedCollection,
 } from "./store";
 import { draftChapters, selectedAnswers } from "./content";
 import {
@@ -339,11 +340,13 @@ async function publishStatus(job: InterviewPreparationJob) {
       throw new InterviewPreparationError("Your stories could not be found.");
     if (c.status === "approved" || c.interviewPreparation?.id !== job.id)
       return c;
-    c.interviewPreparation = interviewPreparationJobView(job);
+    const next = structuredClone(c);
+    next.interviewPreparation = interviewPreparationJobView(job);
     if (job.status === "needs_attention")
-      queuePreparationAttention(c, job.id, job.error, job.updatedAt);
-    c.updatedAt = iso();
-    return c;
+      queuePreparationAttention(next, job.id, job.error, job.updatedAt);
+    if (sameSavedCollection(c, next)) return c;
+    next.updatedAt = iso();
+    return next;
   });
 }
 
@@ -356,7 +359,10 @@ export async function claimInterviewPreparation(
   for (const id of registry?.ids ?? []) {
     if (onlyId && onlyId !== id) continue;
     let claimed: InterviewPreparationJob | null = null;
+    let attentionStarted = false;
     const result = await mutateRecord<InterviewPreparationJob>(id, (job) => {
+      claimed = null;
+      attentionStarted = false;
       if (!job)
         throw new InterviewPreparationError("Preparation could not be found.");
       if (
@@ -365,7 +371,8 @@ export async function claimInterviewPreparation(
         (job.nextAttemptAt && Date.parse(job.nextAttemptAt) > now)
       )
         return job;
-      if (job.attempts >= MAX_ATTEMPTS)
+      if (job.attempts >= MAX_ATTEMPTS) {
+        attentionStarted = true;
         return {
           ...job,
           status: "needs_attention",
@@ -374,6 +381,7 @@ export async function claimInterviewPreparation(
           error:
             "Preparation needs a setup check after three attempts. Your original recordings and saved progress are preserved.",
         };
+      }
       claimed = {
         ...job,
         status: "preparing",
@@ -388,7 +396,7 @@ export async function claimInterviewPreparation(
       };
       return claimed;
     });
-    if (result.status === "needs_attention") await publishStatus(result);
+    if (attentionStarted) await publishStatus(result);
     if (claimed) {
       await publishStatus(claimed);
       return claimed as InterviewPreparationJob;
