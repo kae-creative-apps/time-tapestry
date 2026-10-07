@@ -11,6 +11,64 @@ export type SourceWord = {
   /** Provider-detected language. Unknown language cannot authorize lexical cuts. */
   languageCode?: string;
 };
+/** Fillers and backchannels that are not the start or end of a thought.
+ * A content word such as "never" is intentionally absent.
+ */
+const edgeFillers = new Set([
+  "um",
+  "uh",
+  "uhh",
+  "uhm",
+  "erm",
+  "er",
+  "hmm",
+  "hm",
+  "mm",
+  "mmm",
+  "mhm",
+  "mhmm",
+  "ah",
+  "ahh",
+  "oh",
+  "ohh",
+  "eh",
+  "yeah",
+  "yea",
+  "yes",
+  "yep",
+  "yup",
+  "yah",
+  "okay",
+  "ok",
+  "alright",
+  "anyway",
+  "anyways",
+]);
+/** Interview openers the written answer often keeps and Scribe often drops.
+ * They are not accepted at the end, where the same spellings can be content.
+ */
+const leadingEdgeTokens = new Set([
+  ...edgeFillers,
+  "well",
+  "so",
+  "and",
+  "but",
+  "just",
+  "actually",
+  "like",
+  "right",
+]);
+const EDGE_DRIFT_TOKENS = 2;
+type AlignOp =
+  | { kind: "match"; wordIndex: number }
+  | {
+      kind: "substitute";
+      wordIndex: number;
+      query: string;
+      source: string;
+    }
+  | { kind: "delete"; query: string };
+
 const contractions: Record<string, string[]> = {
   "i'm": ["i", "am"],
   "it's": ["it", "is"],
@@ -44,7 +102,9 @@ export function validateSourceWords(
   if (!words.length || words.length > 60000)
     throw new Error("The transcription did not contain usable source words.");
   if (!Number.isFinite(durationMs) || durationMs <= 0)
-    throw new Error("The original recording needs a measured positive duration.");
+    throw new Error(
+      "The original recording needs a measured positive duration.",
+    );
   for (const word of words) {
     if (
       word.mediaId !== mediaId ||
@@ -127,31 +187,59 @@ export function matchSourceWords(
     let i = query.length,
       j = end,
       matched = 0;
-    let firstBoundary = false,
-      lastBoundary = false;
     const indices: number[] = [];
+    const ops: AlignOp[] = [];
     while (i > 0 && j > 0) {
       const step = trace[i * width + j];
       if (step === 1) {
         if (query[i - 1] === source[j - 1].text) {
           matched++;
-          if (i === 1) firstBoundary = true;
-          if (i === query.length) lastBoundary = true;
           indices.push(source[j - 1].wordIndex);
-        }
+          ops.push({ kind: "match", wordIndex: source[j - 1].wordIndex });
+        } else
+          ops.push({
+            kind: "substitute",
+            wordIndex: source[j - 1].wordIndex,
+            query: query[i - 1],
+            source: source[j - 1].text,
+          });
         i--;
         j--;
-      } else if (step === 2) i--;
-      else j--;
+      } else if (step === 2) {
+        ops.push({ kind: "delete", query: query[i - 1] });
+        i--;
+      } else j--;
     }
-    return { start: j, end, matched, indices, firstBoundary, lastBoundary };
+    while (i > 0) {
+      ops.push({ kind: "delete", query: query[i - 1] });
+      i--;
+    }
+    ops.reverse();
+    return { start: j, end, matched, indices, ops };
+  };
+  const edgeDrift = (ops: AlignOp[], allowed: Set<string>) => {
+    const extra: number[] = [];
+    let consumed = 0;
+    for (const op of ops) {
+      if (op.kind === "match") return extra;
+      if (consumed >= EDGE_DRIFT_TOKENS) return null;
+      if (op.kind === "delete") {
+        if (!allowed.has(op.query)) return null;
+        consumed++;
+        continue;
+      }
+      if (!allowed.has(op.query) || !allowed.has(op.source)) return null;
+      consumed++;
+      extra.push(op.wordIndex);
+    }
+    return null;
   };
   const endpoints = Array.from(previous)
     .map((cost, j) => ({ cost, j }))
     .filter(({ cost, j }) => j > 0 && cost === bestCost);
-  const best = traceMatch(endpoints[0].j);
-  for (const { j } of endpoints.slice(1)) {
-    const alternative = traceMatch(j);
+  const candidates = endpoints.map(({ j }) => traceMatch(j));
+  const best = candidates[0];
+  for (const alternative of candidates.slice(1)) {
     const overlap = Math.max(
       0,
       Math.min(best.end, alternative.end) -
@@ -169,12 +257,25 @@ export function matchSourceWords(
     throw new Error(
       "The source-word match did not preserve enough of the complete answer.",
     );
-  if (!best.firstBoundary || !best.lastBoundary)
+  const verified = candidates
+    .filter(
+      (candidate) =>
+        edgeDrift(candidate.ops, leadingEdgeTokens) &&
+        edgeDrift([...candidate.ops].reverse(), edgeFillers),
+    )
+    .sort(
+      (left, right) => right.end - right.start - (left.end - left.start),
+    )[0];
+  const leading = verified && edgeDrift(verified.ops, leadingEdgeTokens);
+  const trailing =
+    verified && edgeDrift([...verified.ops].reverse(), edgeFillers);
+  if (!verified || !leading || !trailing)
     throw new Error(
       "The complete answer boundaries could not be verified. No partial-thought cut was made.",
     );
-  const first = Math.min(...best.indices),
-    last = Math.max(...best.indices);
+  const indices = [...new Set([...verified.indices, ...leading, ...trailing])];
+  const first = Math.min(...indices),
+    last = Math.max(...indices);
   const enclosingPassage = words.slice(first, last + 1);
   // Verify the entire matched interval before rollover filtering. Otherwise an
   // untimed unmatched file-edge token could disappear within the text allowance.
@@ -182,7 +283,7 @@ export function matchSourceWords(
   // Keep all interior words, but remove duplicate rollover edges only when
   // alignment actually matched them in the neighboring source file.
   const bounds = new Map<string, [number, number]>();
-  for (const index of best.indices) {
+  for (const index of indices) {
     const id = words[index].mediaId,
       bound = bounds.get(id);
     bounds.set(id, [
@@ -273,7 +374,9 @@ export function cutsForMatchedWords(
       durationMs! <= 0 ||
       group.some((word) => word.endMs > durationMs!)
     )
-      throw new Error("A selected passage needs verified original source bounds.");
+      throw new Error(
+        "A selected passage needs verified original source bounds.",
+      );
     // A direct caller must not omit an untimed original token while asking for
     // one continuous cut around it.
     assertTimedSourceWords(sameFile.slice(first, last + 1));

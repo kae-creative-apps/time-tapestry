@@ -126,6 +126,14 @@ export function filmJobMatches(job: StoryFilmJob, c: Collection) {
   }
 }
 
+export function automaticFilmTemplateCurrent(job: StoryFilmJob) {
+  return (
+    job.mode === "original" &&
+    job.preparation === "automatic" &&
+    job.templateVersion === AUTOMATIC_TEMPLATE_VERSION
+  );
+}
+
 function filmTemplateCurrent(job: StoryFilmJob) {
   const expected =
     job.mode !== "original"

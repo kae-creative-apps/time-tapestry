@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
@@ -1044,6 +1044,122 @@ test("exhausted original film work queues owner attention and rejects another pr
       error instanceof preparation.InterviewPreparationError &&
       error.status === 409,
   );
+});
+
+test("an older automatic film template can be prepared again after three preparation attempts", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const result = await preparation.runInterviewPreparationOnce(
+    "preparation-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      draft,
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  assert.equal(result?.status, "films_queued");
+  const createdId = result!.filmJobId!;
+  const created = await films.getFilmJob(createdId);
+  const previousId = `film_${"ab".repeat(32)}`;
+  const boundary =
+    "The complete answer boundaries could not be verified. No partial-thought cut was made.";
+  await store.mutateRecord<StoryFilmJob>(previousId, () => ({
+    ...created!,
+    id: previousId,
+    templateVersion: "original-scribe-source-cleanup-orb-v4",
+    status: "failed",
+    attempts: 1,
+    error: boundary,
+    chapters: created!.chapters.map((chapter) => ({
+      ...chapter,
+      status: "failed" as const,
+      error: boundary,
+    })),
+  }));
+  await unlink(path.join(store.dataRoot, `${createdId}.json`));
+  await store.mutateRecord<{ ids: string[] }>(
+    `film-index-${c.id}`,
+    (index) => ({
+      ids: [...(index?.ids ?? []).filter((id) => id !== createdId), previousId],
+    }),
+  );
+  await store.mutateRecord<InterviewPreparationJob>(
+    queued.preparation.id,
+    (job) => ({
+      ...job!,
+      status: "needs_attention",
+      attempts: 3,
+      filmJobId: previousId,
+      error:
+        "Film preparation needs a setup check. Completed films, written stories and original recordings are preserved.",
+    }),
+  );
+  const blocked = (await store.getCollection(c.id))!;
+  const before = await preparation.getInterviewPreparationView(blocked);
+  assert.equal(before?.canRetry, true);
+  assert.match(before?.error ?? "", /updated edit/);
+  const closed = await syntheticRecordedFilmCollection();
+  const closedQueued = await preparation.enqueueInterviewPreparation(
+    closed.id,
+    consent,
+  );
+  const closedRun = await preparation.runInterviewPreparationOnce(
+    "current-template-worker",
+    {
+      onlyId: closedQueued.preparation.id,
+      reconcile: async (current) => current,
+      draft,
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  await store.mutateRecord<InterviewPreparationJob>(
+    closedQueued.preparation.id,
+    (job) => ({
+      ...job!,
+      status: "needs_attention",
+      attempts: 3,
+      filmJobId: closedRun!.filmJobId,
+      error:
+        "Film preparation needs a setup check. Completed films, written stories and original recordings are preserved.",
+    }),
+  );
+  await assert.rejects(
+    preparation.enqueueInterviewPreparation(closed.id, {
+      ...consent,
+      retry: true,
+    }),
+    (error: unknown) =>
+      error instanceof preparation.InterviewPreparationError &&
+      error.status === 409,
+  );
+  const retry = await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  assert.equal(retry.preparation.status, "queued");
+  const resumed = await preparation.runInterviewPreparationOnce(
+    "updated-template-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async () => {
+        throw new Error("Recovery checkpoint must be reused");
+      },
+      draft: async () => {
+        throw new Error("Draft checkpoint must be reused");
+      },
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  assert.equal(resumed?.status, "films_queued");
+  assert.notEqual(resumed?.filmJobId, previousId);
+  const next = await films.getFilmJob(resumed!.filmJobId!);
+  assert.equal(next?.status, "queued");
+  assert.equal(next?.templateVersion, "original-scribe-source-cleanup-orb-v5");
+  assert.equal((await films.getFilmJob(previousId))?.status, "failed");
 });
 
 test("draft provider budget is reserved only immediately before configured drafting", async () => {
