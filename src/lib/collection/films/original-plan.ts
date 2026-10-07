@@ -399,11 +399,11 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-// v7 keeps a cut when the live transcript and Scribe disagree by one unspoken
-// token, a filler standing in for a short prefix, or a single disputed opener.
-// The new id replaces the failed v6 film instead of repeating that alignment.
+// v8 skips source tokens with no positive duration and bounds the cut with the
+// nearest word that already has a start and end. The new id replaces the failed
+// v7 film instead of repeating that timing check.
 export const AUTOMATIC_TEMPLATE_VERSION =
-  "original-scribe-source-cleanup-orb-v7";
+  "original-scribe-source-cleanup-orb-v8";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",
