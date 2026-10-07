@@ -312,6 +312,45 @@ test("filler and backchannel drift at the answer edges keeps the spoken source w
   );
 });
 
+test("a repeated false start and a trailing response particle can be cut without dropping real words", () => {
+  const story = [
+    "I remember the blue bicycle beside the kitchen window every morning",
+    "before school and after the long walk home together with everyone",
+    "who waited there patiently for us each afternoon through all those",
+    "quiet years beside the garden gate",
+  ].join(" ");
+  assert.equal(story.split(" ").length, 39);
+  const restarted = matchSourceWords(
+    `Snappy what snappy what ${story}`,
+    words(`Snappy what ${story}`),
+  );
+  assert.equal(
+    restarted.words.map((word) => word.text).join(" "),
+    `Snappy what ${story}`,
+  );
+  const abandoned = matchSourceWords(
+    `Snappy what snappy what ${story}`,
+    words(story),
+  );
+  assert.equal(abandoned.words.map((word) => word.text).join(" "), story);
+  const particle = matchSourceWords(`${story} No`, words(`${story} Nah`));
+  assert.equal(particle.words.at(-1)!.text, "Nah");
+  const dropped = matchSourceWords(`${story} No`, words(story));
+  assert.equal(dropped.words.map((word) => word.text).join(" "), story);
+  assert.throws(
+    () => matchSourceWords(`Purple marble ${story}`, words(story)),
+    /boundaries/,
+  );
+  assert.throws(
+    () => matchSourceWords(`Never never ${story}`, words(story)),
+    /boundaries/,
+  );
+  assert.throws(
+    () => matchSourceWords(`${story} know`, words(`${story} no`)),
+    /boundaries/,
+  );
+});
+
 test("automatic API requires owner processing consent and reports the real queued mode", async () => {
   Object.assign(process.env, {
     NODE_ENV: "test",
