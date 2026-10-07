@@ -1387,3 +1387,46 @@ test("duplicate submission preserves a ready notice in the enqueue-to-checkpoint
     notificationId,
   );
 });
+
+test("a newer ready film replaces a stale failed preparation film", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const completed = await preparation.runInterviewPreparationOnce(
+    "test-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      draft,
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  const failedId = completed!.filmJobId!;
+  await store.mutateRecord<StoryFilmJob>(failedId, (job) => ({
+    ...job!,
+    status: "failed",
+    error:
+      "A selected source word has no verified positive duration. Its original is preserved for review; no automatic cut or caption was made.",
+  }));
+  let saved = (await store.getCollection(c.id))!;
+  assert.equal(
+    (await preparation.getInterviewPreparationView(saved))?.status,
+    "needs_attention",
+  );
+  saved.chapters[0].content += " A later correction.";
+  await store.putCollection(saved);
+  const next = await films.enqueueAutomaticOriginalFilms(saved, {
+    processingApproved: true,
+    outputMode: "interactive",
+  });
+  assert.notEqual(next.id, failedId);
+  saved = await attachSyntheticInteractivePlayback(
+    (await store.getCollection(c.id))!,
+    next,
+  );
+  const view = await preparation.getInterviewPreparationView(saved);
+  assert.equal(view?.ready, true);
+  assert.equal(view?.filmJobId, next.id);
+  assert.notEqual(view?.status, "needs_attention");
+  assert.equal(view?.error, undefined);
+});
