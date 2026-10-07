@@ -458,6 +458,10 @@
   gap: 0.65rem;
   margin-top: 1.15rem;
 }
+.chapter h3,
+.chapter p {
+  overflow-wrap: anywhere;
+}
 .chapter > span {
   font-size: 0.6rem;
 }

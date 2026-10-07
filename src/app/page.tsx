@@ -40,10 +40,10 @@ const steps = [
 }[];
 
 const chapters = [
-  ["01", "Roots of generosity", "Who first showed them what giving looks like."],
+  ["01", "Roots of generosity", "Who modeled a generous life."],
   ["02", "Why I give", "The faith and values that moved them."],
-  ["03", "Lives I’ve seen flourish", "The ministries and people their generosity has touched."],
-  ["04", "What I hope you carry", "A blessing for their children and grandchildren."],
+  ["03", "Lives I’ve seen flourish", "Ministries and people they love."],
+  ["04", "What I hope you carry", "A blessing for their family."],
 ];
 
 const benefits = [
