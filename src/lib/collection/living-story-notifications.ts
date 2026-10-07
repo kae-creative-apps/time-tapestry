@@ -1,4 +1,4 @@
-import { appOrigin, linksFor } from "./access";
+import { appOrigin } from "./access";
 import {
   normalizeRecipientEmail,
   recipientById,
@@ -7,10 +7,24 @@ import {
 import type { Collection, Notification } from "./types";
 import type { LivingStoryBatch, LivingStoryMoment } from "./living-story-types";
 
+/** Questions and new chapters live on the story library, not the original gift page. */
+function continuedStoryUrl(
+  c: Collection,
+  hash: "new-moments" | "story-library",
+  owner: boolean,
+) {
+  const key = owner ? `?key=${c.ownerKey}` : "";
+  return `${appOrigin()}/collection/${c.id}/stories${key}#${hash}`;
+}
+
+/** Storyteller opens the waiting family questions with the private owner link. */
 export const livingStoryOwnerUrl = (c: Collection) =>
-  appOrigin() + linksFor(c).review + "#new-moments";
+  continuedStoryUrl(c, "new-moments", true);
+/** A finished chapter opens in the library for the storyteller and each invited reader. */
+export const livingStoryPublishedOwnerUrl = (c: Collection) =>
+  continuedStoryUrl(c, "story-library", true);
 export const livingStoryRecipientUrl = (c: Collection) =>
-  appOrigin() + linksFor(c).collection + "#new-moments";
+  continuedStoryUrl(c, "story-library", false);
 
 function enqueue(c: Collection, notice: Notification) {
   if (!c.notifications.some((item) => item.id === notice.id))
@@ -46,7 +60,7 @@ export function queueLivingStoryPublished(
     to: c.storyteller.email,
     subject: "Your new Time Tapestry story is ready",
     text: `Your new film and written story, “${moment.title},” are ready in your private collection. The people you have invited can now enjoy them.`,
-    url: livingStoryOwnerUrl(c),
+    url: livingStoryPublishedOwnerUrl(c),
     dueAt,
     status: "pending",
   });
@@ -125,7 +139,7 @@ export function livingStoryNotificationSuppressionReason(
     normalizeRecipientEmail(n.to) !==
       normalizeRecipientEmail(c.storyteller.email) ||
     n.id !== `${c.id}:moment-published:${moment.id}:owner` ||
-    n.url !== livingStoryOwnerUrl(c)
+    n.url !== livingStoryPublishedOwnerUrl(c)
   ) {
     return "This story confirmation belongs to the storyteller.";
   }
