@@ -105,6 +105,17 @@ function canRetry(dispatch: DispatchState | undefined, now: number) {
     (!dispatch?.nextAttemptAt || time(dispatch.nextAttemptAt) <= now)
   );
 }
+function notificationNeedsAttempt(
+  notification: Notification | undefined,
+  now: number,
+): notification is Notification {
+  return Boolean(
+    notification &&
+    ["pending", "failed"].includes(notification.status) &&
+    time(notification.dueAt) <= now &&
+    canRetry(notification.dispatch, now),
+  );
+}
 function expiredRetryWindow(dispatch: DispatchState | undefined, now: number) {
   return Boolean(
     dispatch?.firstAttemptAt &&
@@ -1057,16 +1068,21 @@ async function processNotification(
   now: number,
   origin: string,
 ) {
+  const snapshot = await getCollection(id);
+  // Sent and not-yet-due mail must not open a collection write. Doing so on
+  // every worker pass used to change updatedAt and reject the current
+  // full-interview choice.
+  if (
+    !notificationNeedsAttempt(
+      snapshot?.notifications.find((item) => item.id === notificationId),
+      now,
+    )
+  )
+    return false;
   let lease: DispatchState | undefined;
   await mutateCollection(id, async (c) => {
     const n = c.notifications.find((item) => item.id === notificationId);
-    if (
-      !n ||
-      !["pending", "failed"].includes(n.status) ||
-      time(n.dueAt) > now ||
-      !canRetry(n.dispatch, now)
-    )
-      return c;
+    if (!notificationNeedsAttempt(n, now)) return c;
     const suppression = await currentNotificationSuppressionReason(c, n);
     if (suppression) {
       n.status = "suppressed";

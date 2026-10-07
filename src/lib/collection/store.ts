@@ -155,13 +155,25 @@ export async function mutateRecord<T>(
   }
 }
 
+/** Full-interview restoration treats updatedAt as the saved-answer version. */
+function sameSavedCollection(before: Collection, next: Collection) {
+  return (
+    JSON.stringify({ ...before, updatedAt: "" }) ===
+    JSON.stringify({ ...next, updatedAt: "" })
+  );
+}
+
 export async function mutateCollection(
   id: string,
   update: (c: Collection) => Collection | Promise<Collection>,
 ) {
   return mutateRecord<Collection>(id, async (c) => {
     if (!c) throw new Error("Your stories could not be found.");
+    const before = structuredClone(c);
     const next = await update(c);
+    // A delivery or worker pass often returns the same collection. Moving
+    // updatedAt anyway makes "Use my full interview" reject a current choice.
+    if (sameSavedCollection(before, next)) return before;
     next.updatedAt = new Date().toISOString();
     return next;
   });

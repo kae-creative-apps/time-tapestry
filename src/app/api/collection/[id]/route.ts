@@ -122,6 +122,21 @@ export async function POST(
         throw new InterviewPreparationError(
           "Confirm that you want to use your full saved interview before continuing.",
         );
+      // Reject a stale page before spending the hourly generation budget.
+      // Repeated mismatches were locking the collection behind the generic
+      // "please take a moment" limit while preparation stayed unfinished.
+      if (
+        typeof b.expectedUpdatedAt !== "string" ||
+        !b.expectedUpdatedAt.trim()
+      )
+        throw new InterviewPreparationError(
+          "Confirm that you want to use your full saved interview before continuing.",
+        );
+      if (initial.updatedAt !== b.expectedUpdatedAt)
+        throw new InterviewPreparationError(
+          "Your saved answers changed. Refresh the page and choose again.",
+          409,
+        );
       await guardRequest(req, { action: "generate", resourceId: id });
       const restored = await restoreCompletedInterview(id, {
         sessionId: b.sessionId,

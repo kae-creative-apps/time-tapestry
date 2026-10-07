@@ -459,3 +459,97 @@ test("route requires owner consent and the current source version", async () => 
     assert.deepEqual(await store.getCollection(c.id), c);
   }
 });
+
+test("unchanged collection saves keep the version full-interview restoration checks", async () => {
+  const c = await fixture();
+  const unchanged = await store.mutateCollection(c.id, (current) => current);
+  assert.equal(unchanged.updatedAt, c.updatedAt);
+  assert.deepEqual(await store.getCollection(c.id), c);
+  const changed = await store.mutateCollection(c.id, (current) => {
+    current.invitationNote = "A later fictional note.";
+    return current;
+  });
+  assert.notEqual(changed.updatedAt, c.updatedAt);
+  assert.equal(changed.invitationNote, "A later fictional note.");
+});
+
+test("mail scans that do not send keep the saved version and still queue the full interview", async () => {
+  const c = await fixture();
+  c.notifications.push(
+    {
+      id: `${c.id}:preparation-attention:sent`,
+      kind: "preparation_attention",
+      to: c.storyteller.email,
+      subject: "Your Time Tapestry preparation needs attention",
+      text: "Open your saved collection to see the next step.",
+      url: "https://example.test/complete",
+      dueAt: c.createdAt,
+      status: "sent",
+      sentAt: c.createdAt,
+    },
+    {
+      id: `${c.id}:preparation-attention:later`,
+      kind: "preparation_attention",
+      to: c.storyteller.email,
+      subject: "Your Time Tapestry preparation needs attention",
+      text: "Open your saved collection to see the next step.",
+      url: "https://example.test/complete",
+      dueAt: "2999-01-01T00:00:00.000Z",
+      status: "pending",
+    },
+  );
+  await store.putCollection(c);
+  const before = (await store.getCollection(c.id))!;
+  const email = process.env.COLLECTION_EMAIL_ENABLED;
+  const origin = process.env.NEXT_PUBLIC_APP_URL;
+  process.env.COLLECTION_EMAIL_ENABLED = "true";
+  process.env.NEXT_PUBLIC_APP_URL = "https://example.test";
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_FROM_EMAIL;
+  try {
+    const delivery = await import("../src/lib/collection/delivery");
+    await delivery.processDeliveryJobs();
+    await delivery.processDeliveryJobs();
+  } finally {
+    if (email === undefined) delete process.env.COLLECTION_EMAIL_ENABLED;
+    else process.env.COLLECTION_EMAIL_ENABLED = email;
+    if (origin === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+    else process.env.NEXT_PUBLIC_APP_URL = origin;
+  }
+  const after = (await store.getCollection(c.id))!;
+  assert.equal(after.updatedAt, before.updatedAt);
+  assert.equal(after.notifications[0].status, "sent");
+  assert.equal(after.notifications[1].status, "pending");
+  assert.equal(after.notifications[1].error, undefined);
+  const response = await route.POST(request(after, {}), {
+    params: Promise.resolve({ id: after.id }),
+  });
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.preparation.status, "queued");
+});
+
+test("a stale full-interview choice does not spend the generation attempt budget", async () => {
+  const previous = process.env.SECURITY_TEST_BYPASS;
+  process.env.SECURITY_TEST_BYPASS = "false";
+  try {
+    const c = await fixture();
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const response = await route.POST(
+        request(c, { expectedUpdatedAt: "old" }),
+        { params: Promise.resolve({ id: c.id }) },
+      );
+      assert.equal(response.status, 409);
+      const body = await response.json();
+      assert.match(body.error, /saved answers changed/);
+    }
+    assert.deepEqual(await store.getCollection(c.id), c);
+    const fresh = await route.POST(request(c, {}), {
+      params: Promise.resolve({ id: c.id }),
+    });
+    assert.equal(fresh.status, 202);
+  } finally {
+    if (previous === undefined) delete process.env.SECURITY_TEST_BYPASS;
+    else process.env.SECURITY_TEST_BYPASS = previous;
+  }
+});
