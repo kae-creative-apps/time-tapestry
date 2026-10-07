@@ -14,6 +14,8 @@ export function StoryMediaPlayer({
   className = "",
   preload = "none",
   onEnded,
+  seekToMs = null,
+  seekToken = 0,
 }: {
   src: string;
   label: string;
@@ -21,6 +23,8 @@ export function StoryMediaPlayer({
   className?: string;
   preload?: "none" | "metadata";
   onEnded?: () => void;
+  seekToMs?: number | null;
+  seekToken?: number;
 }) {
   const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -28,6 +32,20 @@ export function StoryMediaPlayer({
   const [loading, setLoading] = useState(false);
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (seekToMs == null || !seekToken) return;
+    const player = media.current;
+    if (!player) return;
+    const seconds = seekToMs / 1000;
+    const move = () => {
+      player.currentTime = seconds;
+    };
+    player.addEventListener("loadedmetadata", move);
+    if (player.readyState >= 1) move();
+    setStarted(true);
+    void player.play().catch(() => {});
+    return () => player.removeEventListener("loadedmetadata", move);
+  }, [seekToken, seekToMs]);
   useEffect(() => {
     if (!loading) {
       setSlow(false);

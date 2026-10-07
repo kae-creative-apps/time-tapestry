@@ -1,0 +1,85 @@
+.quote {
+  margin: 0;
+  border-left: 4px solid #c18f7b;
+  padding-left: 1rem;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+.moments {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.moment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  border: 1px solid #e7dfd6;
+  border-radius: 18px;
+  background: #fbfaf8;
+  color: #432e23;
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+}
+
+button.moment {
+  cursor: pointer;
+}
+
+button.moment:hover {
+  background: #f1e6db;
+}
+
+.chip {
+  display: inline-flex;
+  min-width: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #432e23;
+  color: #fbfaf8;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.momentText {
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.transcript {
+  margin-top: 1.1rem;
+  border-top: 1px solid #e7dfd6;
+  padding-top: 0.8rem;
+}
+
+.transcript summary {
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.transcript p {
+  margin: 0.4rem 0 0;
+  white-space: pre-wrap;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #5c4a40;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.moment {
+    transition: none;
+  }
+}
