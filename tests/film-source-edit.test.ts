@@ -176,21 +176,34 @@ test("an untimed word in excluded speech stays in the original transcript withou
   assert.deepEqual(f.words, original);
 });
 
-test("a selected untimed word prevents all four films from being assembled", async () => {
+test("a selected untimed word is skipped and the timed words still assemble", async () => {
   const f = fixture();
   const selectedWord = f.wordGroups[0][3];
-  selectedWord.endMs = selectedWord.startMs;
   const original = structuredClone(f.c);
-  await assert.rejects(
-    assembleSourceEdits(
-      f.c,
-      f.job,
-      new Map([[f.words[0].mediaId, f.words]]),
-      f.durations,
-      [],
-    ),
-    /selected source word.*positive duration/,
+  selectedWord.endMs = selectedWord.startMs;
+  const originalWords = structuredClone(f.words);
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
   );
+  assert.equal(result.chapters.length, 4);
+  assert.ok(
+    result.chapters.every((chapter) => chapter.sourceEdit!.clips.length > 0),
+  );
+  assert.ok(
+    result.chapters.every((chapter) =>
+      chapter.sourceEdit!.clips.every((clip) =>
+        (clip.captions ?? []).every(
+          (caption) => caption.endMs > caption.startMs,
+        ),
+      ),
+    ),
+  );
+  assert.equal(selectedWord.endMs, selectedWord.startMs);
+  assert.deepEqual(f.words, originalWords);
   assert.deepEqual(f.c, original);
 });
 

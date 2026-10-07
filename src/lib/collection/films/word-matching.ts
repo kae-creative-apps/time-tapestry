@@ -3,8 +3,8 @@ import type { OriginalClipSelection, SourceCaption } from "./types";
 export type SourceWord = {
   text: string;
   startMs: number;
-  // Providers can return an untimed lexical token. Keep it for source alignment,
-  // but it cannot authorize a selected passage, caption or edit boundary.
+  // Providers can return an untimed lexical token. Keep its timestamps unchanged.
+  // Cuts skip it and bound the clip with the nearest word that already has a duration.
   endMs: number;
   mediaId: string;
   speakerId?: string;
@@ -156,17 +156,41 @@ export function validateSourceWords(
  */
 export function assertTimedSourceWords(words: SourceWord[]) {
   for (const word of words) {
-    if (
-      !word.text.trim() ||
-      !Number.isFinite(word.startMs) ||
-      !Number.isFinite(word.endMs) ||
-      word.startMs < 0 ||
-      word.endMs <= word.startMs
-    )
+    if (!sourceWordHasPositiveDuration(word))
       throw new Error(
         "A selected source word has no verified positive duration. Its original is preserved for review; no automatic cut or caption was made.",
       );
   }
+}
+
+/** A provider token with no span. Callers may skip it; they must not assign times. */
+export function sourceWordHasPositiveDuration(word: SourceWord) {
+  return (
+    Boolean(word.text.trim()) &&
+    Number.isFinite(word.startMs) &&
+    Number.isFinite(word.endMs) &&
+    word.startMs >= 0 &&
+    word.endMs > word.startMs
+  );
+}
+
+function nearestTimedEdge(
+  words: SourceWord[],
+  start: number,
+  direction: -1 | 1,
+  fallback: number,
+  edge: "start" | "end",
+) {
+  for (
+    let index = start;
+    index >= 0 && index < words.length;
+    index += direction
+  ) {
+    const word = words[index];
+    if (!sourceWordHasPositiveDuration(word)) continue;
+    return edge === "end" ? word.endMs : word.startMs;
+  }
+  return fallback;
 }
 
 /** Semi-global token alignment. Source timestamps alone determine the edit. */
@@ -424,10 +448,7 @@ function alignSourceWords(
   const first = Math.min(...indices),
     last = Math.max(...indices);
   const enclosingPassage = words.slice(first, last + 1);
-  // Verify the entire matched interval before rollover filtering. Otherwise an
-  // untimed unmatched file-edge token could disappear within the text allowance.
-  assertTimedSourceWords(enclosingPassage);
-  // Keep all interior words, but remove duplicate rollover edges only when
+  // Keep all interior timed words, but remove duplicate rollover edges only when
   // alignment actually matched them in the neighboring source file.
   const bounds = new Map<string, [number, number]>();
   for (const index of indices) {
@@ -438,12 +459,21 @@ function alignSourceWords(
       Math.max(bound?.[1] ?? index, index),
     ]);
   }
+  // An untimed token has no span, so it cannot move a cut. Leave its timestamps
+  // untouched and continue with the timed words around it.
   const passage = enclosingPassage.filter((word, offset) => {
     const bound = bounds.get(word.mediaId);
-    return bound && first + offset >= bound[0] && first + offset <= bound[1];
+    return (
+      bound &&
+      first + offset >= bound[0] &&
+      first + offset <= bound[1] &&
+      sourceWordHasPositiveDuration(word)
+    );
   });
-  // Includes every retained interior word, not just the tokens the alignment
-  // matched. An untimed word cannot be hidden by the permitted text mismatch.
+  if (!passage.length)
+    throw new Error(
+      "A selected source word has no verified positive duration. Its original is preserved for review; no automatic cut or caption was made.",
+    );
   assertTimedSourceWords(passage);
   // Diarization is evidence only, never a guess about a person's identity.
   for (const mediaId of new Set(passage.map((word) => word.mediaId))) {
@@ -503,9 +533,13 @@ export function matchSourceWords(
           )
         )
           continue;
+        const kept = [...skipped, ...aligned.words].filter(
+          sourceWordHasPositiveDuration,
+        );
+        if (!kept.length) continue;
         return {
           ...aligned,
-          words: [...skipped, ...aligned.words],
+          words: kept,
           firstWordIndex: 0,
         };
       } catch {
@@ -575,20 +609,16 @@ export function cutsForMatchedWords(
       throw new Error(
         "A selected passage needs verified original source bounds.",
       );
-    // A direct caller must not omit an untimed original token while asking for
-    // one continuous cut around it.
-    assertTimedSourceWords(sameFile.slice(first, last + 1));
-    // An adjacent untimed lexical token cannot prove where excluded speech ends
-    // or begins. Do not assign it a duration or cut through a guessed boundary.
-    assertTimedSourceWords([
-      ...(first > 0 ? [sameFile[first - 1]] : []),
-      ...(last + 1 < sameFile.length ? [sameFile[last + 1]] : []),
-    ]);
-    const before = first > 0 ? sameFile[first - 1].endMs : 0;
-    const after =
-      last >= 0 && last + 1 < sameFile.length
-        ? sameFile[last + 1].startMs
-        : durationMs!;
+    // Untimed tokens inside the span are skipped. They are not given a duration,
+    // and they are not used as the edge of the continuous cut.
+    const span = sameFile.slice(first, last + 1);
+    const timedSpan = span.filter(sourceWordHasPositiveDuration);
+    if (!timedSpan.length) assertTimedSourceWords(span);
+    assertTimedSourceWords(timedSpan);
+    // The nearest word that already has a positive duration supplies the bound.
+    // An adjacent untimed token keeps its original timestamps and is not used.
+    const before = nearestTimedEdge(sameFile, first - 1, -1, 0, "end");
+    const after = nearestTimedEdge(sameFile, last + 1, 1, durationMs!, "start");
     const groupEnd = Math.max(...group.map((word) => word.endMs));
     if (before > group[0].startMs || after < groupEnd)
       throw new Error(

@@ -45,35 +45,53 @@ test("untimed source tokens remain unchanged without blocking a separate timed a
   assert.deepEqual(words, original, "no words, times or speaker labels change");
 });
 
-test("an untimed first, interior or final answer token cannot authorize a passage", () => {
+test("an untimed answer token is skipped and timed words still authorize the passage", () => {
+  const sentence = "I remember blue bicycle";
+  const parts = sentence.split(" ");
   for (const index of [0, 1, 3]) {
-    const words = sourceWords("I remember blue bicycle");
+    const words = sourceWords(sentence);
     untimed(words, index);
+    const original = structuredClone(words);
     validateSourceWords(words, 1000, mediaId);
-    assert.throws(
-      () => matchSourceWords("I remember blue bicycle", words),
-      /selected source word.*positive duration/,
+    const match = matchSourceWords(sentence, words);
+    assert.deepEqual(
+      match.words.map((word) => word.text),
+      parts.filter((_, wordIndex) => wordIndex !== index),
     );
+    assert.ok(match.words.every((word) => word.endMs > word.startMs));
+    const clips = cutsForMatchedWords(
+      match.words,
+      words,
+      new Map([[mediaId, 1000]]),
+    );
+    assert.equal(clips.length, 1);
+    assert.ok(clips[0].outMs > clips[0].inMs);
+    assert.equal(words[index].endMs, words[index].startMs);
+    assert.deepEqual(words, original);
   }
 });
 
-test("an unmatched interior untimed token cannot hide within the text alignment allowance", () => {
+test("an unmatched interior untimed token is skipped without a fabricated duration", () => {
   const words = sourceWords(
     "I remember the blue bicycle extra beside the kitchen window daily",
   );
   untimed(words, 5);
+  const original = structuredClone(words);
   validateSourceWords(words, 2000, mediaId);
-  assert.throws(
-    () =>
-      matchSourceWords(
-        "I remember the blue bicycle beside the kitchen window daily",
-        words,
-      ),
-    /selected source word.*positive duration/,
+  const match = matchSourceWords(
+    "I remember the blue bicycle beside the kitchen window daily",
+    words,
   );
+  assert.equal(
+    match.words.map((word) => word.text).join(" "),
+    "I remember the blue bicycle beside the kitchen window daily",
+  );
+  assert.ok(match.words.every((word) => word.endMs > word.startMs));
+  assert.equal(words[5].endMs, words[5].startMs);
+  assert.deepEqual(words, original);
 });
 
-test("an untimed cross-file rollover edge cannot disappear within the text alignment allowance", () => {
+test("an untimed cross-file edge is skipped and the timed answer still matches", () => {
   const text =
     "I remember how we walked along the garden path together before the summer rain began and shared every story afterward";
   const query = text.split(" ");
@@ -83,33 +101,39 @@ test("an untimed cross-file rollover edge cannot disappear within the text align
     ...word,
     mediaId: "second_source",
   }));
+  const originalEdge = structuredClone(first[first.length - 1]);
   untimed(first, first.length - 1);
   validateSourceWords(first, 2000, mediaId);
   validateSourceWords(second, 2000, "second_source");
-  assert.throws(
-    () => matchSourceWords(text, [...first, ...second]),
-    /selected source word.*positive duration/,
-  );
+  const match = matchSourceWords(text, [...first, ...second]);
+  assert.equal(match.words.length, query.length);
+  assert.ok(match.words.every((word) => word.endMs > word.startMs));
+  assert.equal(first.at(-1)!.endMs, first.at(-1)!.startMs);
+  assert.equal(first.at(-1)!.text, originalEdge.text);
 });
 
-test("untimed excluded speech immediately beside a passage cannot prove its cut boundary", () => {
-  for (const index of [1, 6]) {
-    const words = sourceWords(
-      "welcome hello I remember blue bicycle goodbye thanks now",
-    );
-    untimed(words, index);
-    validateSourceWords(words, 1000, mediaId);
-    const match = matchSourceWords("I remember blue bicycle", words);
-    assert.throws(
-      () =>
-        cutsForMatchedWords(
-          match.words,
-          words,
-          new Map([[mediaId, 1000]]),
-        ),
-      /selected source word.*positive duration/,
-    );
-  }
+test("an untimed neighbor is skipped and the nearest timed word bounds the cut", () => {
+  const sentence = "welcome hello I remember blue bicycle goodbye thanks now";
+  const duration = new Map([[mediaId, 1000]]);
+  const left = sourceWords(sentence);
+  untimed(left, 1);
+  const leftOriginal = structuredClone(left);
+  validateSourceWords(left, 1000, mediaId);
+  const leftMatch = matchSourceWords("I remember blue bicycle", left);
+  const leftClip = cutsForMatchedWords(leftMatch.words, left, duration)[0];
+  assert.equal(leftClip.inMs, left[0].endMs);
+  assert.equal(leftClip.outMs, left[6].startMs);
+  assert.deepEqual(left, leftOriginal);
+  const right = sourceWords(sentence);
+  untimed(right, 6);
+  const rightOriginal = structuredClone(right);
+  validateSourceWords(right, 1000, mediaId);
+  const rightMatch = matchSourceWords("I remember blue bicycle", right);
+  const rightClip = cutsForMatchedWords(rightMatch.words, right, duration)[0];
+  assert.equal(rightClip.inMs, right[1].endMs);
+  assert.equal(rightClip.outMs, right[7].startMs);
+  assert.equal(right[6].endMs, right[6].startMs);
+  assert.deepEqual(right, rightOriginal);
 });
 
 test("caption, cut and cleanup entry points independently refuse a selected untimed token", () => {
@@ -131,19 +155,22 @@ test("caption, cut and cleanup entry points independently refuse a selected unti
   assert.deepEqual({ words, clip }, original);
 });
 
-test("a direct continuous cut cannot omit an untimed interior original word", () => {
+test("a continuous cut skips an untimed interior word and keeps timed bounds", () => {
   const words = sourceWords("alpha untimed beta");
   untimed(words, 1);
+  const original = structuredClone(words);
   validateSourceWords(words, 1000, mediaId);
-  assert.throws(
-    () =>
-      cutsForMatchedWords(
-        [words[0], words[2]],
-        words,
-        new Map([[mediaId, 1000]]),
-      ),
-    /selected source word.*positive duration/,
+  const clips = cutsForMatchedWords(
+    [words[0], words[2]],
+    words,
+    new Map([[mediaId, 1000]]),
   );
+  assert.equal(clips.length, 1);
+  assert.equal(clips[0].inMs, Math.max(0, words[0].startMs - 140));
+  assert.equal(clips[0].outMs, Math.min(1000, words[2].endMs + 180));
+  assert.equal(clips[0].captions![0].text, "alpha beta");
+  assert.equal(words[1].endMs, words[1].startMs);
+  assert.deepEqual(words, original);
 });
 
 test("source search still rejects every actual invalid bound or source identity", () => {
