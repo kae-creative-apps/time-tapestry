@@ -27,7 +27,6 @@ import {
   nextUnansweredChapterId,
 } from "@/lib/collection/interview-progress";
 import { collectionRequest } from "@/lib/collection/client-request";
-import { interviewReviewPath } from "@/lib/collection/interview-recording-review";
 import { interviewSaveNeedsConfirmation } from "@/lib/collection/interview-review-backup";
 import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
 import { classifyInterviewMessage } from "@/lib/collection/interview-message-identity";
@@ -149,7 +148,8 @@ export default function LiveInterview({
   const [pending, setPending] = useState<InterviewCommand[]>([]);
   const [savingWords, setSavingWords] = useState(false);
   const [working, setWorking] = useState(false);
-  const [openingRecordingReview, setOpeningRecordingReview] = useState(false);
+  const [restartConfirm, setRestartConfirm] = useState(false);
+  const [leaveNotice, setLeaveNotice] = useState("");
   const [activeChapterId, setActiveChapterId] =
     useState<InterviewChapterId>("q1");
   const theme = useRef<InterviewChapterId>("q1");
@@ -177,6 +177,8 @@ export default function LiveInterview({
   const restoredPosition = useRef(false);
   const choseKind = useRef(false);
   const heardAnswerSinceQuestion = useRef(false);
+  /** User turns heard since the interviewer last spoke (the current answer). */
+  const currentAnswerTurnIds = useRef<string[]>([]);
   const liveAnsweredThemes = useRef(new Set<InterviewChapterId>());
   const explicitNextTheme = useRef<InterviewChapterId | null>(null);
   const [inputLevel, setInputLevel] = useState(0);
@@ -629,6 +631,8 @@ export default function LiveInterview({
     };
     if (identity.eventKey !== null)
       messages.current.set(identity.eventKey, turn);
+    if (message.role === "user") currentAnswerTurnIds.current.push(turn.id);
+    else currentAnswerTurnIds.current = [];
     void enqueue({
       action: "append_turns",
       sessionId: s.id,
@@ -1031,7 +1035,7 @@ export default function LiveInterview({
   async function finish() {
     if (submitting.current || working) return;
     submitting.current = true;
-    setOpeningRecordingReview(true);
+    setRestartConfirm(false);
     setWorking(true);
     setPhase("finishing");
     intentionalStop.current = true;
@@ -1080,16 +1084,16 @@ export default function LiveInterview({
       if (failed?.status === "rejected") throw failed.reason;
       await localWrites.current;
       await flush();
-      const backupStartedAt = Date.now();
+      // Submission waits for every recording part to be saved. Slow uploads
+      // keep waiting; only a failed part stops so it can be retried.
       while (archiveRef.current.saving || archiveRef.current.pendingCount > 0) {
         if (
           archiveRef.current.recordings.some(
             (record) => record.error && !record.empty,
-          ) ||
-          Date.now() - backupStartedAt > 90_000
+          )
         )
           throw new Error(
-            "Your interview has not been submitted yet. Finish backing up your recording below, then choose Finish interview again.",
+            "Your interview has not been submitted yet. A recording part needs a retry. Choose Retry backup below, then Finish interview again.",
           );
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
@@ -1104,8 +1108,8 @@ export default function LiveInterview({
         throw new Error(
           "Your interview has not been submitted yet. Back up your remaining recordings and words before finishing.",
         );
-      // Finish always opens the same review. Missing live transcript text is
-      // not proof that the securely saved original lacks an answer.
+      // Missing live transcript text is not proof that the securely saved
+      // original lacks an answer, so finishing submits the saved recordings.
       for (const savedSession of collectionRef.current?.interviews ?? []) {
         if (savedSession.status !== "completed")
           await request("/interview", {
@@ -1114,8 +1118,16 @@ export default function LiveInterview({
             status: savedSession.segments.length ? "completed" : "interrupted",
           });
       }
+      const result = await request("", {
+        action: "submit_interview",
+        processingApproved: true,
+      });
+      if (!result.preparation?.id)
+        throw new Error(
+          "We could not confirm submission. Your recordings are saved. Please choose Finish interview again.",
+        );
       router.push(
-        interviewReviewPath(collectionId, accessKey, rerecordChapterId ?? "q1"),
+        `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
       );
     } catch (e) {
       submitting.current = false;
@@ -1124,6 +1136,31 @@ export default function LiveInterview({
     } finally {
       setWorking(false);
     }
+  }
+
+  async function startAnswerOver() {
+    const conversation = client.current;
+    const session = sessionRef.current;
+    setRestartConfirm(false);
+    if (!conversation || !session || working) return;
+    const turnIds = [...currentAnswerTurnIds.current];
+    currentAnswerTurnIds.current = [];
+    heardAnswerSinceQuestion.current = false;
+    setInputNeedsCheck(false);
+    setInputNotice("");
+    // Commands share the device journal, so each exclusion is saved after the
+    // words it leaves out. The original recording itself is always kept.
+    for (const turnId of turnIds)
+      void enqueue({
+        action: "select_turn",
+        sessionId: session.id,
+        turnId,
+        included: false,
+      }).catch((e) => setError(`Your choice needs a backup. ${friendly(e)}`));
+    const text =
+      "[Interview control: I’d like to start my last answer over. Please ask the same question again in a few words, and don’t mention what I said before.]";
+    controlEchoes.current.push(text);
+    conversation.sendUserMessage(text);
   }
 
   function downloadWords() {
@@ -1324,7 +1361,7 @@ export default function LiveInterview({
           disabled={working || !journalReady}
           onClick={() => void finish()}
         >
-          {rerecordChapterId ? "Back to review" : "Finish interview"}
+          Finish interview
         </button>
       )}
     </div>
@@ -1516,9 +1553,7 @@ export default function LiveInterview({
                             : "This is taking longer than usual. We are still waiting for the voice connection. You can begin when you hear the first question."
                           : "You can begin when you hear the first question."
                   : phase === "finishing"
-                    ? openingRecordingReview
-                      ? "Your saved recordings will open when the backup is confirmed."
-                      : "Your saved recordings will open when the backup is confirmed."
+                    ? "Please keep this page open while your recordings finish saving. This can take a minute on slower connections."
                     : !collection.capabilities.liveInterview
                       ? "Voice conversation is unavailable on this page. Check availability below when you are ready to try again."
                       : phase === "ready"
@@ -1531,12 +1566,6 @@ export default function LiveInterview({
                           ? "The conversation and recording are paused. Continue when you are ready."
                           : "There is no perfect answer. Start with a moment you remember."}
               </p>
-              {activeChapterId === "q2" && phase !== "connecting" && (
-                <p className="mt-5 max-w-xl text-base leading-7 text-paper">
-                  Faith questions are optional. You can share a life lesson
-                  instead.
-                </p>
-              )}
             </div>
             {kind === "video" && (
               <div className="mx-auto w-full max-w-[220px]">
@@ -1552,15 +1581,19 @@ export default function LiveInterview({
           </div>
         </div>
         <div className="p-6 sm:p-8">
-          <RecordingBackupProgress
-            progress={archive.backupProgress}
-            pendingWords={pendingWordConfirmation}
-            safeToClose={
-              !working &&
-              !["connecting", "talking", "finishing"].includes(phase) &&
-              !pendingWordConfirmation
-            }
-          />
+          {archive.backupProgress.parts.some(
+            (part) => part.stage === "failed",
+          ) && (
+            <RecordingBackupProgress
+              progress={archive.backupProgress}
+              pendingWords={pendingWordConfirmation}
+              safeToClose={
+                !working &&
+                !["connecting", "talking", "finishing"].includes(phase) &&
+                !pendingWordConfirmation
+              }
+            />
+          )}
           {(phase === "ready" ||
             (phase === "paused" && !archive.stream && !sessionRef.current)) && (
             <div className="space-y-5">
@@ -1599,8 +1632,8 @@ export default function LiveInterview({
               {collection.capabilities.liveInterview && !resuming && (
                 <p className="max-w-2xl text-base leading-7 text-ink-500">
                   Starting the conversation uses your microphone and records
-                  your answers. Choose Finish interview to watch or listen, then
-                  Submit my interview to prepare your stories and videos.
+                  your answers. When you choose Finish interview, we save your
+                  recordings and start preparing your stories and videos.
                   Nothing is mailed until you approve your postcards.
                 </p>
               )}
@@ -1655,6 +1688,42 @@ export default function LiveInterview({
                   I’m finished with this answer
                 </button>
               )}
+              {active &&
+                (restartConfirm ? (
+                  <span
+                    role="group"
+                    aria-label="Start this answer over"
+                    className="inline-flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2"
+                  >
+                    <span className="text-base">
+                      Leave out this answer and hear the question again?
+                    </span>
+                    <button
+                      type="button"
+                      className={secondary}
+                      disabled={working || !client.current}
+                      onClick={() => void startAnswerOver()}
+                    >
+                      Yes, start over
+                    </button>
+                    <button
+                      type="button"
+                      className="min-h-12 px-3 text-base underline underline-offset-4"
+                      onClick={() => setRestartConfirm(false)}
+                    >
+                      Keep my answer
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className={secondary}
+                    disabled={working || !client.current}
+                    onClick={() => setRestartConfirm(true)}
+                  >
+                    Start this answer over
+                  </button>
+                ))}
               {phase === "talking" && nextChapterId && !rerecordChapterId && (
                 <button
                   type="button"
@@ -1682,8 +1751,7 @@ export default function LiveInterview({
                 disabled={working}
                 onClick={() => void finish()}
               >
-                <AppIcon name="check" size={20} />{" "}
-                {rerecordChapterId ? "Back to review" : "Finish interview"}
+                <AppIcon name="check" size={20} /> Finish interview
               </button>
               {phase === "talking" && (
                 <button
@@ -1852,11 +1920,33 @@ export default function LiveInterview({
         <p className="text-base leading-7 text-ink-500">
           Recordings marked Backed up are linked to{" "}
           {collection.storyteller.email}. Sign in to{" "}
-          <Link href="/account" className="underline underline-offset-4">
+          <Link
+            href="/account"
+            className="underline underline-offset-4"
+            onClick={(event) => {
+              if (
+                ["talking", "connecting", "finishing"].includes(phase) ||
+                working ||
+                pendingWordConfirmation ||
+                archive.pendingCount ||
+                archive.saving
+              ) {
+                event.preventDefault();
+                setLeaveNotice(
+                  "Your recordings are still saving. Pause or finish the interview and wait for saving to complete before leaving this page.",
+                );
+              }
+            }}
+          >
             My stories
           </Link>{" "}
           with that email to return on another device.
         </p>
+        {leaveNotice && (
+          <p role="status" className="mt-2 text-base leading-7 text-oxblood">
+            {leaveNotice}
+          </p>
+        )}
       </details>
       {archive.recordings.some((recording) => recording.recovered) && (
         <p role="status" className="mt-4 text-base leading-7 text-ink-500">

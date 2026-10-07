@@ -1,27 +1,17 @@
-import type { Metadata } from "next";
-import InterviewRecordingReview from "@/components/collection/InterviewRecordingReview";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Your recordings | Time Tapestry",
-  robots: { index: false, follow: false },
-};
-
+/**
+ * The separate raw-recording review step was retired: finishing the
+ * interview now submits it directly. Old links return to the interview,
+ * which forwards to the completion page once the interview is submitted.
+ */
 export default async function RecordingReviewPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ key?: string; chapter?: string }>;
+  searchParams: Promise<{ key?: string }>;
 }) {
-  const [{ id }, { key = "", chapter }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
-  return (
-    <InterviewRecordingReview
-      collectionId={id}
-      accessKey={key}
-      initialChapterId={chapter}
-    />
-  );
+  const [{ id }, { key = "" }] = await Promise.all([params, searchParams]);
+  redirect(`/record/${encodeURIComponent(id)}?key=${encodeURIComponent(key)}`);
 }
