@@ -113,7 +113,7 @@ export function NarratedFilmRoot() {
           chapterId: "q1",
           chapterNumber: 1,
           storytellerName: "Sample storyteller",
-          title: "Kindness received",
+          title: "Roots of generosity",
           script: "A fictional story for layout review.",
           sourceTakeIds: ["synthetic"],
           sourceSha256: "",

@@ -1,48 +1,46 @@
 export const MAX_FOLLOW_UPS = 2;
 
-/** Optional q2 prompt, still recorded as the same second part. */
+/** Optional q2 prompt when someone does not want a faith question. Same section. */
 export const NEUTRAL_DECISION_QUESTION =
-  "Tell me about a decision that mattered to you and what you learned from it.";
+  "What values have guided the way you give?";
 
 /** The interview and the published story share these four section boundaries. */
 export const CHAPTERS = [
   {
     id: "q1",
-    title: "Kindness received",
-    question: "Tell me about someone whose kindness has stayed with you.",
+    title: "Roots of generosity",
+    question: "What made you become so generous?",
     followUps: [
-      "What do you remember most clearly about that moment?",
-      "What did their kindness help you understand?",
+      "Who first showed you what a generous life looks like?",
+      "When did giving first feel meaningful to you?",
     ],
   },
   {
     id: "q2",
-    title: "A life of faith",
-    question:
-      "Tell me about a decision you made while following Jesus that later changed your life for the better.",
+    title: "Why I give",
+    question: "How has your faith shaped why you give?",
     followUps: [
-      "What helped you make that choice?",
-      "Looking back, how has that decision affected your life?",
+      "What moved you to keep giving?",
+      "Was there a moment when you knew this was part of your life?",
     ],
   },
   {
     id: "q3",
-    title: "What you sowed",
-    question:
-      "When you think about helping others over the years, is there a person or a story that comes to mind?",
+    title: "Lives I’ve seen flourish",
+    question: "Why did you fall in love with these ministries you give to?",
     followUps: [
-      "Were there people or causes you supported financially that you would like your family to know about? Amounts are optional.",
-      "What do you hope your family learns from the ways you chose to give?",
+      "Tell me about a person there whose life you have seen flourish.",
+      "Why was it worth it to you?",
     ],
   },
   {
     id: "q4",
     title: "What I hope you carry",
     question:
-      "Looking back at these stories, what would you like the people you care about to carry into their own lives?",
+      "What do you hope your children and grandchildren carry from your life of giving?",
     followUps: [
-      "What might that look like in an ordinary day?",
-      "Is there something you would like to say directly to them?",
+      "Is there a blessing you would like to leave with them?",
+      "What might that look like in their ordinary days?",
     ],
   },
 ] as const;
@@ -63,11 +61,11 @@ export function getChapterQuestion(
   if (!chapter) throw new Error(`Unknown interview chapter: ${chapterId}`);
 
   if (chapterId === "q2" && context.faithFraming === "beliefs") {
-    return "Tell me about a decision guided by your beliefs that later changed your life for the better.";
+    return NEUTRAL_DECISION_QUESTION;
   }
   const recipientName = context.recipientName?.trim();
   if (chapterId === "q4" && recipientName) {
-    return `Looking back at these stories, what would you like ${recipientName} to carry into their own life?`;
+    return `What do you hope ${recipientName} carries from your life of giving?`;
   }
   return chapter.question;
 }
@@ -83,7 +81,7 @@ export const OPTIONAL_QUESTIONS: Array<{ id: string; text: string }> = [];
 
 /** An optional direction within an existing follow-up, never a fifth section. */
 export const OPTIONAL_SCRIPTURE_FOLLOW_UP =
-  "Is there a Scripture that helped you with that decision, if you would like to share it?";
+  "Is there a Scripture that has shaped why you give, if you would like to share it?";
 
 export type InterviewPhase =
   "intro" | "question" | "followup" | "continue_prompt" | "paused" | "finished";
