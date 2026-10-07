@@ -399,10 +399,11 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-// v6 accepts a repeated false start and a trailing response particle. The new
-// id replaces a failed v5 film instead of repeating that alignment.
+// v7 keeps a cut when the live transcript and Scribe disagree by one unspoken
+// token, a filler standing in for a short prefix, or a single disputed opener.
+// The new id replaces the failed v6 film instead of repeating that alignment.
 export const AUTOMATIC_TEMPLATE_VERSION =
-  "original-scribe-source-cleanup-orb-v6";
+  "original-scribe-source-cleanup-orb-v7";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",

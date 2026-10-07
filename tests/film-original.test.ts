@@ -282,14 +282,14 @@ test("unverified beginning or ending words do not produce partial-thought cuts",
     () => matchSourceWords(`Never ${story}`, words(story)),
     /boundaries/,
   );
+  const unspokenNight = matchSourceWords(`${story} night`, words(story));
+  assert.equal(unspokenNight.words.map((word) => word.text).join(" "), story);
+  const unspokenSo = matchSourceWords(`${story} so`, words(story));
+  assert.equal(unspokenSo.words.map((word) => word.text).join(" "), story);
   assert.throws(
-    () => matchSourceWords(`${story} night`, words(story)),
+    () => matchSourceWords(`${story} night please`, words(story)),
     /boundaries/,
-  );
-  assert.throws(
-    () => matchSourceWords(`${story} so`, words(story)),
-    /boundaries/,
-    "a trailing word that can carry meaning is not treated as filler",
+    "two unspoken trailing tokens are not a verified ending",
   );
 });
 
@@ -309,6 +309,61 @@ test("filler and backchannel drift at the answer edges keeps the spoken source w
   assert.throws(
     () => matchSourceWords(`Um uh well ${story}`, words(story)),
     /boundaries/,
+  );
+});
+
+test("the recorded interview edges cut without swapping a content word", () => {
+  const honeymoon =
+    "Snappy. What? Snappy. What the... Uh, um, oh, when somebody paid for our meal on our honeymoon, um, and it was like 100 bucks.";
+  const spokenHoneymoon = words(
+    "Snappy. What? Snappy. What the, uh... Um, oh, when somebody paid for our meal on our honeymoon, um, and it was like $100.",
+  );
+  spokenHoneymoon[0].speakerId = "speaker_1";
+  spokenHoneymoon[2].speakerId = "speaker_1";
+  const paid = matchSourceWords(honeymoon, spokenHoneymoon);
+  assert.equal(paid.words.at(-1)!.text, "$100.");
+  assert.equal(paid.words[0].text, "Snappy.");
+  assert.equal(
+    matchSourceWords(
+      "Yeah. Just choosing to follow Jesus, and, um, he taught me a lot of lessons along the way that helped me. But...",
+      words(
+        "Yeah, just choosing to follow Jesus, and, um, he taught me a lot of lessons along the way that helped me.",
+      ),
+    ).words.at(-1)!.text,
+    "me.",
+  );
+  assert.equal(
+    matchSourceWords(
+      "It's almost helped me to want and have a heart to mentor others.",
+      words("Someone's helped me to want and have a heart to mentor others."),
+    ).words[0].text,
+    "helped",
+  );
+  assert.equal(
+    matchSourceWords(
+      "That's a big question. Um...",
+      words("It's a big question. Um,"),
+    ).words[0].text,
+    "It's",
+  );
+  assert.equal(
+    matchSourceWords(
+      "I had to put Jesus in the middle of everything.",
+      words("Uh, to put Jesus in the middle of everything."),
+    ).words[0].text,
+    "Uh,",
+  );
+  assert.equal(
+    matchSourceWords("Um, that I love her.", words("Um, that I love")).words.at(
+      -1,
+    )!.text,
+    "love",
+  );
+  const mixed = words("I remember the blue bicycle");
+  mixed[3].speakerId = "speaker_1";
+  assert.throws(
+    () => matchSourceWords("I remember the blue bicycle", mixed),
+    /more than one/,
   );
 });
 

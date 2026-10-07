@@ -1158,7 +1158,7 @@ test("an older automatic film template can be prepared again after three prepara
   assert.notEqual(resumed?.filmJobId, previousId);
   const next = await films.getFilmJob(resumed!.filmJobId!);
   assert.equal(next?.status, "queued");
-  assert.equal(next?.templateVersion, "original-scribe-source-cleanup-orb-v6");
+  assert.equal(next?.templateVersion, "original-scribe-source-cleanup-orb-v7");
   assert.equal((await films.getFilmJob(previousId))?.status, "failed");
 });
 
