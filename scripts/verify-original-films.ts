@@ -15,6 +15,7 @@ process.env.COLLECTION_DATA_DIR = path.resolve(
     : ".data/original-automatic-qa",
 );
 for (const key of [
+  "REDIS_URL",
   "KV_REST_API_URL",
   "KV_REST_API_TOKEN",
   "VERCEL",

@@ -229,7 +229,7 @@ export async function prepareChapterPlayback(
       );
       media.url = blob.url;
     } else {
-      if (process.env.VERCEL || process.env.KV_REST_API_URL)
+      if (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL)
         throw new Error("Private playback storage is not configured.");
       const directory = path.join(dataRoot, "media");
       await mkdir(directory, { recursive: true, mode: 0o700 });

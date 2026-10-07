@@ -356,7 +356,7 @@ async function storeOutput(
       throw new Error("Rendered output was not stored privately");
     media.url = blob.url;
   } else {
-    if (process.env.VERCEL || process.env.KV_REST_API_URL)
+    if (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL)
       throw new Error(
         "Cloud collection requires private Blob storage for rendered videos",
       );

@@ -2,7 +2,7 @@ import { appendFile, mkdir, readdir, stat, realpath } from "node:fs/promises";
 import { assertLocalMediaPath } from "./collection/media";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { kv } from "@vercel/kv";
+import { kv, kvConfigured } from "./kv-client";
 import type { NextRequest } from "next/server";
 import { adminForRequest, requireAdmin } from "./admin-auth";
 import { ACCOUNT_COOKIE } from "./accounts/http";
@@ -35,7 +35,7 @@ export async function adminAuthorized(req: NextRequest) {
   return Boolean(await adminForRequest(req));
 }
 const cloud = () =>
-  Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  kvConfigured();
 /** Verified team actor and resource IDs only. Never log family content, URLs or credentials. */
 export async function auditAdminRead(
   req: NextRequest,

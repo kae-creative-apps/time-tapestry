@@ -16,8 +16,6 @@ import { promisify } from "node:util";
 type Environment = Record<string, string | undefined>;
 
 const sharedSettings = [
-  "KV_REST_API_URL",
-  "KV_REST_API_TOKEN",
   "BLOB_READ_WRITE_TOKEN",
   "ELEVENLABS_API_KEY",
   "ELEVENLABS_AGENT_ID",
@@ -76,7 +74,15 @@ export function resolveFilmWorkerConfig(
 ) {
   const hosted = isHostedFilmWorker(env);
   if (hosted) {
-    const missing = sharedSettings.filter((name) => !env[name]?.trim());
+    const missing: string[] = sharedSettings.filter(
+      (name) => !env[name]?.trim(),
+    );
+    // Either standard Redis (Redis Cloud) or the Upstash REST pair.
+    if (
+      !env.REDIS_URL?.trim() &&
+      !(env.KV_REST_API_URL?.trim() && env.KV_REST_API_TOKEN?.trim())
+    )
+      missing.unshift("REDIS_URL (or KV_REST_API_URL and KV_REST_API_TOKEN)");
     if (missing.length)
       throw new WorkerStartupError(
         `Hosted film worker configuration is incomplete. Set ${missing.join(", ")} before starting.`,

@@ -115,7 +115,7 @@ async function savePrivateFilm(
     );
     media.url = blob.url;
   } else {
-    if (process.env.VERCEL || process.env.KV_REST_API_URL)
+    if (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL)
       throw new Error(
         "Shared film storage needs private Blob storage before rendering can publish.",
       );
@@ -258,7 +258,7 @@ export async function processFilmJob(
       );
     await checkDiskSpace(sourceBytes);
     if (
-      (process.env.VERCEL || process.env.KV_REST_API_URL) &&
+      (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL) &&
       !process.env.BLOB_READ_WRITE_TOKEN
     )
       throw new Error("Shared film storage needs private Blob storage.");

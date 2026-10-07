@@ -115,7 +115,7 @@ async function saveMomentFilm(
     assertPrivateBlobUrl(blob.url);
     media.url = blob.url;
   } else {
-    if (process.env.VERCEL || process.env.KV_REST_API_URL)
+    if (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL)
       throw new Error("Shared story films need private Blob storage.");
     const directory = path.join(dataRoot, "media");
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -239,7 +239,7 @@ export async function processLivingStoryMoment(
     const media = await assertCurrent();
     metadataHash = sourceMetadataHash(media);
     if (
-      (process.env.VERCEL || process.env.KV_REST_API_URL) &&
+      (process.env.VERCEL || process.env.REDIS_URL || process.env.KV_REST_API_URL) &&
       !process.env.BLOB_READ_WRITE_TOKEN
     )
       throw new Error("Shared story films need private Blob storage.");

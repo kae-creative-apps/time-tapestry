@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { kv } from "@vercel/kv";
+import { kv, kvConfigured } from "../kv-client";
 import { dataRoot, mutateRecord, readRecord } from "./store";
 import type { StoredMedia } from "./types";
 import { SecurityError } from "../security/policy";
@@ -71,7 +71,7 @@ async function initialUsage(collectionId: string): Promise<UsageRecord> {
     uploads: {},
   };
   let media: Array<StoredMedia | null>;
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  if (kvConfigured()) {
     const keys = await kv.keys("collection-v2:media-*");
     media = await Promise.all(keys.map((key) => kv.get<StoredMedia>(key)));
   } else {

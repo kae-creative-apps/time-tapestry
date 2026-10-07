@@ -75,8 +75,8 @@ export function hostedSecurityConfigured() {
   return Boolean(
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY &&
     process.env.TURNSTILE_SECRET_KEY &&
-    process.env.KV_REST_API_URL &&
-    process.env.KV_REST_API_TOKEN &&
+    (process.env.REDIS_URL ||
+      (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)) &&
     process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://"),
   );
 }

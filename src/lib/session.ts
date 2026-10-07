@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { kv, kvConfigured } from './kv-client';
 import { nanoid } from 'nanoid';
 
 export type SessionStatus =
@@ -87,7 +87,7 @@ function sessionKey(id: string): string {
 }
 
 function useMemoryFallback(): boolean {
-  return !process.env.KV_URL || !process.env.KV_REST_API_TOKEN;
+  return !kvConfigured();
 }
 
 function slugify(input: string): string {

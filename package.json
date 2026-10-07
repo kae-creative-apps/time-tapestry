@@ -34,6 +34,7 @@
     "date-fns": "^4.4.0",
     "framer-motion": "^14.0.0",
     "lucide-react": "^1.50.0",
+    "mediabunny": "1.56.1",
     "nanoid": "^5.1.16",
     "next": "^15.5.26",
     "openai": "^7.25.0",
@@ -42,10 +43,10 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "redis": "4.7.1",
     "remotion": "4.0.532",
     "resend": "^6.31.0",
-    "tailwind-merge": "^3.7.0",
-    "mediabunny": "1.56.1"
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

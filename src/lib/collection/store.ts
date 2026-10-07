@@ -11,14 +11,13 @@ import {
 import path from "node:path";
 import { serializeMetadata } from "../security/storage";
 import { randomUUID } from "node:crypto";
-import { kv } from "@vercel/kv";
+import { kv, kvConfigured } from "../kv-client";
 import type { Collection, StoredMedia } from "./types";
 
 export const dataRoot =
   process.env.COLLECTION_DATA_DIR ||
   path.join(process.cwd(), ".data", "collections");
-const cloud = () =>
-  Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+const cloud = () => kvConfigured();
 function safeId(id: string) {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(id)) throw new Error("Invalid identifier");
   return id;
@@ -26,7 +25,7 @@ function safeId(id: string) {
 function requireStorage() {
   if (process.env.VERCEL && !cloud()) {
     console.error(
-      "Collection storage is unavailable. Configure KV_REST_API_URL and KV_REST_API_TOKEN.",
+      "Collection storage is unavailable. Configure REDIS_URL, or KV_REST_API_URL and KV_REST_API_TOKEN.",
     );
     throw new Error(
       "We cannot open or save your stories right now. Keep this page open and try again.",

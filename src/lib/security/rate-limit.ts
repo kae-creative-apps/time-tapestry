@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
-import { kv } from "@vercel/kv";
+import { kv, kvConfigured } from "../kv-client";
 import type { NextRequest } from "next/server";
 import { mutateRecord } from "../collection/store";
 import { SecurityError, localSecurityBypass } from "./policy";
@@ -39,7 +39,7 @@ export async function consumeLimit(
   const key = `guard-${opaqueIdentifier(identity)}`;
   let used: number;
   let retryAfter: number;
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  if (kvConfigured()) {
     const result = await kv
       .eval(
         "local n=redis.call('incr',KEYS[1]); if n==1 then redis.call('expire',KEYS[1],ARGV[1]) end; return {n,redis.call('ttl',KEYS[1])}",

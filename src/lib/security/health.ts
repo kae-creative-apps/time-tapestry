@@ -6,7 +6,8 @@ import { MAX_MEDIA_BYTES, collectionStorageLimit } from "../collection/usage";
 /** Operational readiness only. Never returns credentials, contact details, or filesystem paths. */
 export function getSecurityHealth() {
   const durableMetadataConfigured = Boolean(
-    process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN,
+    process.env.REDIS_URL ||
+      (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
   );
   const mediaStoreConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   const temporaryLocalStorage =
