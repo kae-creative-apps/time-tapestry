@@ -3,6 +3,10 @@ import type { Collection, StoredMedia } from "../types";
 import { selectedAnswers } from "../content";
 import { isStoredOwnerRecording } from "../recording-validation";
 import { CHAPTERS } from "../../interview-state";
+import {
+  chapterOpeningQuestion,
+  questionCardMusicSha256,
+} from "./question-card";
 import { sha256 } from "./plan";
 import type {
   FilmChapter,
@@ -399,11 +403,10 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-// v8 skips source tokens with no positive duration and bounds the cut with the
-// nearest word that already has a start and end. The new id replaces the failed
-// v7 film instead of repeating that timing check.
+// v9 opens each automatic chapter on a five-second question card with music.
+// Ready films keep the template id they were rendered with.
 export const AUTOMATIC_TEMPLATE_VERSION =
-  "original-scribe-source-cleanup-orb-v8";
+  "original-scribe-source-cleanup-orb-v9";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",
@@ -434,6 +437,7 @@ export async function prepareAutomaticJob(
       chapterId: id,
       chapterNumber: (index + 1) as 1 | 2 | 3 | 4,
       title: chapter.title,
+      openingQuestion: chapterOpeningQuestion(c, id),
       content: chapter.content,
       script: "",
       scriptSha256: sha256(chapter.content),
@@ -460,6 +464,8 @@ export async function prepareAutomaticJob(
         ({ durationMs: _durationMs, ...source }) => source,
       ),
       template: AUTOMATIC_TEMPLATE_VERSION,
+      questionCardMusicSha256: await questionCardMusicSha256(),
+      openingQuestions: chapters.map((chapter) => chapter.openingQuestion),
     }),
   );
   return { sourceSha256, snapshots, chapters, versionHash };
