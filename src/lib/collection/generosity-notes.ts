@@ -83,7 +83,7 @@ export function normalizeGenerosityNotesValues(
 /** Only an explicit owner preview should call this. It supplies labels, never new facts. */
 export function formatGenerosityNotes(values: GenerosityNotesValues): string {
   return (Object.keys(emptyValues) as Array<keyof GenerosityNotesValues>)
-    .filter((key) => values[key].trim())
+    .filter((key) => key !== "amount" && values[key].trim())
     .map((key) => `${labels[key]}: ${values[key]}`)
     .join("\n\n");
 }

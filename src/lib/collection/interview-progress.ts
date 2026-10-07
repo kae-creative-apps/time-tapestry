@@ -8,7 +8,7 @@ export function interviewChapterTitle(
   id: ChapterId,
   faithFraming?: "faith" | "beliefs",
 ) {
-  if (id === "q2" && faithFraming === "beliefs") return "Choices and beliefs";
+  if (id === "q2" && faithFraming === "beliefs") return "Why I give";
   return CHAPTERS.find((chapter) => chapter.id === id)!.title;
 }
 
@@ -52,6 +52,7 @@ export function detectInterviewThemeFromQuestion(
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/\s+/g, " ");
   if (
+    /what made you become so generous/.test(question) ||
     /tell me about someone whose kindness has stayed with you/.test(question) ||
     /tell me about a moment when someone's kindness made a difference in your life/.test(
       question,
@@ -62,6 +63,8 @@ export function detectInterviewThemeFromQuestion(
   )
     return "q1";
   if (
+    /how has your faith shaped why you give/.test(question) ||
+    /what values have guided the way you give/.test(question) ||
     /(?:decision|choice).{0,100}(?:following jesus|guided by (?:your|their) beliefs).{0,100}(?:changed|affected).{0,40}(?:life|better)/.test(
       question,
     ) ||
@@ -71,12 +74,16 @@ export function detectInterviewThemeFromQuestion(
   )
     return "q2";
   if (
+    /why did you fall in love with (?:these|the) ministries/.test(question) ||
     /when you think about helping others over the years.{0,90}(?:person|story).{0,40}comes to mind/.test(
       question,
     )
   )
     return "q3";
   if (
+    /what do you hope .+carr(?:y|ies) from (?:your|a) life of giving/.test(
+      question,
+    ) ||
     /looking back at these stories.{0,150}(?:carry|carried).{0,40}(?:life|lives)/.test(
       question,
     ) ||
