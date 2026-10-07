@@ -60,7 +60,7 @@ test("a chapter with no saved question falls back to the written prompt", () => 
   const c = collection();
   assert.equal(
     chapterOpeningQuestion(c, "q4"),
-    "Looking back at these stories, what would you like Sammie to carry into their own life?",
+    "What do you hope Sammie carries from your life of giving?",
   );
 });
 
