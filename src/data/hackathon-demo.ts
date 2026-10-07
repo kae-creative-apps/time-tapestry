@@ -20,7 +20,6 @@ export type HackathonDemoChapter = {
   scripture: { reference: string; text: string; translation: "NIV" | "ESV" };
   momentsTitle: string;
   moments: readonly { title: string; text: string }[];
-  replyPrompt: string;
   next: { href: string; label: string; teaser: string } | null;
 };
 
@@ -112,7 +111,6 @@ That's the secret, Sammie. Giving never made our life smaller. It made it so muc
         text: "A house fire, and Walt's question: what if we did the whole thing?",
       },
     ],
-    replyPrompt: "Who first showed you what generosity looks like?",
     next: {
       href: "/hackathon-demo-2",
       label: "A life of faith",
@@ -182,7 +180,6 @@ God was generous with us first, Sammie. Giving it back is the most joyful thing 
         text: "Years later, a new wing, so another mom can sleep near her baby.",
       },
     ],
-    replyPrompt: "Where have you seen God at work through someone's generosity?",
     next: {
       href: "/hackathon-demo-3",
       label: "What you sowed",
@@ -250,7 +247,6 @@ That's why it was worth it, Sammie. It keeps going. You plant things you'll neve
         text: "Tuesday soup, grown into a life of caring for others.",
       },
     ],
-    replyPrompt: "What would make your giving feel worth it to you?",
     next: {
       href: "/hackathon-demo-4",
       label: "What I hope you carry",
@@ -329,7 +325,6 @@ I love you. I'm proud of you. Now go make some soup for somebody.`,
         text: "Giving should feel like the best part of your week.",
       },
     ],
-    replyPrompt: "Where would you want your first gift to go, and why?",
     next: null,
   },
 ];

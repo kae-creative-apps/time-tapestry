@@ -38,7 +38,6 @@ test("hackathon demo chapters follow Gigi's four-part story for Sammie", () => {
     });
     const copy = JSON.stringify(chapter);
     assert.doesNotMatch(copy, /—/, "No em dashes in demo copy.");
-    assert.ok(chapter.replyPrompt.endsWith("?"));
   }
   assert.equal(hackathonDemoChapters[3].moments.length, 4);
   assert.equal(hackathonDemoChapters[3].next, null);

@@ -238,7 +238,7 @@ export function HackathonDemoChapter({
         <FadeIn delay={0.24}>
           <section id="reply" className={`${s.card} ${s.reply}`} aria-labelledby="reply-title">
             <p className={s.kicker}>Reply to Gigi</p>
-            <h2 id="reply-title">{chapter.replyPrompt}</h2>
+            <h2 id="reply-title">What would you like Gigi to know?</h2>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -249,7 +249,7 @@ export function HackathonDemoChapter({
               }}
             >
               <label className="sr-only" htmlFor="demo-reply">
-                {chapter.replyPrompt}
+                What would you like Gigi to know?
               </label>
               <textarea
                 id="demo-reply"
@@ -259,15 +259,17 @@ export function HackathonDemoChapter({
                 placeholder="Write a note to Gigi."
               />
               <div className={s.replyRow}>
-                <p>This demo reply stays on this page. It is not sent or saved.</p>
                 <button type="submit" className={fd.primaryButton}>
-                  Save demo reply
+                  Send to Gigi
                 </button>
               </div>
             </form>
             {saved && (
               <p role="status" className={s.saved}>
                 {saved}
+                <span className="mt-2 block text-sm text-taupe-600">
+                  Demo only. Your note stays on this page.
+                </span>
               </p>
             )}
           </section>
