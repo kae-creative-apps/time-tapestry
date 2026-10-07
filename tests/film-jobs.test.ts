@@ -334,6 +334,32 @@ test("explicit original processing approval and idempotent concurrent enqueue", 
   assert.equal((await jobs.latestFilmJob(c.id))?.id, a.id);
   assert.equal(a.attempts, 0);
 });
+test("automatic film versions default to 10 and ignore the retired daily env", () => {
+  const env = {
+    STORY_FILM_DAILY_LIMIT: "3",
+  } as NodeJS.ProcessEnv;
+  assert.equal(jobs.automaticFilmVersionsPerDay(undefined, env), 10);
+  assert.equal(
+    jobs.automaticFilmVersionsPerDay(undefined, {
+      ...env,
+      AUTOMATIC_FILM_VERSIONS_PER_DAY: "12",
+    }),
+    12,
+  );
+  assert.equal(
+    jobs.automaticFilmVersionsPerDay(undefined, {
+      AUTOMATIC_FILM_VERSIONS_PER_DAY: "99",
+    }),
+    30,
+  );
+  assert.equal(
+    jobs.automaticFilmVersionsPerDay(undefined, {
+      AUTOMATIC_FILM_VERSIONS_PER_DAY: "nope",
+    }),
+    10,
+  );
+  assert.equal(jobs.automaticFilmVersionsPerDay(1, env), 1);
+});
 test("daily versions are bounded but existing job reads do not consume a version", async () => {
   const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);

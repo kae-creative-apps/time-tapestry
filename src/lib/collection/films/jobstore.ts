@@ -210,17 +210,42 @@ function retiredNarrationJob(job: StoryFilmJob): StoryFilmJob {
 }
 
 type EnqueueOptions = { now?: Date; dailyLimit?: number };
+
+/** New automatic films per collection in 24 hours. The old cap was 3. */
+export const AUTOMATIC_FILM_VERSIONS_PER_DAY_DEFAULT = 10;
+const AUTOMATIC_FILM_VERSIONS_PER_DAY_MAX = 30;
+
+/**
+ * AUTOMATIC_FILM_VERSIONS_PER_DAY overrides the pilot default (1–30).
+ * STORY_FILM_DAILY_LIMIT is not read: a hosted value of 3 must not keep
+ * blocking another full-interview film after this change.
+ */
+export function automaticFilmVersionsPerDay(
+  override?: number,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  if (override !== undefined) {
+    if (!Number.isInteger(override) || override < 1)
+      throw new Error(
+        "Film version allowance must be a positive whole number.",
+      );
+    return override;
+  }
+  const raw = env.AUTOMATIC_FILM_VERSIONS_PER_DAY;
+  if (raw === undefined || raw.trim() === "")
+    return AUTOMATIC_FILM_VERSIONS_PER_DAY_DEFAULT;
+  const configured = Number(raw);
+  if (!Number.isInteger(configured))
+    return AUTOMATIC_FILM_VERSIONS_PER_DAY_DEFAULT;
+  return Math.max(1, Math.min(AUTOMATIC_FILM_VERSIONS_PER_DAY_MAX, configured));
+}
+
 async function enqueuePreparedJob(
   job: StoryFilmJob,
   options: EnqueueOptions = {},
 ) {
   const now = options.now ?? new Date();
-  const configuredLimit = Number(process.env.STORY_FILM_DAILY_LIMIT || 3);
-  const dailyLimit =
-    options.dailyLimit ??
-    (Number.isInteger(configuredLimit)
-      ? Math.max(1, Math.min(10, configuredLimit))
-      : 3);
+  const dailyLimit = automaticFilmVersionsPerDay(options.dailyLimit);
   let result: StoryFilmJob | null = null;
   await mutateRecord<Index>(indexKey(job.collectionId), async (index) => {
     const ids = index?.ids ?? [];
