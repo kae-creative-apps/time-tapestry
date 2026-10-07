@@ -11,6 +11,8 @@ import {
   nextQuestion,
   requestContinue,
 } from "../src/lib/interview-state";
+import { INTERVIEW_AGENT_PROMPT } from "../src/lib/collection/conversation-agent";
+import { interviewerSystemPrompt } from "../src/prompts/interviewer-system";
 
 test("the four core sections finish without an extra-question continuation", () => {
   let state = { ...initialState(), phase: "question" as const };
@@ -82,25 +84,47 @@ test("explicit interview control requests still work", () => {
   }
 });
 
-test("new interviews use Christian faith while older framing and recipient names remain supported", () => {
-  assert.match(
-    getChapterQuestion("q2"),
-    /decision you made while following Jesus/,
-  );
-  assert.match(
+test("new interviews ask about generosity while older framing and recipient names remain supported", () => {
+  assert.equal(CHAPTERS.map((chapter) => chapter.id).join(), "q1,q2,q3,q4");
+  assert.equal(getChapterQuestion("q1"), "What made you become so generous?");
+  assert.match(getChapterQuestion("q2"), /faith shaped why you give/);
+  assert.equal(
     getChapterQuestion("q2", { faithFraming: "beliefs" }),
-    /decision guided by your beliefs/,
+    "What values have guided the way you give?",
   );
   assert.match(
     getChapterQuestion("q2", { faithFraming: "faith" }),
-    /following Jesus/,
+    /faith shaped why you give/,
   );
+  assert.equal(
+    getChapterQuestion("q3"),
+    "Why did you fall in love with these ministries you give to?",
+  );
+  assert.equal(CHAPTERS[2].followUps[1], "Why was it worth it to you?");
   assert.match(
     getChapterQuestion("q4", { recipientName: "  Morgan  " }),
-    /like Morgan to carry/,
+    /hope Morgan carries from your life of giving/,
   );
   assert.equal(
     getChapterQuestion("q4", { recipientName: "   " }),
     CHAPTERS[3].question,
+  );
+  const asked = [
+    ...CHAPTERS.flatMap((chapter) => [chapter.question, ...chapter.followUps]),
+    getChapterQuestion("q2", { faithFraming: "beliefs" }),
+    getChapterQuestion("q4", { recipientName: "Morgan" }),
+  ].join("\n");
+  assert.doesNotMatch(asked, /\$|\bdollar\b|\bamount\b|how much|gift size/i);
+});
+
+test("interviewer instructions ask about generosity and do not request a gift size", () => {
+  const prompts = `${INTERVIEW_AGENT_PROMPT}\n${interviewerSystemPrompt}`;
+  assert.match(prompts, /What made you become so generous\?/);
+  assert.match(prompts, /Why did you fall in love with these ministries you give to\?/);
+  assert.match(prompts, /Why was it worth it to you\?/);
+  assert.match(prompts, /Never ask how much they gave/);
+  assert.doesNotMatch(
+    prompts,
+    /dollar amount|Amounts are optional|supported financially/i,
   );
 });
