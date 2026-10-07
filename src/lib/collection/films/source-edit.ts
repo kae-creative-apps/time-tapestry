@@ -172,12 +172,26 @@ export async function assembleSourceEdits(
         throw new Error(
           "A short answer needs a verified neighboring answer before its source can be selected automatically.",
         );
-      const match = matchAnswer(
-        index,
-        before ? before.last + 1 : 0,
-        after ? after.first : matchableWords.length,
-        true,
-      );
+      let match: Matched;
+      try {
+        match = matchAnswer(
+          index,
+          before ? before.last + 1 : 0,
+          after ? after.first : matchableWords.length,
+          true,
+        );
+      } catch (error) {
+        // A backchannel or fragment the recording does not contain must not
+        // discard the verified answers around it.
+        if (
+          error instanceof Error &&
+          /could not be matched confidently|boundaries could not be verified|more than once|did not preserve|smaller source search/.test(
+            error.message,
+          )
+        )
+          continue;
+        throw error;
+      }
       // A common short answer such as 'yes' needs speaker evidence from a
       // verified neighbor in the same file. Labels are not identities across files.
       for (const word of match.words) {
@@ -198,7 +212,8 @@ export async function assembleSourceEdits(
       matches.set(index, match);
     }
     for (const [index, answer] of answers.entries()) {
-      const match = matches.get(index)!;
+      const match = matches.get(index);
+      if (!match) continue;
       const matchedClips = cutsForMatchedWords(
         match.words,
         allWords,

@@ -59,6 +59,10 @@ const leadingEdgeTokens = new Set([
   "right",
 ]);
 const trailingEdgeTokens = new Set([...edgeFillers, "no", "nah", "nope"]);
+/** Spoken "it" and "that" often swap between the live transcript and Scribe.
+ * They are not a content swap such as Never/Always.
+ */
+const pronounDrift = new Set(["it", "that", "this"]);
 const EDGE_DRIFT_TOKENS = 2;
 const FALSE_START_TOKENS = 8;
 type AlignOp =
@@ -166,7 +170,7 @@ export function assertTimedSourceWords(words: SourceWord[]) {
 }
 
 /** Semi-global token alignment. Source timestamps alone determine the edit. */
-export function matchSourceWords(
+function alignSourceWords(
   reference: string,
   words: SourceWord[],
   options: { allowShort?: boolean } = {},
@@ -203,10 +207,6 @@ export function matchSourceWords(
   const bestCost = previous
     .subarray(1)
     .reduce((lowest, cost) => Math.min(lowest, cost), Infinity);
-  if (bestCost / query.length > 0.1)
-    throw new Error(
-      "The saved answer could not be matched confidently to its original recording. No automatic cut was made.",
-    );
   const traceMatch = (end: number) => {
     let i = query.length,
       j = end,
@@ -338,22 +338,84 @@ export function matchSourceWords(
         "The same answer occurs more than once in its recordings. Automatic editing could not choose a unique passage.",
       );
   }
-  if (best.matched / query.length < 0.9 || !best.indices.length)
+  // A one-for-one Never/Always swap does not match. A longer written opener
+  // against a single different source word can start at the shared phrase.
+  const disputedOpening = (ops: AlignOp[]) => {
+    let queryCount = 0;
+    let sourceCount = 0;
+    let index = 0;
+    while (index < ops.length && ops[index].kind !== "match") {
+      const op = ops[index];
+      if (op.kind === "delete") queryCount++;
+      else if (op.kind === "substitute") {
+        queryCount++;
+        sourceCount++;
+      } else return null;
+      index++;
+    }
+    if (
+      !index ||
+      index === ops.length ||
+      sourceCount !== 1 ||
+      queryCount < 3 ||
+      !ops.slice(index).every((op) => op.kind === "match")
+    )
+      return null;
+    return [] as number[];
+  };
+  const pronounEdge = (ops: AlignOp[]) => {
+    const first = ops[0];
+    if (
+      first?.kind !== "substitute" ||
+      !pronounDrift.has(first.query) ||
+      !pronounDrift.has(first.source) ||
+      !ops.slice(1).every((op) => op.kind === "match")
+    )
+      return null;
+    return [first.wordIndex];
+  };
+  const trailingOnly =
+    best.ops.length > 1 &&
+    best.ops.at(-1)?.kind === "delete" &&
+    best.ops.slice(0, -1).every((op) => op.kind === "match");
+  const relaxed = Boolean(
+    disputedOpening(best.ops) || pronounEdge(best.ops) || trailingOnly,
+  );
+  if (!relaxed && bestCost / query.length > 0.1)
+    throw new Error(
+      "The saved answer could not be matched confidently to its original recording. No automatic cut was made.",
+    );
+  if (!relaxed && (best.matched / query.length < 0.9 || !best.indices.length))
     throw new Error(
       "The source-word match did not preserve enough of the complete answer.",
     );
+  // One written token the recording never said. The cut ends on the last
+  // verified source word. A second extra token, or a content substitution,
+  // still fails.
+  const trailingUnspoken = (candidate: { ops: AlignOp[]; end: number }) => {
+    const reversed = [...candidate.ops].reverse();
+    if (reversed[0]?.kind !== "delete" || reversed[1]?.kind !== "match")
+      return null;
+    const deleted = reversed[0].query;
+    const next = source[candidate.end]?.text;
+    // "know" must not be dropped in front of a spoken "no".
+    const shorter = next && next.length < deleted.length ? next : deleted;
+    const longer = next && shorter === next ? deleted : next;
+    if (next && shorter.length >= 2 && longer?.includes(shorter)) return null;
+    return [] as number[];
+  };
+  const leadingOf = (ops: AlignOp[]) =>
+    pronounEdge(ops) ?? disputedOpening(ops) ?? leadingBoundary(ops);
+  const trailingOf = (candidate: { ops: AlignOp[]; end: number }) =>
+    edgeDrift([...candidate.ops].reverse(), trailingEdgeTokens) ??
+    trailingUnspoken(candidate);
   const verified = candidates
-    .filter(
-      (candidate) =>
-        leadingBoundary(candidate.ops) &&
-        edgeDrift([...candidate.ops].reverse(), trailingEdgeTokens),
-    )
+    .filter((candidate) => leadingOf(candidate.ops) && trailingOf(candidate))
     .sort(
       (left, right) => right.end - right.start - (left.end - left.start),
     )[0];
-  const leading = verified && leadingBoundary(verified.ops);
-  const trailing =
-    verified && edgeDrift([...verified.ops].reverse(), trailingEdgeTokens);
+  const leading = verified && leadingOf(verified.ops);
+  const trailing = verified && trailingOf(verified);
   if (!verified || !leading || !trailing)
     throw new Error(
       "The complete answer boundaries could not be verified. No partial-thought cut was made.",
@@ -385,12 +447,21 @@ export function matchSourceWords(
   assertTimedSourceWords(passage);
   // Diarization is evidence only, never a guess about a person's identity.
   for (const mediaId of new Set(passage.map((word) => word.mediaId))) {
-    const speakers = new Set(
-      passage
-        .filter((word) => word.mediaId === mediaId && word.speakerId)
-        .map((word) => word.speakerId),
-    );
-    if (speakers.size > 1)
+    const speakers = new Map<string, number>();
+    for (const word of passage) {
+      if (word.mediaId !== mediaId || !word.speakerId) continue;
+      speakers.set(word.speakerId, (speakers.get(word.speakerId) ?? 0) + 1);
+    }
+    if (speakers.size <= 1) continue;
+    const dominant = [...speakers.entries()].sort(
+      (left, right) => right[1] - left[1],
+    )[0][0];
+    const fileWords = passage.filter((word) => word.mediaId === mediaId);
+    const flicker = fileWords.every((word, index) => {
+      if (!word.speakerId || word.speakerId === dominant) return true;
+      return index < 3 || index === fileWords.length - 1;
+    });
+    if (!flicker)
       throw new Error(
         "This matched passage contains more than one detected speaker. It needs review before a clean storyteller-only cut can be made.",
       );
@@ -401,6 +472,48 @@ export function matchSourceWords(
     lastWordIndex: last,
     confidence: 1 - bestCost / query.length,
   };
+}
+
+/** Semi-global token alignment. Source timestamps alone determine the edit. */
+export function matchSourceWords(
+  reference: string,
+  words: SourceWord[],
+  options: { allowShort?: boolean } = {},
+) {
+  try {
+    return alignSourceWords(reference, words, options);
+  } catch (error) {
+    // A written prefix the recording replaced with a filler ("I had" / "uh").
+    // Dropping it is accepted only when the kept source words are fillers.
+    // An unrepeated content prefix with nothing spoken in its place still fails.
+    if (options.allowShort) throw error;
+    const parts = reference.trim().split(/\s+/);
+    for (let drop = 1; drop <= 2 && drop < parts.length; drop++) {
+      const suffix = parts.slice(drop).join(" ");
+      if (sourceTokenCount(suffix) < 4) continue;
+      try {
+        const aligned = alignSourceWords(suffix, words, options);
+        const skipped = words.slice(0, aligned.firstWordIndex);
+        if (
+          !skipped.length ||
+          aligned.firstWordIndex !== skipped.length ||
+          skipped.some(
+            (word) =>
+              !tokens(word.text).every((token) => leadingEdgeTokens.has(token)),
+          )
+        )
+          continue;
+        return {
+          ...aligned,
+          words: [...skipped, ...aligned.words],
+          firstWordIndex: 0,
+        };
+      } catch {
+        continue;
+      }
+    }
+    throw error;
+  }
 }
 
 export function captionsForWords(words: SourceWord[]): SourceCaption[] {

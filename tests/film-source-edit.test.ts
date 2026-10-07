@@ -120,6 +120,34 @@ test("separate accepted turns never include an excluded answer or intervening pa
   assert.ok(clips[1].inMs >= f.wordGroups[2][0].startMs - 140);
 });
 
+test("an unspoken short backchannel does not discard the verified answers", async () => {
+  const f = fixture();
+  const session = f.c.interviews![0];
+  session.turns.splice(3, 0, {
+    id: "synthetic_turn_hmm",
+    role: "user",
+    chapterId: "q2",
+    sequence: 0,
+    capturedAt: f.c.createdAt,
+    timing: "unaligned",
+    text: "Hmm.",
+  });
+  session.turns.forEach((turn, index) => {
+    turn.sequence = index;
+  });
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
+  );
+  assert.ok(
+    result.chapters.some((chapter) => chapter.sourceEdit!.clips.length > 0),
+  );
+  assert.equal(JSON.stringify(result).includes("Hmm"), false);
+});
+
 test("an untimed word in excluded speech stays in the original transcript without blocking verified answers", async () => {
   const f = fixture();
   const excludedWord = f.wordGroups[1][1];
