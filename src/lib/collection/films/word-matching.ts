@@ -58,9 +58,11 @@ const leadingEdgeTokens = new Set([
   "like",
   "right",
 ]);
+const trailingEdgeTokens = new Set([...edgeFillers, "no", "nah", "nope"]);
 const EDGE_DRIFT_TOKENS = 2;
+const FALSE_START_TOKENS = 8;
 type AlignOp =
-  | { kind: "match"; wordIndex: number }
+  | { kind: "match"; wordIndex: number; query: string }
   | {
       kind: "substitute";
       wordIndex: number;
@@ -68,6 +70,28 @@ type AlignOp =
       source: string;
     }
   | { kind: "delete"; query: string };
+
+/** A repeated phrase of at least two tokens, with the first copy in the
+ * abandoned prefix. One repeated word is not enough: "never never" must not
+ * become a license to drop the start of the thought.
+ */
+function repeatedPhraseOverlapsStart(tokens: string[], deletionCount: number) {
+  for (let size = 2; size <= Math.floor(tokens.length / 2); size++) {
+    for (let start = 0; start <= tokens.length - size * 2; start++) {
+      for (let again = start + size; again <= tokens.length - size; again++) {
+        let same = true;
+        for (let offset = 0; offset < size; offset++) {
+          if (tokens[start + offset] !== tokens[again + offset]) {
+            same = false;
+            break;
+          }
+        }
+        if (same && start < deletionCount) return true;
+      }
+    }
+  }
+  return false;
+}
 
 const contractions: Record<string, string[]> = {
   "i'm": ["i", "am"],
@@ -195,7 +219,11 @@ export function matchSourceWords(
         if (query[i - 1] === source[j - 1].text) {
           matched++;
           indices.push(source[j - 1].wordIndex);
-          ops.push({ kind: "match", wordIndex: source[j - 1].wordIndex });
+          ops.push({
+            kind: "match",
+            wordIndex: source[j - 1].wordIndex,
+            query: query[i - 1],
+          });
         } else
           ops.push({
             kind: "substitute",
@@ -234,6 +262,63 @@ export function matchSourceWords(
     }
     return null;
   };
+  // Fillers first. A content-word opening is accepted only when the written
+  // answer itself restarts that phrase, and the recording did not keep the
+  // abandoned attempt. The cut then begins at the verified restart.
+  const leadingBoundary = (ops: AlignOp[]) => {
+    const fillers = edgeDrift(ops, leadingEdgeTokens);
+    if (fillers) return fillers;
+    const extra: number[] = [];
+    let index = 0;
+    let consumed = 0;
+    while (
+      index < ops.length &&
+      ops[index].kind !== "match" &&
+      consumed < EDGE_DRIFT_TOKENS
+    ) {
+      const op = ops[index];
+      if (op.kind === "delete" && leadingEdgeTokens.has(op.query)) {
+        consumed++;
+        index++;
+        continue;
+      }
+      if (
+        op.kind === "substitute" &&
+        leadingEdgeTokens.has(op.query) &&
+        leadingEdgeTokens.has(op.source)
+      ) {
+        consumed++;
+        extra.push(op.wordIndex);
+        index++;
+        continue;
+      }
+      break;
+    }
+    const deleted: string[] = [];
+    while (
+      index < ops.length &&
+      ops[index].kind === "delete" &&
+      deleted.length < FALSE_START_TOKENS
+    ) {
+      deleted.push(ops[index].query);
+      index++;
+    }
+    if (!deleted.length || ops[index]?.kind !== "match") return null;
+    const following: string[] = [];
+    for (
+      let cursor = index;
+      cursor < ops.length && following.length < FALSE_START_TOKENS;
+      cursor++
+    ) {
+      if (ops[cursor].kind !== "match") break;
+      following.push(ops[cursor].query);
+    }
+    if (
+      !repeatedPhraseOverlapsStart([...deleted, ...following], deleted.length)
+    )
+      return null;
+    return extra;
+  };
   const endpoints = Array.from(previous)
     .map((cost, j) => ({ cost, j }))
     .filter(({ cost, j }) => j > 0 && cost === bestCost);
@@ -260,15 +345,15 @@ export function matchSourceWords(
   const verified = candidates
     .filter(
       (candidate) =>
-        edgeDrift(candidate.ops, leadingEdgeTokens) &&
-        edgeDrift([...candidate.ops].reverse(), edgeFillers),
+        leadingBoundary(candidate.ops) &&
+        edgeDrift([...candidate.ops].reverse(), trailingEdgeTokens),
     )
     .sort(
       (left, right) => right.end - right.start - (left.end - left.start),
     )[0];
-  const leading = verified && edgeDrift(verified.ops, leadingEdgeTokens);
+  const leading = verified && leadingBoundary(verified.ops);
   const trailing =
-    verified && edgeDrift([...verified.ops].reverse(), edgeFillers);
+    verified && edgeDrift([...verified.ops].reverse(), trailingEdgeTokens);
   if (!verified || !leading || !trailing)
     throw new Error(
       "The complete answer boundaries could not be verified. No partial-thought cut was made.",

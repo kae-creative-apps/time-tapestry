@@ -399,10 +399,10 @@ export async function originalJobInputsCurrent(job: StoryFilmJob) {
   return Boolean(job.originalSources?.length);
 }
 
-// v5 accepts filler and backchannel drift at answer edges. The new id replaces
-// a failed v4 film instead of repeating that alignment.
+// v6 accepts a repeated false start and a trailing response particle. The new
+// id replaces a failed v5 film instead of repeating that alignment.
 export const AUTOMATIC_TEMPLATE_VERSION =
-  "original-scribe-source-cleanup-orb-v5";
+  "original-scribe-source-cleanup-orb-v6";
 export async function prepareAutomaticJob(
   c: Collection,
   presentation: "video" | "audio" = "video",
