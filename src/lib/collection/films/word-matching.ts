@@ -197,7 +197,7 @@ function nearestTimedEdge(
 function alignSourceWords(
   reference: string,
   words: SourceWord[],
-  options: { allowShort?: boolean } = {},
+  options: { allowShort?: boolean; ignoreInsertions?: boolean } = {},
 ) {
   const query = tokens(reference);
   const source = words.flatMap((word, wordIndex) =>
@@ -221,7 +221,8 @@ function alignSourceWords(
       const diagonal =
         previous[j - 1] + (query[i - 1] === source[j - 1].text ? 0 : 1);
       const deletion = previous[j] + 1,
-        insertion = current[j - 1] + 1;
+        insertion =
+          current[j - 1] + (options.ignoreInsertions ? 0 : 1);
       current[j] = Math.min(diagonal, deletion, insertion);
       trace[i * width + j] =
         current[j] === diagonal ? 1 : current[j] === deletion ? 2 : 3;
@@ -504,6 +505,34 @@ function alignSourceWords(
     const kept = passage.filter((word) => !droppedSpeakers.has(word));
     if (kept.length) passage = kept;
   }
+  // A room recording labels the interviewer as the same speaker. Extra words
+  // between the saved answer are not part of the cut when they form a real gap.
+  if (options.ignoreInsertions) {
+    const matched = new Set(indices);
+    const isMatched = passage.map((word) => matched.has(words.indexOf(word)));
+    const nextMatched: number[] = new Array(passage.length).fill(passage.length);
+    let upcoming = passage.length;
+    for (let offset = passage.length - 1; offset >= 0; offset--) {
+      nextMatched[offset] = upcoming;
+      if (isMatched[offset]) upcoming = offset;
+    }
+    let previous = -1;
+    passage = passage.filter((word, offset) => {
+      if (isMatched[offset]) {
+        previous = offset;
+        return true;
+      }
+      const next = nextMatched[offset];
+      if (previous < 0 || next >= passage.length) return false;
+      const before = passage[previous];
+      const after = passage[next];
+      return (
+        word.mediaId === before.mediaId &&
+        after.mediaId === before.mediaId &&
+        after.startMs - before.endMs <= 900
+      );
+    });
+  }
   return {
     words: passage,
     firstWordIndex: first,
@@ -512,7 +541,11 @@ function alignSourceWords(
   };
 }
 
-type MatchOptions = { allowShort?: boolean; speakerSubset?: boolean };
+type MatchOptions = {
+  allowShort?: boolean;
+  speakerSubset?: boolean;
+  ignoreInsertions?: boolean;
+};
 
 function speakerDuration(words: SourceWord[], speaker: string) {
   return words.reduce((total, word) => {
@@ -654,7 +687,7 @@ export function matchSourceWords(
 const SPEAKER_MAJORITY = 1.5;
 
 /** Bump when alignment can resolve an older confident-match failure without new audio. */
-export const SOURCE_MATCH_REVISION = 2;
+export const SOURCE_MATCH_REVISION = 3;
 
 /** Spoken duration of each diarized speaker. Unlabeled words are not a speaker. */
 export function dominantSpeaker(words: SourceWord[]): string | null {
@@ -715,12 +748,18 @@ export function captionsForWords(words: SourceWord[]): SourceCaption[] {
   return captions;
 }
 
-function otherSpeakerLiesBetween(
+function matchedWordsShouldSplit(
   allWords: SourceWord[],
   left: SourceWord,
   right: SourceWord,
 ) {
   if (left.mediaId !== right.mediaId) return false;
+  if (right.startMs - left.endMs > 900) {
+    const file = allWords.filter((word) => word.mediaId === left.mediaId);
+    const start = file.indexOf(left);
+    const end = file.indexOf(right);
+    if (start >= 0 && end > start + 1) return true;
+  }
   const kept = [left.speakerId, right.speakerId].filter(Boolean);
   if (!kept.length) return false;
   const sameFile = allWords.filter((word) => word.mediaId === left.mediaId);
@@ -744,7 +783,7 @@ export function cutsForMatchedWords(
     if (
       !previous ||
       previous.mediaId !== word.mediaId ||
-      otherSpeakerLiesBetween(allWords, previous, word)
+      matchedWordsShouldSplit(allWords, previous, word)
     )
       groups.push([word]);
     else groups.at(-1)!.push(word);
