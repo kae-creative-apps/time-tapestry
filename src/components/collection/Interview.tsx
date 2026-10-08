@@ -13,6 +13,7 @@ import type { AnswerTake, CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 import { listLocalTakes } from "@/lib/collection/local-takes";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { shouldLeaveRecordingForComplete } from "@/lib/collection/complete-actions";
 import { interviewReviewPath } from "@/lib/collection/interview-recording-review";
 import { requireInterviewReviewBackup } from "@/lib/collection/interview-review-backup";
 import SavedRecorder from "./SavedRecorder";
@@ -361,11 +362,12 @@ export default function Interview({
   }, [load]);
   useEffect(() => {
     if (
-      collection?.role === "owner" &&
-      collection.status !== "approved" &&
-      collection.interviewPreparation &&
-      !collection.draftOutdated &&
-      !collection.interviewPreparation.missingAreas?.length
+      shouldLeaveRecordingForComplete({
+        role: collection?.role,
+        status: collection?.status,
+        draftOutdated: collection?.draftOutdated,
+        preparation: collection?.interviewPreparation,
+      })
     ) {
       router.replace(
         `/collection/${encodeURIComponent(collectionId)}/complete${query}`,

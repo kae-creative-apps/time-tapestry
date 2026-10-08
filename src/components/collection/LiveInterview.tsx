@@ -27,6 +27,7 @@ import {
   nextUnansweredChapterId,
 } from "@/lib/collection/interview-progress";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { shouldLeaveRecordingForComplete } from "@/lib/collection/complete-actions";
 import { interviewSaveNeedsConfirmation } from "@/lib/collection/interview-review-backup";
 import { stripConversationPerformanceCues } from "@/lib/collection/conversation-copy";
 import { classifyInterviewMessage } from "@/lib/collection/interview-message-identity";
@@ -201,13 +202,14 @@ export default function LiveInterview({
 
   useEffect(() => {
     if (
-      collection?.role === "owner" &&
-      collection.status !== "approved" &&
-      collection.interviewPreparation &&
-      !rerecordChapterId &&
-      !collection.draftOutdated &&
-      !collection.interviewPreparation.missingAreas?.length &&
-      phase === "ready"
+      shouldLeaveRecordingForComplete({
+        role: collection?.role,
+        status: collection?.status,
+        draftOutdated: collection?.draftOutdated,
+        preparation: collection?.interviewPreparation,
+        rerecordChapterId,
+        phase,
+      })
     ) {
       router.replace(
         `/collection/${encodeURIComponent(collectionId)}/complete${query}`,
