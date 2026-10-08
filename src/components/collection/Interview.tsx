@@ -666,10 +666,8 @@ export default function Interview({
           Your stories, in your own words.
         </h1>
         <p className="mt-4 max-w-2xl text-lg leading-8 text-ink-400">
-          Four parts to help you share your life, your walk with Jesus, and what
-          you hope {collection.recipient.name} carries forward. Start with one
-          moment you remember. You can take a break and review everything before
-          sharing.
+          A short conversation for {collection.recipient.name}. You can pause
+          and review before sharing.
         </p>
         <div className="mt-6 flex items-center justify-between gap-4 text-sm">
           <span>{completed} of 4 recorded answers are ready</span>

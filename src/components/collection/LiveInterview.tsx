@@ -1415,14 +1415,14 @@ export default function LiveInterview({
             ? `Record again: ${interviewChapterTitle(rerecordChapterId, collection.faithFraming)}`
             : resuming
               ? "Welcome back."
-              : "Take your time. Your story matters."}
+              : "Let's begin."}
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
           {rerecordChapterId
             ? "We’ll ask about just this part, then bring you back to your recordings."
             : resuming
               ? `Continue with part ${activeChapterId.slice(1)} of 4: ${interviewChapterTitle(activeChapterId, collection.faithFraming)}.`
-              : `One conversation about your life, your walk with Jesus, and what you hope ${collection.recipient.name} carries forward.`}
+              : `A short conversation for ${collection.recipient.name}.`}
         </p>
         {resuming && <div className="mt-5">{startControls}</div>}
       </div>
@@ -1559,7 +1559,7 @@ export default function LiveInterview({
                           ? rerecordChapterId
                             ? "Your camera and microphone stay off until you choose Record this part again."
                             : "Your camera and microphone stay off until you choose Continue recording."
-                          : "We will take this one question at a time. You can pause whenever you need to. You review your stories and videos before anything is shared."
+                          : "You can pause anytime."
                         : phase === "paused"
                           ? "The conversation and recording are paused. Continue when you are ready."
                           : "There is no perfect answer. Start with a moment you remember."}
@@ -1629,10 +1629,8 @@ export default function LiveInterview({
                 ))}
               {collection.capabilities.liveInterview && !resuming && (
                 <p className="max-w-2xl text-base leading-7 text-ink-500">
-                  Starting the conversation uses your microphone and records
-                  your answers. When you choose Finish interview, we save your
-                  recordings and start preparing your stories and videos.
-                  Nothing is mailed until you approve your postcards.
+                  We’ll use your microphone and save your answers. Nothing is
+                  sent until you approve.
                 </p>
               )}
               {!resuming && startControls}
