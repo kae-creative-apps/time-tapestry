@@ -5,7 +5,7 @@ import { AppIcon } from "@/components/icons";
 import { OrganizationSetup } from "@/components/organizations/OrganizationSetup";
 import { OrganizationShell } from "@/components/organizations/shared";
 
-const title = "Start a donor legacy pilot | Time Tapestry";
+const title = "Invite your donors | Time Tapestry";
 const description =
   "Bring Time Tapestry to your major donors. Ministries, nonprofits, foundations, and advancement teams can invite donors to pass the story of their generosity to their children and grandchildren.";
 
@@ -46,13 +46,13 @@ export default function ForOrganizations() {
                 the lives changed — for their children and grandchildren.
               </p>
               <p className="mt-6 text-base font-medium">
-                Free during the pilot. Donors are never asked about gift size.
+                Donors are never asked about gift size.
               </p>
             </div>
             <ol className="mt-7 space-y-6 px-2">
               {[
                 {
-                  title: "Open a pilot for your donors.",
+                  title: "Invite your donors.",
                   text: "Choose up to 100 invitations and save your private management link.",
                   icon: "handHeart" as const,
                 },

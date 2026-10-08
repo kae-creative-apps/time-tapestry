@@ -150,7 +150,7 @@
 .secondaryButton:hover {
   background: var(--fd-sand);
 }
-.pilotNote {
+.assuranceNote {
   margin-top: 1rem;
   font-size: 0.8rem;
   line-height: 1.6;
@@ -668,7 +668,7 @@
 .beginChoice > a {
   margin-top: auto;
 }
-.beginPilot {
+.beginNote {
   max-width: 650px;
   margin: 1.5rem auto 0;
   text-align: center;
@@ -676,7 +676,7 @@
   font-size: 0.8rem;
   line-height: 1.8;
 }
-.beginPilot a {
+.beginNote a {
   display: inline-flex;
   align-items: center;
   color: var(--fd-ink);
@@ -979,7 +979,7 @@
     padding-inline: 1.2rem;
     font-size: 0.92rem;
   }
-  .pilotNote {
+  .assuranceNote {
     font-size: 0.72rem;
   }
   .showcase {
@@ -1189,7 +1189,7 @@
   .beginChoice > a {
     align-self: stretch;
   }
-  .beginPilot {
+  .beginNote {
     font-size: 0.74rem;
   }
   .organizationLine {

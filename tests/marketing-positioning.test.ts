@@ -19,8 +19,13 @@ const source = files
   .join("\n");
 
 test("public marketing speaks to organizations and donor legacy", () => {
-  assert.match(source, /Bring Time Tapestry to your donors/);
-  assert.match(source, /Start a pilot/);
+  assert.match(source, /Invite your donors/);
+  assert.match(
+    source,
+    /Helping your donors pass on a legacy of generosity/,
+  );
+  assert.doesNotMatch(source, /Help your donors pass on/);
+  assert.doesNotMatch(source, /pilot/i);
   assert.match(source, /What made you become so generous/);
   assert.match(source, /Roots of generosity/);
   assert.match(source, /Lives I’ve seen flourish/);

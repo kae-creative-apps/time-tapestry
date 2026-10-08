@@ -170,12 +170,12 @@ export function OrganizationDashboard({
       <OrganizationShell>
         <main className="mx-auto max-w-2xl px-5 py-16 sm:px-8">
           <p className="brand-eyebrow mb-4 text-taupe-600">
-            Donor pilot
+            Donor invitations
           </p>
-          <h1 className="mb-6 text-4xl font-medium">Your donor pilot</h1>
+          <h1 className="mb-6 text-4xl font-medium">Your donor invitations</h1>
           {loading ? (
             <p role="status" className="text-lg text-ink-500">
-              Opening your pilot…
+              Opening your invitations…
             </p>
           ) : (
             <>
@@ -193,7 +193,7 @@ export function OrganizationDashboard({
                 href="/for-organizations"
                 className="mt-6 block py-3 underline underline-offset-4"
               >
-                About the donor pilot
+                Invite your donors
               </Link>
             </>
           )}
@@ -209,7 +209,7 @@ export function OrganizationDashboard({
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="brand-eyebrow mb-4 text-taupe-600">
-              Donor legacy pilot
+              Donor invitations
             </p>
             <h1 className="break-words font-display text-4xl font-medium leading-tight sm:text-5xl">
               {organization.organizationName}

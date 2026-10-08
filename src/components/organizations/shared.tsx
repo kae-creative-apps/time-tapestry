@@ -70,7 +70,7 @@ export function OrganizationShell({ children }: { children: ReactNode }) {
       </header>
       {children}
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-10 text-sm text-ink-500 sm:px-8">
-        <p>Time Tapestry · Donor legacy pilot</p>
+        <p>Time Tapestry · Donor legacy</p>
         <Link
           href="/privacy"
           className="inline-flex min-h-11 items-center underline underline-offset-4"

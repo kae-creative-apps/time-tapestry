@@ -128,9 +128,9 @@ export function PostcardCollection() {
           </div>
         </div>
 
-        <p className={styles.pilotNote}>
+        <p className={styles.assuranceNote}>
           Planned for weeks 0, 2, 4 and 6. Physical mailing is still being
-          tested during the pilot.
+          tested.
         </p>
       </div>
     </section>

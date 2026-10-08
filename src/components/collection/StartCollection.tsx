@@ -246,7 +246,7 @@ export default function StartCollection({
           <p className="mb-8 text-lg leading-relaxed text-ink-500">
             {
               [
-                "This free pilot turns your recorded conversation into four films, four written chapters and a personal story page. No payment details are needed.",
+                "This turns your recorded conversation into four films, four written chapters and a personal story page. No payment details are needed.",
                 mode === "share"
                   ? "Choose someone you want to share your stories, faith and encouragement with."
                   : "Invite them to record their story with video and sound, or audio only. They approve the finished gift before sharing.",

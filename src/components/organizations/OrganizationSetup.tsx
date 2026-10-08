@@ -50,7 +50,7 @@ export function OrganizationSetup() {
 
   return (
     <form
-      id="start-pilot"
+      id="invite-donors"
       className="scroll-mt-8 rounded-[28px] border border-warmgray-200 bg-white p-6 shadow-sm sm:p-9"
       onSubmit={submit}
       aria-busy={busy}
@@ -58,15 +58,12 @@ export function OrganizationSetup() {
       <div className="mb-7 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold sm:text-3xl">
-            Start a pilot.
+            Invite your donors.
           </h2>
           <p className="mt-2 text-base leading-7 text-ink-500">
             Tell us about your organization and how many donors you’d like to invite.
           </p>
         </div>
-        <span className="rounded-full bg-sage-100 px-3 py-1.5 text-sm font-medium text-sage-700">
-          Free pilot
-        </span>
       </div>
       <FormError message={error} />
       <fieldset disabled={busy} className="mt-5 space-y-5">
@@ -160,7 +157,7 @@ export function OrganizationSetup() {
           className={`${primaryClass} w-full`}
           type="submit"
         >
-          {busy ? "Starting your pilot…" : "Start a pilot"}
+          {busy ? "Saving your invitations…" : "Invite your donors"}
           {!busy && <AppIcon name="arrowRight" size={20} />}
         </button>
       </fieldset>
@@ -169,7 +166,7 @@ export function OrganizationSetup() {
         from your private dashboard.
       </p>
       <p className="sr-only" role="status">
-        {busy ? "Starting your pilot. Please wait." : ""}
+        {busy ? "Saving your invitations. Please wait." : ""}
       </p>
     </form>
   );

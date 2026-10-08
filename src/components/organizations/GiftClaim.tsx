@@ -183,7 +183,7 @@ export function GiftClaim({
                 your life and share them with someone you love.
               </p>
               <span className="mt-7 inline-block rounded-full border border-white/25 px-4 py-2 text-sm font-medium">
-                Your gift is free during the pilot.
+                Your gift does not need payment details.
               </span>
             </div>
             <div className="mt-6 flex gap-3 rounded-2xl bg-sage-100 p-5">

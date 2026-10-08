@@ -162,7 +162,7 @@
   text-wrap: pretty;
 }
 
-.pilotNote {
+.assuranceNote {
   max-width: 52rem;
   margin: 3rem 0 0;
   padding-top: 1.5rem;
@@ -212,7 +212,7 @@
     max-width: 42ch;
   }
 
-  .pilotNote {
+  .assuranceNote {
     margin-top: 2rem;
   }
 }
