@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { AppIcon } from "@/components/icons";
 import { StorytellerDashboard } from "@/components/collection/StorytellerDashboard";
 import { collectionRequest } from "@/lib/collection/client-request";
+import { completePageAction } from "@/lib/collection/complete-actions";
 import { CHAPTERS } from "@/lib/interview-state";
 import type { CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
@@ -13,14 +14,6 @@ import dash from "@/components/collection/StorytellerDashboard.module.css";
 
 const primary =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-espresso px-6 py-3 text-base font-medium text-white hover:bg-espresso-600 disabled:opacity-50";
-
-function preparationLabel(preparation: InterviewPreparationView) {
-  if (preparation.ready) return "Ready for your review";
-  if (preparation.status === "queued") return "Queued for preparation";
-  if (preparation.status === "preparing") return "Preparing your stories";
-  if (preparation.status === "films_queued") return "Preparing your videos";
-  return "Needs attention";
-}
 
 export default function InterviewComplete({
   collectionId,
@@ -269,49 +262,41 @@ export default function InterviewComplete({
               ? "Your four stories, four videos, and postcard drafts are being prepared from your recording. You can leave this page and return through your private link."
               : "Return to your conversation to finish saving and submitting your recording.";
 
-  const preparationActions = (
-    <>
-      {ready ? (
-        <Link
-          className={dash.heroPrimary}
-          href={`/collection/${encodeURIComponent(collectionId)}/review${query}`}
-        >
-          Review your stories and videos
-          <AppIcon name="arrowRight" size={20} />
-        </Link>
-      ) : needsAttention &&
-        preparation.canRetry !== false &&
-        !canUseFullInterview &&
-        !preparation.missingAreas?.length ? (
-        <button
-          type="button"
-          className={dash.heroPrimary}
-          disabled={busy || checking}
-          onClick={() => void retryPreparation()}
-        >
-          {busy ? "Requesting preparation…" : "Retry preparation"}
-        </button>
-      ) : null}
-      {(!accepted || needsAttention) && !loading && (
-        <Link
-          className={dash.heroSecondary}
-          href={`/record/${encodeURIComponent(collectionId)}${query}${preparation?.missingAreas?.[0] ? `&classic=1&chapter=${encodeURIComponent(preparation.missingAreas[0].id)}` : ""}`}
-        >
-          Continue conversation
-        </Link>
-      )}
-      {!ready && (
-        <button
-          type="button"
-          className={dash.heroSecondary}
-          disabled={checking || busy}
-          onClick={() => setRevision((value) => value + 1)}
-        >
-          {checking ? "Checking progress…" : "Check preparation"}
-        </button>
-      )}
-    </>
-  );
+  const recordHref = `/record/${encodeURIComponent(collectionId)}${query}${
+    preparation?.missingAreas?.[0]
+      ? `&classic=1&chapter=${encodeURIComponent(preparation.missingAreas[0].id)}`
+      : ""
+  }`;
+  const action = completePageAction({
+    loading,
+    ready,
+    accepted,
+    needsAttention,
+    canRetry: preparation?.canRetry !== false,
+    canUseFullInterview,
+    missingAreaId: preparation?.missingAreas?.[0]?.id,
+    preparationStatus: preparation?.status,
+    recordHref,
+    reviewHref: `/collection/${encodeURIComponent(collectionId)}/review${query}`,
+  });
+  const preparationActions =
+    action.kind === "retry" ? (
+      <button
+        type="button"
+        className={dash.heroPrimary}
+        disabled={busy}
+        onClick={() => void retryPreparation()}
+      >
+        {busy ? "Trying again…" : action.label}
+      </button>
+    ) : action.kind === "link" ? (
+      <Link className={dash.heroPrimary} href={action.href}>
+        {action.label}
+        <AppIcon name="arrowRight" size={20} />
+      </Link>
+    ) : action.kind === "status" ? (
+      <p className={dash.statusNote}>{action.label}</p>
+    ) : null;
 
   return (
     <main className="mx-auto max-w-5xl px-5 pb-16 pt-5 text-ink-700 sm:px-8 sm:pt-8">
@@ -373,22 +358,12 @@ export default function InterviewComplete({
           accessKey={accessKey}
           preparation={preparation}
         >
-          {preparation && (
-            <p role="status" aria-live="polite" className={dash.heroSecondary}>
-              <AppIcon name={ready ? "check" : "conversation"} size={18} />
-              {preparationLabel(preparation)}
-            </p>
-          )}
-          {accepted && (
-            <p className={dash.heroSecondary}>
-              {ready
-                ? "Nothing is mailed until you approve your gift."
-                : collection.capabilities.email
-                  ? "We’ll email you when everything is ready to review."
-                  : "Return through your private link to check progress."}
-            </p>
-          )}
           {preparationActions}
+          {error ? (
+            <p role="alert" className={dash.statusNote}>
+              {error}
+            </p>
+          ) : null}
         </StorytellerDashboard>
       ) : (
         <section className={dash.hero} aria-busy={loading}>
