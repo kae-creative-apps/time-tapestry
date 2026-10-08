@@ -1,0 +1,536 @@
+/* Demo chapter pages. The card system mirrors the storyteller dashboard
+   (collection/StorytellerDashboard.module.css) so the demo reads as the app. */
+.shell {
+  min-height: 100vh;
+  padding: 1.5rem 1rem 3rem;
+}
+.column {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+.top {
+  padding: 0.25rem 0 0.25rem;
+}
+.demoNote {
+  border-radius: 16px;
+  border: 1px solid #e7dfd6;
+  background: #fff;
+  padding: 0.8rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #5c4a40;
+}
+.demoTag {
+  display: inline-block;
+  margin-right: 0.55rem;
+  border-radius: 999px;
+  background: #432e23;
+  color: #fbfaf8;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
+
+/* Dark hero */
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #432e23;
+  color: #fbfaf8;
+  padding: 1.75rem 1.25rem 1.35rem;
+}
+.heroCopy {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+}
+.orbRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e6d7ca;
+}
+.title {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(2rem, 4vw, 3.35rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+.lede {
+  margin: 0.9rem 0 0;
+  max-width: 38rem;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.35rem;
+  line-height: 1.45;
+  color: #f6efe8;
+}
+.byline {
+  margin: 0.6rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #e6d7ca;
+}
+.pattern {
+  pointer-events: none;
+  position: absolute;
+  right: -4.5rem;
+  bottom: -4.5rem;
+  z-index: 0;
+  width: 18rem;
+  height: 18rem;
+  color: #fff;
+  opacity: 0.08;
+}
+.film {
+  position: relative;
+  z-index: 1;
+  margin-top: 1.35rem;
+}
+.video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  background: #fbfaf8;
+}
+.filmMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: #e6d7ca;
+}
+.excerpt {
+  position: relative;
+  z-index: 1;
+  margin: 1.1rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+.tasks {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.55rem;
+  margin: 1.35rem 0 0;
+}
+.task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  border-radius: 16px;
+  background: #ffffff14;
+  color: inherit;
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+.task:hover {
+  background: #ffffff22;
+}
+.current,
+.current:hover {
+  background: #fbfaf8;
+  color: #432e23;
+}
+.done {
+  background: #ffffff10;
+}
+.mark {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  border: 1.5px solid #ffffff55;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.current .mark {
+  border-color: #432e23;
+  background: #432e23;
+  color: #fbfaf8;
+}
+.done .mark {
+  border-color: #dadecf;
+  background: #dadecf;
+  color: #432e23;
+}
+.taskTitle {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.taskDetail {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  opacity: 0.86;
+}
+.actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.15rem;
+}
+.heroPrimary,
+.heroSecondary {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.7rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+.heroPrimary {
+  background: #fbfaf8;
+  color: #432e23;
+}
+.heroPrimary:hover {
+  background: #fff;
+}
+.heroSecondary {
+  border: 1px solid #ffffff55;
+  color: #fbfaf8;
+}
+.heroSecondary:hover {
+  background: #ffffff14;
+}
+
+/* Clay callout */
+.callout {
+  border-radius: 28px;
+  border: 1px solid #c18f7b;
+  background:
+    radial-gradient(circle at 100% 0%, #e5c8bb 0%, transparent 42%), #f1e6db;
+  color: #432e23;
+  padding: 1.35rem 1.2rem 1.25rem;
+}
+.callout h2 {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.callout > p {
+  margin: 0.7rem 0 0;
+  max-width: 40rem;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+.postcardFrame {
+  margin-top: 1.2rem;
+  border-radius: 20px;
+  background: #fbfaf8;
+  padding: 1rem;
+}
+
+/* White cards */
+.card {
+  border-radius: 28px;
+  border: 1px solid #e7dfd6;
+  background: #fff;
+  color: #432e23;
+  padding: 1.25rem 1.15rem 1.2rem;
+}
+.card h2 {
+  display: block;
+  margin: 0.3rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.cardNote {
+  margin: 0.65rem 0 0;
+  max-width: 40rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #5c4a40;
+}
+.kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #756454;
+}
+.story p {
+  margin: 1rem 0 0;
+  font-size: 1.08rem;
+  line-height: 1.85;
+}
+.pullQuote {
+  margin: 1.4rem 0 0;
+  border-left: 3px solid #c18f7b;
+  padding-left: 1.1rem;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.5rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+.scripture {
+  margin-top: 1.3rem;
+  border-radius: 18px;
+  background: #dadecf;
+  padding: 1.1rem 1.15rem;
+}
+.scripture blockquote {
+  margin: 0.55rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.7;
+}
+.scripture p:last-child {
+  margin: 0.55rem 0 0;
+  font-size: 0.88rem;
+  color: #5c4a40;
+}
+
+/* Tiles */
+.strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+.tile {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid #e7dfd6;
+  background: #fbfaf8;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+a.tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px #432e2314;
+}
+.tileHere {
+  border-color: #432e23;
+}
+.tileBody {
+  padding: 0.85rem 0.9rem 1rem;
+}
+.tileLabel {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #756454;
+}
+.tileTitle {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.tileNote {
+  margin: 0.45rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #5c4a40;
+}
+.tileLink {
+  display: block;
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.tile .momentNumber {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: #c18f7b;
+}
+.filmStage {
+  display: grid;
+  min-height: 7.5rem;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 40%, #e5c8bb 0%, transparent 58%), #432e23;
+}
+
+/* Conversation */
+.conversation summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+.conversation summary::-webkit-details-marker {
+  display: none;
+}
+.toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid #e7dfd6;
+  font-size: 1.3rem;
+  transition: transform 0.3s ease;
+}
+.conversation[open] .toggle {
+  transform: rotate(45deg);
+}
+.turns {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.1rem;
+  animation: fadeUp 0.4s ease both;
+}
+.turn dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #756454;
+}
+.turn dd {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.interviewer dd {
+  font-style: italic;
+  color: #5c4a40;
+}
+
+/* Reply */
+.reply textarea {
+  width: 100%;
+  margin-top: 1rem;
+  border-radius: 16px;
+  border: 1px solid #d9cabd;
+  background: #fbfaf8;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.reply textarea:focus {
+  outline: none;
+  border-color: #432e23;
+  box-shadow: 0 0 0 4px #432e2314;
+}
+.replyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+.replyRow p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #756454;
+}
+.saved {
+  margin: 1rem 0 0;
+  border-radius: 16px;
+  background: #f1e6db;
+  padding: 0.9rem 1rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  animation: fadeUp 0.4s ease both;
+}
+.footer {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  text-align: center;
+  color: #756454;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .shell {
+    padding-top: 2.5rem;
+  }
+  .hero {
+    padding: 2.2rem 2rem 1.6rem;
+  }
+  .callout,
+  .card {
+    padding: 1.6rem 1.6rem 1.45rem;
+  }
+  .strip4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .strip3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task,
+  .tile,
+  .toggle,
+  .heroPrimary,
+  .heroSecondary,
+  .reply textarea {
+    transition: none;
+  }
+  .turns,
+  .saved {
+    animation: none;
+  }
+}

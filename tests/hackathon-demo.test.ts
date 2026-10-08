@@ -1,58 +1,56 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import demoStory from "../src/data/demo-story.json";
-import { hackathonDemoChapters } from "../src/data/hackathon-demo";
+import { POSTCARD_THEMES } from "../src/lib/collection/postcard-design";
+import { assertPublicPostcardFits } from "../src/lib/collection/postcard-fit";
+import {
+  hackathonDemoChapters,
+  spokenText,
+} from "../src/data/hackathon-demo";
 
-test("hackathon demo pages use the saved Gigi stories and the postcard scriptures", () => {
+test("hackathon demo chapters follow Gigi's four-part story for Sammie", () => {
   assert.deepEqual(
-    hackathonDemoChapters.map((chapter) => chapter.path),
+    hackathonDemoChapters.map((chapter) => [chapter.path, chapter.theme]),
     [
-      "/hackathon-demo-1",
-      "/hackathon-demo-2",
-      "/hackathon-demo-3",
-      "/hackathon-demo-4",
+      ["/hackathon-demo-1", "kindness"],
+      ["/hackathon-demo-2", "faith"],
+      ["/hackathon-demo-3", "generosity"],
+      ["/hackathon-demo-4", "encouragement"],
     ],
   );
   assert.deepEqual(
-    hackathonDemoChapters.map((chapter) => chapter.story),
-    [
-      demoStory.chapters[0].content,
-      demoStory.chapters[2].content,
-      demoStory.chapters[1].content,
-      demoStory.chapters[3].content,
-    ],
+    hackathonDemoChapters.map((chapter) => chapter.postcard.sentOnDay),
+    [0, 14, 28, 42],
   );
   for (const chapter of hackathonDemoChapters) {
-    assert.equal(chapter.moments.length, 3);
-    assert.ok(chapter.story.includes(chapter.transcript));
-    assert.ok(chapter.scripture.text.length > 0);
-    assert.equal(chapter.scripture.translation, "KJV");
-    for (const moment of chapter.moments)
-      assert.ok(chapter.story.includes(moment));
-    assert.doesNotMatch(
-      `${chapter.story} ${chapter.pullQuote} ${chapter.moments.join(" ")}`,
-      /\d+:\d+/,
-    );
+    const gigi = chapter.conversation
+      .filter((line) => line.speaker === "gigi")
+      .map((line) => spokenText(line.text))
+      .join(" ");
+    // The excerpt on the page is what Gigi actually says in the film.
+    assert.ok(gigi.includes(chapter.transcript), chapter.title);
+    assert.equal(chapter.conversation[0].speaker, "interviewer");
+    assert.doesNotMatch(spokenText(gigi), /[[\]]/);
+    assertPublicPostcardFits({
+      recipientFirstName: "Sammie",
+      storytellerFirstName: "Gigi",
+      publicMessage: chapter.postcard.message,
+      theme: POSTCARD_THEMES[chapter.number - 1],
+    });
+    const copy = JSON.stringify(chapter);
+    assert.doesNotMatch(copy, /—/, "No em dashes in demo copy.");
   }
-  assert.equal(
-    hackathonDemoChapters[3].momentsTitle,
-    "What Gigi hopes Sammie carries",
-  );
+  assert.equal(hackathonDemoChapters[3].moments.length, 4);
   assert.equal(hackathonDemoChapters[3].next, null);
-  assert.equal(hackathonDemoChapters[0].next?.href, "/hackathon-demo-2");
-  assert.equal(hackathonDemoChapters[1].next?.href, "/hackathon-demo-3");
-  assert.equal(hackathonDemoChapters[2].next?.href, "/hackathon-demo-4");
   assert.deepEqual(
-    hackathonDemoChapters.map((chapter) => chapter.scripture.reference),
-    ["1 Peter 4:10", "Lam 3:22–23", "Gal 6:9", "Matt 25:40"],
+    hackathonDemoChapters.slice(0, 3).map((chapter) => chapter.next?.href),
+    ["/hackathon-demo-2", "/hackathon-demo-3", "/hackathon-demo-4"],
   );
-  assert.deepEqual(
-    hackathonDemoChapters.map((chapter) => chapter.pullQuote),
-    [
-      "Someone once gave me their afternoons when I needed them most. Time is the best gift you can give.",
-      "When I did not know what came next, prayer helped me take the next small step. I hope you find that kind of peace.",
-      "The good we give has a way of growing in places we may never see. Keep making room for others.",
-      "There is always room for one more at the table. I hope you carry that welcome wherever life takes you.",
-    ],
+});
+
+test("voice cues are removed from captions and page text", () => {
+  assert.equal(
+    spokenText("Oh... [sighs] well, that one's easy. [pause] Mrs. Hale."),
+    "Oh... well, that one's easy. Mrs. Hale.",
   );
+  assert.equal(spokenText("He's six-foot-two now, so. [laughs]"), "He's six-foot-two now, so.");
 });
