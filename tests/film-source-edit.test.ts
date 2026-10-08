@@ -842,6 +842,83 @@ test("a chapter retake made only of short answers is still cut", async () => {
   assert.equal(caption.includes("listen"), false);
 });
 
+import { recoverInterviewSourceWords } from "../src/lib/collection/interview-source-recovery";
+import type { InterviewSession } from "../src/lib/collection/types";
+
+test("a recovered short retake is cut once as the whole part", async () => {
+  const f = fixture();
+  const original = f.c.interviews![0];
+  const previous = original.turns.find((turn) => turn.chapterId === "q4")!;
+  original.excludedTurnIds.push(previous.id);
+  const mediaId = "retake_media";
+  const retakeWords: SourceWord[] =
+    "I hope you carry courage and plant sunflowers wherever you settle"
+      .split(" ")
+      .map((text, index) => ({
+        text,
+        startMs: 1000 + index * 400,
+        endMs: 1200 + index * 400,
+        mediaId,
+        speakerId: "speaker_0",
+        languageCode: "eng",
+      }));
+  const retake: InterviewSession = {
+    id: "retake_session",
+    provider: "elevenlabs",
+    status: "completed",
+    startedAt: f.c.createdAt,
+    replacesChapterId: "q4",
+    excludedTurnIds: [],
+    segments: [
+      {
+        id: "retake_segment",
+        mediaId,
+        kind: "voice",
+        startMs: 0,
+        durationMs: 12000,
+        createdAt: f.c.createdAt,
+      },
+    ],
+    // Their matched spans cover the sentence, but neither says most of it.
+    turns: ["Courage.", "I hope settle."].map((text, index) => ({
+      id: `retake_${index}`,
+      role: "user" as const,
+      chapterId: "q4" as const,
+      sequence: index,
+      capturedAt: f.c.createdAt,
+      timing: "unaligned" as const,
+      text,
+    })),
+  };
+  retake.turns = recoverInterviewSourceWords(retake, [
+    { segment: retake.segments[0], durationMs: 12000, words: retakeWords },
+  ]);
+  f.c.interviews!.push(retake);
+  const { result } = await withMatchLogs(() =>
+    assembleSourceEdits(
+      f.c,
+      f.job,
+      new Map([
+        [f.words[0].mediaId, f.words],
+        [mediaId, retakeWords],
+      ]),
+      new Map([...f.durations, [mediaId, 12000]]),
+      [],
+    ),
+  );
+  const q4 = (result as Awaited<ReturnType<typeof assembleSourceEdits>>)
+    .chapters[3];
+  assert.equal(q4.status, "preparing");
+  const clips = q4.sourceEdit!.clips;
+  assert.equal(clips.length, 1);
+  assert.equal(clips[0].mediaId, mediaId);
+  assert.ok(clips[0].inMs <= retakeWords[0].startMs);
+  assert.ok(clips[0].outMs >= retakeWords.at(-1)!.endMs);
+  const caption = JSON.stringify(clips);
+  assert.match(caption, /sunflowers/);
+  assert.equal(caption.includes("listen"), false);
+});
+
 test("a short answer with no neighbor still stops outside a chapter retake", async () => {
   const f = fixture();
   const session = f.c.interviews![0];

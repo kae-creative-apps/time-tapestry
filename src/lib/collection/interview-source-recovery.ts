@@ -189,18 +189,31 @@ export function recoverInterviewSourceWords(
   )
     return originalTurns;
   const words = spoken.map(({ word }) => word);
+  // A chapter retake reaches recovery only while its saved answers are short
+  // fragments. A fragment's match can span words it never says, so recover
+  // the whole retake and keep out only left-out answers.
+  const retake = Boolean(session.replacesChapterId);
+  const superseded = new Set(
+    session.turns.map((turn) => turn.supersedesTurnId).filter(Boolean),
+  );
   const alreadySaved = new Set<number>();
   let matchedAny = false;
   let missedAny = false;
   for (const turn of session.turns.filter(
-    (turn) => turn.role === "user" && isMeaningfulInterviewSpeech(turn.text),
+    (turn) =>
+      turn.role === "user" &&
+      isMeaningfulInterviewSpeech(turn.text) &&
+      // A correction is the same speech. Its latest wording decides.
+      !(retake && superseded.has(turn.id)),
   )) {
+    const excluded = session.excludedTurnIds.includes(turn.id);
     try {
       const matched = matchSourceWords(turn.text, words, {
         allowShort: true,
         ignoreInsertions: true,
       });
       matchedAny = true;
+      if (retake && !excluded) continue;
       for (
         let index = matched.firstWordIndex;
         index <= matched.lastWordIndex;
@@ -214,13 +227,15 @@ export function recoverInterviewSourceWords(
           event: "interview_answer_not_in_recording",
           chapterId: turn.chapterId ?? null,
           turnId: turn.id,
-          excluded: session.excludedTurnIds.includes(turn.id),
+          excluded,
           reason: error instanceof Error ? error.message : "unmatched",
         }),
       );
       // A second speaker can leave a saved answer unmatched. Keep every saved
       // answer and do not invent replacements from the other voice.
       if (selected.filtered) return originalTurns;
+      // Left-out words that cannot be found cannot be kept out of a retake.
+      if (retake && excluded) return originalTurns;
       missedAny = true;
     }
   }
@@ -232,7 +247,7 @@ export function recoverInterviewSourceWords(
       );
     // One missed answer must not block the others, and uncovered source words
     // must not be added back as a new copy of an excluded or unmatched answer.
-    return originalTurns;
+    if (!retake) return originalTurns;
   }
   type Group = { chapterId?: InterviewChapterId; entries: typeof spoken };
   const groups: Group[] = [];

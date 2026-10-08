@@ -134,6 +134,94 @@ test("a short chapter retake still recovers the rest of its recording", () => {
   assert.equal(interviewSessionNeedsTranscriptRecovery(session), false);
 });
 
+const retakeWords =
+  "I hope you carry courage and plant sunflowers wherever you settle.".split(
+    " ",
+  );
+function recoverRetake(turns: InterviewTurn[], excludedTurnIds: string[] = []) {
+  const { session } = fixture();
+  session.replacesChapterId = "q4";
+  session.turns = turns;
+  session.excludedTurnIds = excludedTurnIds;
+  const next = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: retakeWords.map((text, index) => word(text, 1000 + index * 500)),
+    },
+  ]);
+  return {
+    session,
+    next,
+    recovered: next.filter((turn) => turn.id.startsWith("source-")),
+  };
+}
+
+test("a short chapter retake recovers its whole recording when its fragments span it", () => {
+  const { session, next, recovered } = recoverRetake([
+    utterance("short-1", "Courage.", "q4"),
+    utterance("short-2", "I hope settle.", "q4"),
+  ]);
+  assert.deepEqual(next.slice(0, 2), session.turns);
+  assert.equal(recovered.length, 1);
+  assert.equal(recovered[0].text, retakeWords.join(" "));
+  assert.equal(recovered[0].chapterId, "q4");
+  assert.equal(
+    interviewSessionNeedsTranscriptRecovery({ ...session, turns: next }),
+    false,
+  );
+});
+
+test("a retake fragment the scribe heard differently does not stop the rest of the retake", () => {
+  const { recovered } = recoverRetake([
+    utterance("short-1", "Courage.", "q4"),
+    utterance("short-2", "Plant tulips anywhere.", "q4"),
+  ]);
+  assert.deepEqual(
+    recovered.map((turn) => turn.text),
+    [retakeWords.join(" ")],
+  );
+});
+
+test("a recovered retake keeps out left-out words and stops when it cannot find them", () => {
+  const { recovered } = recoverRetake(
+    [
+      utterance("short-1", "Courage.", "q4"),
+      utterance("left-2", "And plant sunflowers wherever.", "q4"),
+    ],
+    ["left-2"],
+  );
+  assert.deepEqual(
+    recovered.map((turn) => turn.text),
+    ["I hope you carry courage", "you settle."],
+  );
+  const missing = recoverRetake(
+    [
+      utterance("short-1", "Courage.", "q4"),
+      utterance("left-2", "Plant tulips anywhere.", "q4"),
+    ],
+    ["left-2"],
+  );
+  assert.deepEqual(missing.next, missing.session.turns);
+});
+
+test("a corrected retake fragment does not keep its own speech out", () => {
+  const { recovered } = recoverRetake(
+    [
+      utterance("short-1", "Courage and plants.", "q4"),
+      {
+        ...utterance("short-3", "Courage and plant.", "q4"),
+        supersedesTurnId: "short-1",
+      },
+    ],
+    ["short-1"],
+  );
+  assert.deepEqual(
+    recovered.map((turn) => turn.text),
+    [retakeWords.join(" ")],
+  );
+});
+
 test("a completed partial transcript remains recoverable while intentionally excluded speech stays excluded", () => {
   const { c, session } = fixture();
   session.turns = [utterance("speech-1", "My grandmother was kind.")];
