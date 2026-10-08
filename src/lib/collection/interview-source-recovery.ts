@@ -73,7 +73,12 @@ function selectStorytellerEntries(
     let hits = 0;
     for (const turn of meaningful) {
       try {
-        matchSourceWords(turn.text, words, { allowShort: true });
+        // Same live tolerance as the film matcher: an ElevenLabs turn against a
+        // scribe transcript, not a dedicated recording.
+        matchSourceWords(turn.text, words, {
+          allowShort: true,
+          ignoreInsertions: true,
+        });
         hits += 1;
       } catch {
         // This speaker does not contain that saved answer.
@@ -185,25 +190,49 @@ export function recoverInterviewSourceWords(
     return originalTurns;
   const words = spoken.map(({ word }) => word);
   const alreadySaved = new Set<number>();
+  let matchedAny = false;
+  let missedAny = false;
   for (const turn of session.turns.filter(
     (turn) => turn.role === "user" && isMeaningfulInterviewSpeech(turn.text),
   )) {
     try {
-      const matched = matchSourceWords(turn.text, words, { allowShort: true });
+      const matched = matchSourceWords(turn.text, words, {
+        allowShort: true,
+        ignoreInsertions: true,
+      });
+      matchedAny = true;
       for (
         let index = matched.firstWordIndex;
         index <= matched.lastWordIndex;
         index++
       )
         alreadySaved.add(index);
-    } catch {
-      // A filtered second speaker can leave a saved answer unmatched. Keep that
-      // answer instead of stopping the interview. A single speaker still stops.
+    } catch (error) {
+      // The turn id is enough. The saved sentence stays on the interview.
+      console.info(
+        JSON.stringify({
+          event: "interview_answer_not_in_recording",
+          chapterId: turn.chapterId ?? null,
+          turnId: turn.id,
+          excluded: session.excludedTurnIds.includes(turn.id),
+          reason: error instanceof Error ? error.message : "unmatched",
+        }),
+      );
+      // A second speaker can leave a saved answer unmatched. Keep every saved
+      // answer and do not invent replacements from the other voice.
       if (selected.filtered) return originalTurns;
+      missedAny = true;
+    }
+  }
+  if (missedAny) {
+    // Nothing in this recording lines up. Stop before a film is spent.
+    if (!matchedAny)
       throw new InterviewSourceRecoveryError(
         "Some saved or excluded words could not be matched to the original recording. A source review is needed before recovery can continue. Your recordings and choices are preserved.",
       );
-    }
+    // One missed answer must not block the others, and uncovered source words
+    // must not be added back as a new copy of an excluded or unmatched answer.
+    return originalTurns;
   }
   type Group = { chapterId?: InterviewChapterId; entries: typeof spoken };
   const groups: Group[] = [];
