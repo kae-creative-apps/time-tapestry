@@ -245,11 +245,29 @@ export async function enqueueInterviewPreparation(
             linkedFilm.status !== "ready" &&
             !automaticFilmTemplateCurrent(linkedFilm),
           );
+          // A finished run can still be missing the rest of a short retake.
+          // Recover that recording once more, then write the stories again.
+          // An older session always looks partial once a retake replaces one
+          // of its parts, so only the retake itself can ask for this. Each
+          // pass counts its own attempts, so a pass stopped by the attempt
+          // limit can be asked for again.
+          const reopenRetake =
+            options.retry &&
+            linkedFilm?.status === "ready" &&
+            (existing.status === "films_queued" ||
+              (existing.status === "needs_attention" &&
+                existing.attempts >= MAX_ATTEMPTS)) &&
+            (c.interviews ?? []).some(
+              (session) =>
+                Boolean(session.replacesChapterId) &&
+                interviewSessionNeedsTranscriptRecovery(session),
+            );
           if (
             options.retry &&
             existing.status === "needs_attention" &&
             existing.attempts >= MAX_ATTEMPTS &&
-            !staleAutomaticFilm
+            !staleAutomaticFilm &&
+            !reopenRetake
           )
             throw new InterviewPreparationError(
               "Preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your recordings and completed work are saved.",
@@ -300,23 +318,11 @@ export async function enqueueInterviewPreparation(
               nextAttemptAt: undefined,
               updatedAt: iso(),
             };
-          // A finished run can still be missing the rest of a short retake.
-          // Recover that recording once more, then write the stories again.
-          // An older session always looks partial once a retake replaces one
-          // of its parts, so only the retake itself can ask for this.
-          if (
-            options.retry &&
-            existing.status === "films_queued" &&
-            linkedFilm?.status === "ready" &&
-            (c.interviews ?? []).some(
-              (session) =>
-                Boolean(session.replacesChapterId) &&
-                interviewSessionNeedsTranscriptRecovery(session),
-            )
-          )
+          if (reopenRetake)
             return {
               ...existing,
               status: "queued",
+              attempts: 0,
               recoveredInterviews: undefined,
               recoveredSelectedTakeIds: undefined,
               drafts: undefined,
