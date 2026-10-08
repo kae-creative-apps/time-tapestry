@@ -478,6 +478,63 @@ test("an interviewer question between two halves of one answer is left out of th
   assert.ok(firstChapter[1].inMs >= inserted.at(-1)!.endMs);
 });
 
+test("interviewer words labeled as the storyteller are left out of the film", async () => {
+  const f = fixture();
+  const mediaId = f.words[0].mediaId;
+  const answer = f.c.interviews![0].turns[0].text;
+  const parts = answer.split(" ");
+  const midpoint = Math.ceil(parts.length / 2);
+  const question =
+    "What did she write down and who received those morning messages from her";
+  const questionTokens = question.split(" ");
+  const shift = questionTokens.length * 300 + 400;
+  const group = f.wordGroups[0];
+  for (const word of group.slice(midpoint)) {
+    word.startMs += shift;
+    word.endMs += shift;
+  }
+  for (const later of f.wordGroups.slice(1)) {
+    for (const word of later) {
+      word.startMs += shift;
+      word.endMs += shift;
+    }
+  }
+  const inserted: SourceWord[] = questionTokens.map((text, index) => {
+    const startMs = group[midpoint - 1].endMs + 80 + index * 300;
+    return {
+      text,
+      startMs,
+      endMs: startMs + 200,
+      mediaId,
+      speakerId: "speaker_0",
+      languageCode: "eng",
+    };
+  });
+  const words = [
+    ...group.slice(0, midpoint),
+    ...inserted,
+    ...group.slice(midpoint),
+    ...f.wordGroups.slice(1).flat(),
+  ];
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[mediaId, words]]),
+    f.durations,
+    [],
+  );
+  const caption = JSON.stringify(
+    result.chapters.flatMap((chapter) =>
+      chapter.sourceEdit!.clips.flatMap((clip) => clip.captions ?? []),
+    ),
+  );
+  assert.equal(caption.includes("received"), false);
+  assert.equal(caption.includes("messages"), false);
+  const firstClips = result.chapters[0].sourceEdit!.clips;
+  assert.ok(firstClips[0].outMs <= inserted[0].startMs);
+  assert.ok(firstClips[1].inMs >= inserted.at(-1)!.endMs);
+});
+
 test("timed rollover duplication is removed but a later repeated memory remains", () => {
   const first: SourceWord[] = [
     { text: "I", startMs: 0, endMs: 250, mediaId: "first" },

@@ -137,7 +137,12 @@ export async function assembleSourceEdits(
       const candidates = matchableWords
         .slice(from, until)
         .filter((word) => allowed.has(word.mediaId));
-      const match = matchSourceWords(answer.text, candidates, { allowShort });
+      const match = matchSourceWords(answer.text, candidates, {
+        allowShort,
+        // The room mix is one diarized speaker, so the interviewer is extra
+        // words inside the recording rather than a second label.
+        ignoreInsertions: true,
+      });
       return {
         ...match,
         first: matchableWords.indexOf(candidates[match.firstWordIndex]),

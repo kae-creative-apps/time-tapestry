@@ -103,7 +103,7 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
       ...job!,
       status: "failed",
       attempts: 2,
-      sourceMatchRevision: 2,
+      sourceMatchRevision: 3,
       error: confident,
     }),
   );
