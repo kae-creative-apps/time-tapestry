@@ -196,10 +196,28 @@ export async function assembleSourceEdits(
       const after = [...matches]
         .filter(([position]) => position > index)
         .sort((a, b) => a[0] - b[0])[0]?.[1];
-      if (!before && !after)
+      if (!before && !after) {
+        // A chapter retake is only that chapter. Its short answers are the
+        // story, so they do not need a longer neighbor from another part.
+        if (session.replacesChapterId) {
+          try {
+            matches.set(
+              index,
+              matchAnswer(index, 0, matchableWords.length, true),
+            );
+          } catch (error) {
+            if (error instanceof Error && answerNotInRecording(error)) {
+              logUnmatchedAnswer(answer, error);
+              continue;
+            }
+            throw error;
+          }
+          continue;
+        }
         throw new Error(
           "A short answer needs a verified neighboring answer before its source can be selected automatically.",
         );
+      }
       let match: Matched;
       try {
         match = matchAnswer(
@@ -219,20 +237,24 @@ export async function assembleSourceEdits(
       }
       // A common short answer such as 'yes' needs speaker evidence from a
       // verified neighbor in the same file. Labels are not identities across files.
-      for (const word of match.words) {
-        const neighborWords = [
-          ...(before?.words ?? []),
-          ...(after?.words ?? []),
-        ].filter((neighbor) => neighbor.mediaId === word.mediaId);
-        if (
-          !word.speakerId ||
-          !neighborWords.some(
-            (neighbor) => neighbor.speakerId === word.speakerId,
+      // A chapter retake is only that part, so its own short fragments do not
+      // need a longer answer from another recording to prove the voice.
+      if (!session.replacesChapterId) {
+        for (const word of match.words) {
+          const neighborWords = [
+            ...(before?.words ?? []),
+            ...(after?.words ?? []),
+          ].filter((neighbor) => neighbor.mediaId === word.mediaId);
+          if (
+            !word.speakerId ||
+            !neighborWords.some(
+              (neighbor) => neighbor.speakerId === word.speakerId,
+            )
           )
-        )
-          throw new Error(
-            "A short answer could not be verified as the neighboring storyteller's voice. Its original is preserved for review.",
-          );
+            throw new Error(
+              "A short answer could not be verified as the neighboring storyteller's voice. Its original is preserved for review.",
+            );
+        }
       }
       matches.set(index, match);
     }
