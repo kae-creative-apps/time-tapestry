@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
 import type { HackathonDemoChapter as DemoChapter } from "@/data/hackathon-demo";
 
@@ -10,7 +10,11 @@ const BLACK_POSTER =
 
 export function HackathonDemoChapter({ chapter }: { chapter: DemoChapter }) {
   const [reply, setReply] = useState("");
-  const [saved, setSaved] = useState("");
+  const [sent, setSent] = useState<{ text: string; video: string } | null>(
+    null,
+  );
+  const [videoLabel, setVideoLabel] = useState("");
+  const videoInput = useRef<HTMLInputElement>(null);
   return (
     <main className="mx-auto max-w-5xl px-5 pb-16 pt-5 text-espresso sm:px-8 sm:pt-8">
       <header className="mb-8 border-b border-warmgray-200 pb-5">
@@ -79,48 +83,71 @@ export function HackathonDemoChapter({ chapter }: { chapter: DemoChapter }) {
             ))}
           </ol>
         </section>
-        <section className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8">
-          <h2 className="text-2xl font-semibold">Reply to Gigi</h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
-            This demo reply stays on this page. It is not sent, saved, or
-            mailed.
-          </p>
+        <section className="mt-6 rounded-xl border border-warmgray-200 bg-white p-4 sm:p-5">
+          <h2 className="text-lg font-semibold">Send Gigi a note</h2>
+          {sent && (
+            <div role="status" className="mt-3">
+              <p>Sent. Gigi will see it.</p>
+              {sent.text && (
+                <p className="mt-2 whitespace-pre-wrap text-base leading-7">
+                  {sent.text}
+                </p>
+              )}
+              {sent.video && (
+                <p className="mt-2 text-sm text-ink-500">{sent.video}</p>
+              )}
+            </div>
+          )}
           <form
-            className="mt-5"
+            className="mt-3"
             onSubmit={(event) => {
               event.preventDefault();
               const text = reply.trim();
-              if (!text) return;
-              setSaved(text);
+              if (!text && !videoLabel) return;
+              setSent({ text, video: videoLabel });
               setReply("");
+              setVideoLabel("");
+              if (videoInput.current) videoInput.current.value = "";
             }}
           >
-            <label className="block text-base font-medium" htmlFor="demo-reply">
-              A reply to Gigi
-            </label>
             <textarea
               id="demo-reply"
               rows={4}
               value={reply}
+              aria-label="A note for Gigi"
               onChange={(event) => setReply(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-warmgray-300 bg-white p-3 text-base leading-7"
-              placeholder="Write a note to Gigi."
+              className="w-full rounded-md border border-warmgray-300 bg-white p-3 text-base leading-7"
             />
-            <button
-              type="submit"
-              className="brand-button-primary mt-4 inline-flex min-h-12 items-center justify-center px-5 py-3"
-            >
-              Save demo reply
-            </button>
+            <input
+              ref={videoInput}
+              type="file"
+              accept="video/*"
+              className="sr-only"
+              aria-label="Add a video"
+              onChange={(event) =>
+                setVideoLabel(event.target.files?.[0]?.name || "")
+              }
+            />
+            {videoLabel && (
+              <p className="mt-2 text-sm text-ink-500">{videoLabel}</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="brand-button-secondary inline-flex min-h-12 items-center justify-center px-5 py-3"
+                onClick={() => videoInput.current?.click()}
+              >
+                Add a video
+              </button>
+              <button
+                type="submit"
+                className="brand-button-primary inline-flex min-h-12 items-center justify-center px-5 py-3 disabled:opacity-50"
+                disabled={!reply.trim() && !videoLabel}
+              >
+                Send
+              </button>
+            </div>
           </form>
-          {saved && (
-            <p
-              role="status"
-              className="mt-5 whitespace-pre-wrap text-base leading-8"
-            >
-              {saved}
-            </p>
-          )}
         </section>
         <section className="mt-8 rounded-2xl bg-espresso p-6 text-paper sm:p-8">
           {chapter.next ? (

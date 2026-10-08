@@ -41,10 +41,9 @@ function ReplyForm({
   recordingChapter,
   onOpenRecorder,
   onRecorderBusyChange,
-  revealed,
+  readOnly = false,
 }: {
   c: CollectionView;
-  revealed: boolean;
   chapter: ChapterPackage;
   accessKey: string;
   act: (v: unknown) => Promise<CollectionView | null>;
@@ -52,15 +51,18 @@ function ReplyForm({
   recordingChapter: string | null;
   onOpenRecorder: (chapterId: string) => void;
   onRecorderBusyChange: (chapterId: string, busy: boolean) => void;
+  readOnly?: boolean;
 }) {
-  const [mode, setMode] = useState<"video" | "text" | null>("text"),
-    [text, setText] = useState(""),
+  const [text, setText] = useState(""),
     [mediaId, setMediaId] = useState(""),
     [replyId, setReplyId] = useState(() => crypto.randomUUID()),
     [busy, setBusy] = useState(false),
     [recording, setRecording] = useState(false),
-    [sent, setSent] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
+    [showRecorder, setShowRecorder] = useState(false),
+    [sentNote, setSentNote] = useState<{ text: string; mediaId: string } | null>(
+      null,
+    );
+  const [draftReady, setDraftReady] = useState(readOnly);
   const [draftNotice, setDraftNotice] = useState("");
   const [sendError, setSendError] = useState("");
   const draftKey = recipientReplyDraftKey(
@@ -83,6 +85,10 @@ function ReplyForm({
   const currentDraft = useRef("");
   currentDraft.current = JSON.stringify({ text, mediaId, replyId });
   useEffect(() => {
+    if (readOnly) {
+      setDraftReady(true);
+      return;
+    }
     let alive = true;
     void getTextDraft(c.id, draftKey)
       .then(
@@ -107,7 +113,6 @@ function ReplyForm({
         setText(saved.text);
         setMediaId(saved.mediaId);
         setReplyId(saved.replyId);
-        setMode(saved.mediaId ? "video" : "text");
         setDraftNotice(
           "Your unfinished message was restored from this device. It has not been sent.",
         );
@@ -126,9 +131,9 @@ function ReplyForm({
     };
     // Restore once, never overwrite text in response to a background collection refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c.id, draftKey]);
+  }, [c.id, draftKey, readOnly]);
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || readOnly) return;
     const timer = setTimeout(
       () =>
         void persist(currentDraft.current).catch(() =>
@@ -139,16 +144,16 @@ function ReplyForm({
       300,
     );
     return () => clearTimeout(timer);
-  }, [text, mediaId, replyId, draftReady, persist]);
+  }, [text, mediaId, replyId, draftReady, persist, readOnly]);
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || readOnly) return;
     // Same-app navigation can unmount before the debounce, without a beforeunload event.
     return () => {
       void persist(currentDraft.current).catch(() => {});
     };
-  }, [draftReady, persist]);
+  }, [draftReady, persist, readOnly]);
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || readOnly) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (text.trim() || mediaId || recording || busy) {
         event.preventDefault();
@@ -157,7 +162,7 @@ function ReplyForm({
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [text, mediaId, recording, busy, draftReady]);
+  }, [text, mediaId, recording, busy, draftReady, readOnly]);
   const anotherRecording = Boolean(
     recordingChapter && recordingChapter !== chapter.id,
   );
@@ -170,7 +175,16 @@ function ReplyForm({
   );
 
   async function send() {
-    if (busy || recording || !draftReady || (!text.trim() && !mediaId)) return;
+    if (
+      readOnly ||
+      busy ||
+      recording ||
+      !draftReady ||
+      (!text.trim() && !mediaId)
+    )
+      return;
+    const note = text;
+    const noteMediaId = mediaId;
     setBusy(true);
     setSendError("");
     await persist(currentDraft.current).catch(() => {});
@@ -217,10 +231,10 @@ function ReplyForm({
         );
         return;
       }
-      setSent(true);
+      setSentNote({ text: note, mediaId: noteMediaId });
+      setShowRecorder(false);
       setText("");
       setMediaId("");
-      setMode(null);
       setReplyId(crypto.randomUUID());
       setDraftNotice("");
       await persist("").catch(() => {});
@@ -230,123 +244,109 @@ function ReplyForm({
       );
     }
   }
+  const headingId = `reply-heading-${chapter.id}`;
   return (
     <section
       id={`reply-form-${chapter.id}`}
-      hidden={!revealed && !text.trim() && !mediaId && !sent}
-      className="mt-8 rounded-xl border border-sage-200 bg-sage-50 p-5 sm:p-6"
-      aria-label={`Reply to ${chapter.title}`}
+      className="mt-6 rounded-xl border border-warmgray-200 bg-white p-4 sm:p-5"
+      aria-labelledby={headingId}
     >
-      {revealed && (
-        <p role="status" className="sr-only">
-          You can now reply to this story.
-        </p>
-      )}
-      <h3 className="font-serif text-2xl">
-        Send a message to {c.storyteller.name}.
+      <h3 id={headingId} className="text-lg font-semibold">
+        Send {c.storyteller.name} a note
       </h3>
-      <p className="my-4 leading-relaxed text-ink-500">
-        What would you like them to know after this story? A memory, a question
-        or a simple thank-you is enough.
-      </p>
-      {sent && (
-        <p role="status" className="mb-4 rounded-md bg-paper-200 p-4">
-          {c.capabilities.email
-            ? `Your message is saved here. An email notification is waiting to send to ${c.storyteller.name}.`
-            : `Your message is saved here for ${c.storyteller.name}. Email notifications are not available right now.`}
-        </p>
+      {sentNote && (
+        <div role="status" className="mt-3">
+          <p>Sent. {c.storyteller.name} will see it.</p>
+          {sentNote.mediaId && (
+            <StoryMediaPlayer
+              className="mt-3"
+              key={sentNote.mediaId}
+              label="The video you sent"
+              src={`/api/collection/${encodeURIComponent(c.id)}/media/${encodeURIComponent(sentNote.mediaId)}?key=${encodeURIComponent(accessKey)}`}
+            />
+          )}
+          {sentNote.text.trim() && (
+            <p className="mt-2 whitespace-pre-wrap text-base leading-7">
+              {sentNote.text}
+            </p>
+          )}
+        </div>
       )}
-      <div className="mb-5 flex flex-wrap gap-3">
-        <button
-          className={mode === "video" ? primary : secondary}
-          disabled={!draftReady || busy || recording || anotherRecording}
-          onClick={() => {
-            setSent(false);
-            setMode("video");
-            onOpenRecorder(chapter.id);
-          }}
-        >
-          Record a video
-        </button>
-        <button
-          className={mode === "text" ? primary : secondary}
-          disabled={!draftReady || busy || recording}
-          onClick={() => {
-            setSent(false);
-            setMode("text");
-          }}
-        >
-          Write a message
-        </button>
-      </div>
+      <textarea
+        rows={4}
+        maxLength={30000}
+        disabled={busy || !draftReady}
+        value={text}
+        aria-label={`A note for ${c.storyteller.name}`}
+        onChange={(e) => setText(e.target.value)}
+        className="mt-3 w-full rounded-md border border-warmgray-300 bg-white p-3 text-base"
+      />
       {anotherRecording && (
-        <p role="status" className="mb-4 text-sm text-ink-500">
+        <p role="status" className="mt-3 text-sm text-ink-500">
           Finish saving your recording for the other story before opening this
           camera.
         </p>
       )}
-      {mode === "video" && activeRecorderChapter === chapter.id && (
-        <SavedRecorder
-          collectionId={c.id}
-          accessKey={accessKey}
-          kind="video"
-          questionId={`reply-${c.recipientId || c.recipient.email}-${chapter.id}`}
-          prompt={`A message for ${c.storyteller.name}`}
-          directUpload={c.capabilities.directUpload}
-          maxSeconds={180}
-          suggestedDuration="A minute or two is enough. You can preview and try again before sending."
-          onBusyChange={handleRecorderBusy}
-          onMediaSaved={({ mediaId }) => setMediaId(mediaId)}
-        />
-      )}{" "}
-      {mode && (
-        <>
-          <label className="mt-5 block">
-            {mode === "video" ? "Add a note (optional)" : "Your message"}
-            <textarea
-              rows={4}
-              maxLength={30000}
-              disabled={busy || !draftReady}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="mt-2 w-full rounded-md border border-warmgray-300 bg-white p-4 text-base"
-            />
-          </label>
-          {mediaId && (
-            <div className="my-4 text-sm">
-              <StoryMediaPlayer
-                key={mediaId}
-                label="Your selected reply recording"
-                src={`/api/collection/${encodeURIComponent(c.id)}/media/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(accessKey)}`}
-              />
-              <p className="mt-3 text-base leading-7">
-                Your selected recording is backed up. It will be shared when you
-                send this message.
-              </p>
-              <button
-                type="button"
-                className="mt-3 min-h-12 text-base text-oxblood underline"
-                disabled={busy}
-                onClick={() => setMediaId("")}
-              >
-                Remove video from this reply
-              </button>
-            </div>
-          )}
-          <button
-            className={`${primary} mt-4`}
-            disabled={
-              busy || recording || !draftReady || (!text.trim() && !mediaId)
-            }
-            onClick={() => void send()}
-          >
-            {busy ? "Sending..." : "Send my message"}
-          </button>
-        </>
+      {showRecorder && activeRecorderChapter === chapter.id && !readOnly && (
+        <div className="mt-3">
+          <SavedRecorder
+            collectionId={c.id}
+            accessKey={accessKey}
+            kind="video"
+            questionId={`reply-${c.recipientId || c.recipient.email}-${chapter.id}`}
+            prompt={`A message for ${c.storyteller.name}`}
+            directUpload={c.capabilities.directUpload}
+            maxSeconds={180}
+            suggestedDuration=""
+            onBusyChange={handleRecorderBusy}
+            onMediaSaved={({ mediaId }) => setMediaId(mediaId)}
+          />
+        </div>
       )}
+      {mediaId && (
+        <div className="mt-3">
+          <StoryMediaPlayer
+            key={mediaId}
+            label="Your selected reply recording"
+            src={`/api/collection/${encodeURIComponent(c.id)}/media/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(accessKey)}`}
+          />
+          <button
+            type="button"
+            className="mt-2 min-h-11 text-base text-oxblood underline"
+            disabled={busy}
+            onClick={() => setMediaId("")}
+          >
+            Remove video
+          </button>
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap gap-3">
+        <button
+          type="button"
+          className={secondary}
+          disabled={!draftReady || busy || recording || anotherRecording}
+          onClick={() => {
+            if (readOnly) return;
+            setShowRecorder(true);
+            onOpenRecorder(chapter.id);
+          }}
+        >
+          Add a video
+        </button>
+        <button
+          type="button"
+          className={primary}
+          disabled={
+            busy || recording || !draftReady || (!text.trim() && !mediaId)
+          }
+          onClick={() => void send()}
+        >
+          {busy ? "Sending..." : "Send"}
+        </button>
+      </div>
       <PortalError message={sendError} />
       {draftNotice && (
-        <p role="status" className="mt-4 text-base leading-7 text-ink-500">
+        <p role="status" className="mt-3 text-sm leading-6 text-ink-500">
           {draftNotice}
         </p>
       )}
@@ -366,9 +366,6 @@ export default function CollectionHome({
 }) {
   const { collection: c, error, act, load } = useCollection(id, accessKey);
   const [activeChapter, setActiveChapter] = useState(chapterId || "q1");
-  const [replyRevealed, setReplyRevealed] = useState<Record<string, boolean>>(
-    {},
-  );
   const [momentSeek, setMomentSeek] = useState<{
     chapterId: string;
     ms: number;
@@ -537,16 +534,6 @@ export default function CollectionHome({
     (chapter) =>
       hasRecordedVoiceFilm(chapter) && chapter.film.presentation === "video",
   );
-  const revealReply = (chapterId: string, focus = false) => {
-    setReplyRevealed((current) => ({ ...current, [chapterId]: true }));
-    if (focus)
-      requestAnimationFrame(() =>
-        document
-          .getElementById(`reply-form-${chapterId}`)
-          ?.querySelector("textarea")
-          ?.focus(),
-      );
-  };
   const openAdjacentStory = (nextId: string) => {
     if (
       !rememberRecipientChapter(
@@ -745,7 +732,6 @@ export default function CollectionHome({
                         preload={
                           selectedId === chapter.id ? "metadata" : "none"
                         }
-                        onEnded={() => revealReply(chapter.id)}
                         seekToMs={
                           momentSeek?.chapterId === chapter.id
                             ? momentSeek.ms
@@ -770,7 +756,6 @@ export default function CollectionHome({
                         }
                         label={`Story film: ${chapter.title}`}
                         src={url(chapter.videoMediaId)}
-                        onEnded={() => revealReply(chapter.id)}
                         seekToMs={
                           momentSeek?.chapterId === chapter.id
                             ? momentSeek.ms
@@ -840,60 +825,18 @@ export default function CollectionHome({
                         </p>
                       </section>
                     ))}
-                  {ownerPreview ? (
-                    <div className="mt-5 rounded-xl bg-paper p-5 text-base leading-7">
-                      <p>
-                        After a film finishes, {c.recipient.name} can send you a
-                        private reply here.
-                      </p>
-                      {replyRevealed[chapter.id] && (
-                        <label className="mt-3 block">
-                          A reply to {c.storyteller.name}
-                          <textarea
-                            disabled
-                            rows={3}
-                            className="mt-2 w-full rounded-xl border border-warmgray-300 bg-white p-3"
-                            placeholder="Replies are available to the invited recipient."
-                          />
-                        </label>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {!replyRevealed[chapter.id] && (
-                        <div className="mt-5 flex flex-wrap items-center gap-4">
-                          <p className="text-base leading-7 text-ink-500">
-                            A reply box opens when this story finishes. You can
-                            also reply at any time.
-                          </p>
-                          <button
-                            type="button"
-                            className={secondary}
-                            aria-controls={`reply-form-${chapter.id}`}
-                            onClick={() => revealReply(chapter.id, true)}
-                          >
-                            Reply to this story
-                          </button>
-                        </div>
-                      )}
-                      <ReplyForm
-                        key={`${c.recipientId || c.recipient.email}:${chapter.id}`}
-                        revealed={
-                          Boolean(replyRevealed[chapter.id]) ||
-                          (!hasChapterPlayback(chapter) &&
-                            !hasRecordedVoiceFilm(chapter))
-                        }
-                        c={c}
-                        chapter={chapter}
-                        accessKey={accessKey}
-                        act={act}
-                        activeRecorderChapter={activeRecorderChapter}
-                        recordingChapter={recordingChapter}
-                        onOpenRecorder={setActiveRecorderChapter}
-                        onRecorderBusyChange={handleRecorderBusyChange}
-                      />
-                    </>
-                  )}
+                  <ReplyForm
+                    key={`${c.recipientId || c.recipient.email}:${chapter.id}`}
+                    readOnly={ownerPreview}
+                    c={c}
+                    chapter={chapter}
+                    accessKey={accessKey}
+                    act={act}
+                    activeRecorderChapter={activeRecorderChapter}
+                    recordingChapter={recordingChapter}
+                    onOpenRecorder={setActiveRecorderChapter}
+                    onRecorderBusyChange={handleRecorderBusyChange}
+                  />
                 </div>
               </div>
             </article>
@@ -902,30 +845,6 @@ export default function CollectionHome({
       </div>
       {storyNavigation("Continue through the collection")}
       <PortalError message={error} />
-      {c.isPrimaryRecipient && !ownerPreview && (
-        <details className="mt-8 rounded-2xl border border-warmgray-200 bg-white p-5">
-          <summary className="min-h-11 cursor-pointer text-base font-medium">
-            Reply reminders
-          </summary>
-          <label className="mt-3 flex items-start gap-3 text-base leading-7">
-            <input
-              className="mt-1 h-5 w-5"
-              type="checkbox"
-              checked={c.replyRemindersEnabled}
-              onChange={(event) =>
-                void act({
-                  action: "reply_preferences",
-                  enabled: event.target.checked,
-                })
-              }
-            />
-            <span>
-              If postcards are mailed, send me a follow-up link with an
-              invitation to reply.
-            </span>
-          </label>
-        </details>
-      )}
       <footer className="mt-10 border-t border-warmgray-200 py-6 text-sm leading-7 text-ink-500">
         This collection is shared with your verified email account. Your replies
         go to {c.storyteller.name}; other invited readers cannot see them.
