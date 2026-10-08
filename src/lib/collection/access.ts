@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { chapterMoments, chapterTranscript } from "./chapter-highlights";
 import { livingStoryView } from "./living-story-view";
 import type { Collection, CollectionView } from "./types";
 import {
@@ -157,6 +158,21 @@ export function publicView(
       view.replies = [];
     }
   }
+  view.chapters = view.chapters.map((chapter) => {
+    const source =
+      c.chapters.find((item) => item.id === chapter.id) || chapter;
+    return {
+      ...chapter,
+      storyMoments: chapterMoments({
+        content: source.content,
+        postcardNote: source.postcardNote,
+        generatedWith: source.generatedWith,
+        film: source.film,
+        playbackWords: source.playback?.words,
+      }),
+      storyTranscript: chapterTranscript(source.content),
+    };
+  });
   return {
     ...view,
     ...(role === "owner" && privateGenerosityNotes

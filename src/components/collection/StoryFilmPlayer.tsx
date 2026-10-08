@@ -24,6 +24,8 @@ export function StoryFilmPlayer({
   preload = "metadata",
   onEnded,
   downloadUrl,
+  seekToMs = null,
+  seekToken = 0,
 }: {
   src: string;
   title: string;
@@ -33,6 +35,8 @@ export function StoryFilmPlayer({
   preload?: "none" | "metadata";
   onEnded?: () => void;
   downloadUrl?: string;
+  seekToMs?: number | null;
+  seekToken?: number;
 }) {
   const audio = useRef<HTMLAudioElement>(null);
   const orb = useRef<HTMLDivElement>(null);
@@ -100,6 +104,19 @@ export function StoryFilmPlayer({
   useEffect(() => {
     if (!active) audio.current?.pause();
   }, [active]);
+  useEffect(() => {
+    if (seekToMs == null || !seekToken) return;
+    const player = audio.current;
+    if (!player) return;
+    const seconds = seekToMs / 1000;
+    const move = () => {
+      player.currentTime = seconds;
+    };
+    player.addEventListener("loadedmetadata", move);
+    if (player.readyState >= 1) move();
+    void player.play().catch(() => {});
+    return () => player.removeEventListener("loadedmetadata", move);
+  }, [seekToken, seekToMs]);
   useEffect(() => {
     if (!loading) {
       setSlow(false);

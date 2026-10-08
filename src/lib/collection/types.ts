@@ -113,6 +113,9 @@ export type ChapterPackage = {
   captions?: string;
   editorialReviewed: boolean;
   generatedWith: "source_text" | "gloo";
+  /** Derived for the recipient page. Not a stored transcript replacement. */
+  storyMoments?: Array<{ quote: string; startMs: number | null }>;
+  storyTranscript?: string;
 };
 export type DispatchState = {
   attempts?: number;

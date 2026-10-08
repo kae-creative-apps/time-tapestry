@@ -10,6 +10,7 @@ import { BrandPattern } from "@/components/BrandPattern";
 import { useCollection } from "./useCollection";
 import SavedRecorder from "./SavedRecorder";
 import { StoryMediaPlayer } from "./StoryOriginalPreview";
+import { ChapterHighlights } from "./ChapterHighlights";
 import { recipientReplyDraftKey } from "./recipient-sharing";
 import {
   rememberRecipientChapter,
@@ -31,8 +32,6 @@ const date = (s: string) =>
     day: "numeric",
     year: "numeric",
   });
-const normalizedCopy = (text: string) =>
-  text.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 function ReplyForm({
   c,
   chapter,
@@ -370,6 +369,11 @@ export default function CollectionHome({
   const [replyRevealed, setReplyRevealed] = useState<Record<string, boolean>>(
     {},
   );
+  const [momentSeek, setMomentSeek] = useState<{
+    chapterId: string;
+    ms: number;
+    token: number;
+  } | null>(null);
   const seen = useRef(new Set<string>());
   const [activeRecorderChapter, setActiveRecorderChapter] = useState<
     string | null
@@ -711,7 +715,6 @@ export default function CollectionHome({
       )}
       <div ref={chapters}>
         {c.chapters.map((chapter, chapterIndex) => {
-          const blessing = c.chapterBlessings[chapter.id];
           return (
             <article
               key={chapter.id}
@@ -728,9 +731,9 @@ export default function CollectionHome({
                   });
               }}
             >
-              <div className="grid items-start gap-7 lg:grid-cols-[1fr_.9fr]">
-                <div className="min-w-0">
-                  <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
+              <div className="grid items-start gap-7 lg:grid-cols-[1.15fr_.85fr]">
+                <div className="min-w-0" id={`story-film-${chapter.id}`}>
+                  <div className="overflow-hidden rounded-[28px] border border-warmgray-200 bg-white shadow-[0_18px_40px_#432e2314]">
                     {hasChapterPlayback(chapter) ? (
                       <StoryFilmPlayer
                         key={chapter.playback!.mediaId}
@@ -743,6 +746,16 @@ export default function CollectionHome({
                           selectedId === chapter.id ? "metadata" : "none"
                         }
                         onEnded={() => revealReply(chapter.id)}
+                        seekToMs={
+                          momentSeek?.chapterId === chapter.id
+                            ? momentSeek.ms
+                            : null
+                        }
+                        seekToken={
+                          momentSeek?.chapterId === chapter.id
+                            ? momentSeek.token
+                            : 0
+                        }
                         downloadUrl={
                           chapter.playback!.exportMediaId
                             ? url(chapter.playback!.exportMediaId!)
@@ -750,23 +763,25 @@ export default function CollectionHome({
                         }
                       />
                     ) : hasRecordedVoiceFilm(chapter) ? (
-                      <>
-                        <h2 className="px-5 pb-4 pt-5 text-2xl font-semibold text-espresso">
-                          Watch this story
-                        </h2>
-                        <StoryMediaPlayer
-                          key={chapter.videoMediaId}
-                          preload={
-                            selectedId === chapter.id ? "metadata" : "none"
-                          }
-                          label={`Story film: ${chapter.title}`}
-                          src={url(chapter.videoMediaId)}
-                          onEnded={() => revealReply(chapter.id)}
-                        />
-                        <p className="p-5 text-base leading-7 text-espresso">
-                          Hear {c.storyteller.name} in their own recorded voice.
-                        </p>
-                      </>
+                      <StoryMediaPlayer
+                        key={chapter.videoMediaId}
+                        preload={
+                          selectedId === chapter.id ? "metadata" : "none"
+                        }
+                        label={`Story film: ${chapter.title}`}
+                        src={url(chapter.videoMediaId)}
+                        onEnded={() => revealReply(chapter.id)}
+                        seekToMs={
+                          momentSeek?.chapterId === chapter.id
+                            ? momentSeek.ms
+                            : null
+                        }
+                        seekToken={
+                          momentSeek?.chapterId === chapter.id
+                            ? momentSeek.token
+                            : 0
+                        }
+                      />
                     ) : (
                       <div className="bg-paper-200 p-8 text-espresso">
                         <AppIcon
@@ -785,53 +800,29 @@ export default function CollectionHome({
                     )}
                   </div>
                 </div>
-                <div className="min-w-0 rounded-2xl border border-warmgray-200 bg-white p-6 sm:p-8">
-                  <p className="brand-eyebrow text-taupe-600">
-                    Story {chapterIndex + 1} of {c.chapters.length}
-                  </p>
-                  <h2 className="mt-4 text-3xl font-medium leading-tight">
-                    {chapter.title}
-                  </h2>
-                  {normalizedCopy(chapter.postcardNote) &&
-                    normalizedCopy(chapter.postcardNote) !==
-                      normalizedCopy(chapter.content) && (
-                      <p className="mt-5 text-lg leading-8 text-ink-500">
-                        {chapter.postcardNote}
-                      </p>
-                    )}
-                  <div className="mt-6 whitespace-pre-wrap text-[18px] leading-9 text-espresso">
-                    {chapter.content}
-                  </div>
-                  {blessing &&
-                    (blessing.encouragement ||
-                      blessing.scriptureText ||
-                      blessing.scriptureReference) && (
-                      <aside className="mt-7 rounded-2xl bg-clay-50 p-5">
-                        <p className="brand-eyebrow text-taupe-600">
-                          A word for you
-                        </p>
-                        {blessing.encouragement && (
-                          <p className="mt-4 text-lg leading-8">
-                            {blessing.encouragement}
-                          </p>
-                        )}
-                        {blessing.scriptureText && (
-                          <blockquote className="mt-4 text-lg leading-8">
-                            {blessing.scriptureText}
-                          </blockquote>
-                        )}
-                        <p className="mt-3 text-sm text-ink-500">
-                          {blessing.scriptureReference}{" "}
-                          {blessing.scriptureTranslation}
-                        </p>
-                      </aside>
-                    )}
+                <ChapterHighlights
+                  collection={c}
+                  chapter={chapter}
+                  chapterIndex={chapterIndex}
+                  bookHref={`/api/collection/${encodeURIComponent(id)}/book${accessKey ? `?key=${encodeURIComponent(accessKey)}` : ""}`}
+                  onSeek={(ms) => {
+                    setMomentSeek({
+                      chapterId: chapter.id,
+                      ms,
+                      token: Date.now(),
+                    });
+                    document
+                      .getElementById(`story-film-${chapter.id}`)
+                      ?.scrollIntoView({ block: "nearest" });
+                  }}
+                />
+                <div className="min-w-0 lg:col-span-2">
                   {(ownerPreview ? [] : c.replies)
                     .filter((reply) => reply.chapterId === chapter.id)
                     .map((reply) => (
                       <section
                         key={reply.id}
-                        className="mt-7 border-t border-warmgray-200 pt-6"
+                        className="mt-2 rounded-2xl border border-warmgray-200 bg-white p-5"
                       >
                         <h3 className="text-xl font-semibold">Your reply</h3>
                         <p className="mt-2 text-sm text-ink-500">
@@ -849,8 +840,6 @@ export default function CollectionHome({
                         </p>
                       </section>
                     ))}
-                </div>
-                <div className="min-w-0 lg:col-span-2">
                   {ownerPreview ? (
                     <div className="mt-5 rounded-xl bg-paper p-5 text-base leading-7">
                       <p>
