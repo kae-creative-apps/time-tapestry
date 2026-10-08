@@ -302,6 +302,8 @@ export async function processFilmJob(
     }
     for (const chapter of claimed.chapters) {
       await assertCurrent();
+      if (chapter.status === "failed" || !chapter.sourceEdit?.clips.length)
+        continue;
       if (
         chapter.artifact ||
         (claimed.outputMode === "interactive" && chapter.playback)
@@ -392,7 +394,45 @@ export async function processFilmJob(
       }));
     }
     await assertCurrent();
-    await attachReadyFilms((await getFilmJob(claimed.id))!);
+    const finished = (await getFilmJob(claimed.id))!;
+    const blocked = finished.chapters.filter(
+      (chapter) =>
+        chapter.status === "failed" ||
+        (!chapter.playback &&
+          !chapter.artifact &&
+          !chapter.sourceEdit?.clips.length),
+    );
+    if (blocked.length) {
+      clearInterval(heartbeat);
+      await heartbeatWrite;
+      const everyChapter = blocked.length === finished.chapters.length;
+      return await updateFilmJob(claimed.id, token, (job) => ({
+        ...job,
+        status: "failed",
+        error: everyChapter
+          ? "No chapter could be matched to its original recording. Completed recordings are preserved."
+          : "Some chapters could not be matched to their original recordings. Completed films are saved.",
+        lease: undefined,
+        chapters: job.chapters.map((chapter) => {
+          if (
+            chapter.status === "ready" ||
+            chapter.status === "failed" ||
+            chapter.playback ||
+            chapter.artifact ||
+            chapter.sourceEdit?.clips.length
+          )
+            return chapter;
+          return {
+            ...chapter,
+            status: "failed" as const,
+            error:
+              chapter.error ??
+              "This chapter's saved answers could not be matched to its original recording. No automatic cut was made.",
+          };
+        }),
+      }));
+    }
+    await attachReadyFilms(finished);
     clearInterval(heartbeat);
     await heartbeatWrite;
     return await updateFilmJob(claimed.id, token, (job) => ({

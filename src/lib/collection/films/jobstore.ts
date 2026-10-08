@@ -72,7 +72,7 @@ export async function latestFilmJob(collectionId: string) {
 }
 
 const DETERMINISTIC_SOURCE_FAILURE =
-  /selected source word has no verified positive duration|same answer occurs more than once|complete answer boundaries could not be verified|source-word match did not preserve|saved answer could not be matched confidently|overlapping source words need review|short answer needs a verified neighboring answer|short answer could not be verified|recorded answer is too short to match uniquely|answer needs a smaller source search|multiple detected speakers|source transcription cache failed verification/i;
+  /selected source word has no verified positive duration|same answer occurs more than once|complete answer boundaries could not be verified|source-word match did not preserve|saved answer could not be matched confidently|chapter's saved answers could not be matched|overlapping source words need review|short answer needs a verified neighboring answer|short answer could not be verified|recorded answer is too short to match uniquely|answer needs a smaller source search|multiple detected speakers|source transcription cache failed verification/i;
 
 function sourceFailureErrors(job: StoryFilmJob) {
   return [job.error, ...job.chapters.map((chapter) => chapter.error)]

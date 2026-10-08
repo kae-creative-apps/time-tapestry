@@ -1,5 +1,5 @@
 import { selectedAnswers } from "../content";
-import type { Collection } from "../types";
+import type { AnswerTake, Collection } from "../types";
 import { sha256 } from "./plan";
 import {
   captionsForWords,
@@ -16,6 +16,25 @@ import {
   SOURCE_CLEANUP_VERSION,
   type SourceSilence,
 } from "./source-cleanup";
+
+const ANSWER_NOT_IN_RECORDING =
+  /could not be matched confidently|boundaries could not be verified|more than once|did not preserve|smaller source search/;
+
+function answerNotInRecording(error: Error) {
+  return ANSWER_NOT_IN_RECORDING.test(error.message);
+}
+
+/** Logs the turn identity and matcher reason. Never the saved answer text. */
+function logUnmatchedAnswer(answer: AnswerTake, error: Error) {
+  console.info(
+    JSON.stringify({
+      event: "film_answer_not_in_recording",
+      chapterId: answer.liveSource?.chapterId,
+      turnId: answer.liveSource?.turnId,
+      reason: error.message,
+    }),
+  );
+}
 
 export async function assembleSourceEdits(
   c: Collection,
@@ -151,12 +170,22 @@ export async function assembleSourceEdits(
     };
     // Verify each complete answer separately. A theme-wide range could retain
     // an excluded answer, an interviewer prompt or a pause between answers.
+    // An answer the recording does not contain is logged and skipped. The
+    // cursor stays put so the next answer still searches from the last match.
     for (const [index, answer] of answers.entries()) {
       await assertCurrent();
       if (sourceTokenCount(answer.text) < 4) continue;
-      const match = matchAnswer(index, cursor, matchableWords.length);
-      matches.set(index, match);
-      cursor = match.last + 1;
+      try {
+        const match = matchAnswer(index, cursor, matchableWords.length);
+        matches.set(index, match);
+        cursor = match.last + 1;
+      } catch (error) {
+        if (error instanceof Error && answerNotInRecording(error)) {
+          logUnmatchedAnswer(answer, error);
+          continue;
+        }
+        throw error;
+      }
     }
     for (const [index, answer] of answers.entries()) {
       if (matches.has(index)) continue;
@@ -182,13 +211,10 @@ export async function assembleSourceEdits(
       } catch (error) {
         // A backchannel or fragment the recording does not contain must not
         // discard the verified answers around it.
-        if (
-          error instanceof Error &&
-          /could not be matched confidently|boundaries could not be verified|more than once|did not preserve|smaller source search/.test(
-            error.message,
-          )
-        )
+        if (error instanceof Error && answerNotInRecording(error)) {
+          logUnmatchedAnswer(answer, error);
           continue;
+        }
         throw error;
       }
       // A common short answer such as 'yes' needs speaker evidence from a
@@ -247,10 +273,19 @@ export async function assembleSourceEdits(
         skippedReason: "clip_limit",
       };
     }
-    if (!edit.clips.length || edit.clips.length > 500)
+    if (edit.clips.length > 500)
       throw new Error(
         "A theme could not be assembled into verified original clips. No incomplete four-film collection was attached.",
       );
+    if (!edit.clips.length)
+      return {
+        ...chapter,
+        sourceEdit: undefined,
+        status: "failed" as const,
+        progress: 0,
+        error:
+          "This chapter's saved answers could not be matched to its original recording. No automatic cut was made.",
+      };
     if (
       edit.clips.reduce((total, clip) => total + clip.outMs - clip.inMs, 7000) >
       3600000

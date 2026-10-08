@@ -10,6 +10,7 @@ import {
   testVoice,
 } from "./film-fixture";
 import type { StoryFilmJob } from "../src/lib/collection/films/types";
+import { SOURCE_MATCH_REVISION } from "../src/lib/collection/films/word-matching";
 import {
   collectionFilmSourceHash,
   filmChapters,
@@ -103,7 +104,7 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
       ...job!,
       status: "failed",
       attempts: 2,
-      sourceMatchRevision: 4,
+      sourceMatchRevision: SOURCE_MATCH_REVISION,
       error: confident,
     }),
   );
@@ -118,7 +119,7 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
       ...job!,
       status: "failed",
       attempts: 3,
-      sourceMatchRevision: 3,
+      sourceMatchRevision: SOURCE_MATCH_REVISION - 1,
       error: confident,
     }),
   );
@@ -136,6 +137,25 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
     "A short answer needs a verified neighboring answer before its source can be selected automatically.",
   ])
     assert.equal(jobs.filmJobView({ ...failed, error }).retryAllowed, false);
+  const chapterMiss =
+    "This chapter's saved answers could not be matched to its original recording. No automatic cut was made.";
+  const partial = jobs.filmJobView({
+    ...failed,
+    attempts: 1,
+    sourceMatchRevision: SOURCE_MATCH_REVISION,
+    error:
+      "Some chapters could not be matched to their original recordings. Completed films are saved.",
+    chapters: failed.chapters.map((chapter, index) =>
+      index === 3
+        ? { ...chapter, status: "failed", error: chapterMiss }
+        : { ...chapter, status: "ready", error: undefined },
+    ),
+  });
+  assert.equal(partial.retryAllowed, false);
+  assert.equal(
+    partial.chapters.filter((chapter) => chapter.error === chapterMiss).length,
+    1,
+  );
 });
 
 test("recoverable film failures retain retry while an exhausted job exposes an explicit hold", async () => {
