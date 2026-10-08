@@ -2,10 +2,10 @@ import type { Collection } from "./types";
 
 export const PUBLIC_POSTCARD_MESSAGE_LIMIT = 240;
 export const PUBLIC_POSTCARD_DEFAULTS: Record<string, string> = {
-  q1: "May you always find kindness, and keep making room to offer it.",
-  q2: "May you find hope for the next step, and courage to take it.",
-  q3: "The good you sow can keep growing in the lives of others.",
-  q4: "May the stories behind you give you courage for the story ahead.",
+  q1: "May you remember who first showed you a generous life.",
+  q2: "May you know why a generous life was worth living.",
+  q3: "May you see the lives that flourished, and the joy of giving.",
+  q4: "May you carry this generosity into your own life.",
 };
 
 /** Never derives public print copy from an interview, chapter or private blessing. */

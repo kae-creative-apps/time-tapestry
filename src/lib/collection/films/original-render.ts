@@ -16,6 +16,13 @@ import {
   type ChapterVideoPlan,
 } from "../../video-plan";
 import { fileHash, privateJson, probeFilm } from "./render";
+import {
+  questionCardFontPath,
+  questionCardLabel,
+  questionCardMusicPath,
+} from "./question-card";
+import type { ChapterId } from "../../interview-state";
+import { AUTOMATIC_TEMPLATE_VERSION } from "./original-plan";
 import { sha256 } from "./plan";
 import { stageOriginalSource, originalAudioCopy } from "./source-media";
 import { extractAudioEnvelope } from "./audio-envelope";
@@ -216,6 +223,24 @@ export async function prepareOriginalChapter(
     file: path.resolve("public/brand/fonts/quicksand-latin.woff2"),
     mime: "font/woff2",
   });
+  if (job.templateVersion === AUTOMATIC_TEMPLATE_VERSION) {
+    const question = chapter.openingQuestion?.trim();
+    if (!question)
+      throw new Error("This chapter film is missing its interview question.");
+    const music = questionCardMusicPath();
+    const font = questionCardFontPath();
+    plan.questionCard = {
+      question,
+      label: questionCardLabel(chapter.chapterId as ChapterId),
+      durationMs: 5000,
+      music: {
+        relativePath: "question-card-music.wav",
+        sha256: await fileHash(music),
+      },
+    };
+    assets.set("question-music", { file: music, mime: "audio/wav" });
+    assets.set("question-font", { file: font, mime: "font/woff2" });
+  }
   validateVideoPlan(plan);
   await privateJson(path.join(work, "source-plan.json"), plan);
   await privateJson(path.join(work, "original-provenance.json"), {
@@ -265,6 +290,16 @@ export async function renderOriginalFilm(
     plan.brandCloser!.sha256
   )
     throw new Error("The brand closer changed before rendering.");
+  if (plan.questionCard) {
+    const music = assets.get("question-music");
+    if (
+      !music ||
+      (await fileHash(music.file)) !== plan.questionCard.music.sha256
+    )
+      throw new Error("The question-card music changed before rendering.");
+    if (!assets.get("question-font"))
+      throw new Error("The question-card typeface is missing.");
+  }
   const audioEnvelopes: Record<string, AudioEnvelope> = {};
   const orbSources = new Set(
     plan.clips

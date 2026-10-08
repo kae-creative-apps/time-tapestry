@@ -5,10 +5,18 @@ import { AppIcon } from "@/components/icons";
 import { OrganizationSetup } from "@/components/organizations/OrganizationSetup";
 import { OrganizationShell } from "@/components/organizations/shared";
 
+const title = "Start a donor legacy pilot | Time Tapestry";
+const description =
+  "Bring Time Tapestry to your major donors. Ministries, nonprofits, foundations, and advancement teams can invite donors to pass the story of their generosity to their children and grandchildren.";
+
 export const metadata: Metadata = {
-  title: "Free group gifting | Time Tapestry",
-  description:
-    "Invite people in your church or organization to share their stories with someone they love. Create a free group in the Time Tapestry pilot.",
+  title,
+  description,
+  openGraph: {
+    title,
+    description,
+    url: "https://timetapestry.app/for-organizations",
+  },
 };
 
 export default function ForOrganizations() {
@@ -27,34 +35,35 @@ export default function ForOrganizations() {
                 className="mb-10 h-16 w-16 text-white"
               />
               <p className="brand-eyebrow mb-5 text-paper">
-                For churches and organizations
+                For organizations
               </p>
               <h1 className="max-w-xl font-display text-4xl font-medium leading-[1.12] tracking-[-.035em] sm:text-5xl">
-                Give your community a reason to share their stories.
+                Offer your donors a way to pass their generosity on.
               </h1>
               <p className="mt-6 text-lg leading-8 text-paper">
-                Invite members, donors and neighbors to pass on the faith,
-                generosity and everyday moments that shaped their lives.
+                Ministries, nonprofits, foundations, and advancement teams
+                invite major donors to tell why they give — the joy, the faith,
+                the lives changed — for their children and grandchildren.
               </p>
               <p className="mt-6 text-base font-medium">
-                Free during the pilot. No checkout.
+                Free during the pilot. Donors are never asked about gift size.
               </p>
             </div>
             <ol className="mt-7 space-y-6 px-2">
               {[
                 {
-                  title: "Make room for your group.",
-                  text: "Choose up to 100 free gifts and save your private management link.",
+                  title: "Open a pilot for your donors.",
+                  text: "Choose up to 100 invitations and save your private management link.",
                   icon: "handHeart" as const,
                 },
                 {
-                  title: "Share a personal invitation.",
-                  text: "Add each storyteller’s name and email, then copy their gift link and send it yourself.",
+                  title: "Invite each donor by name.",
+                  text: "Add their name and email, then copy their invitation and send it yourself.",
                   icon: "postcard" as const,
                 },
                 {
-                  title: "Let each person make it theirs.",
-                  text: "They choose a recipient and begin collecting their stories and videos. Follow their progress through four chapters and confirmed postcard mailing. Their stories stay private.",
+                  title: "They record it for their family.",
+                  text: "A donor chooses a child or grandchild and tells the story of their generosity. You can follow progress. The recordings stay private.",
                   icon: "collection" as const,
                 },
               ].map((step, index) => (

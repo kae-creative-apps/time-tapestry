@@ -18,12 +18,14 @@ export function HackathonDemoChapter({ chapter }: { chapter: DemoChapter }) {
       </header>
       <article aria-label={chapter.title}>
         <p className="brand-eyebrow text-taupe-600">
-          Chapter {chapter.number} · {chapter.theme}
+          Chapter {chapter.number} · Gigi’s generosity, for Sammie
         </p>
         <h1 className="mt-4 max-w-3xl font-display text-4xl font-medium leading-tight sm:text-5xl">
           {chapter.title}
         </h1>
-        <p className="mt-3 text-lg text-ink-500">From Gigi, for Sammie.</p>
+        <p className="mt-3 text-lg text-ink-500">
+          From Gigi, a donor, for her granddaughter Sammie.
+        </p>
         <div className="mt-8 grid items-start gap-7 lg:grid-cols-[1.1fr_.9fr]">
           <div className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white">
             <h2 className="px-5 pb-4 pt-5 text-2xl font-semibold">

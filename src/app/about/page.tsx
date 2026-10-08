@@ -9,16 +9,20 @@ export default function About() {
       </h1>
       <div className="space-y-6 text-lg leading-relaxed">
         <p>
-          Time Tapestry helps people share the stories, faith and values behind
-          their lives. Generosity is part of that story: the kindness they
-          received, the choices they made and what they hope others will carry
-          forward.
+          Time Tapestry is for organizations that serve major donors: ministries,
+          nonprofits, foundations, advancement teams, and donor advisors. It is
+          the easiest way for a donor to pass the experience and legacy of their
+          generosity to their children and grandchildren.
         </p>
         <p>
-          Kaelyn Brooks and Tayloe Hansen are building this pilot for the Gloo
-          AI Hackathon. Our focus is relationships and character, especially the
-          practice of generosity. Purpose and meaning are also part of helping
-          someone reflect on a legacy they want to share.
+          The conversation is about human flourishing. Why they give. What it
+          meant. The joy, the faith, the relationships, and the lives that
+          changed. What they hope their family carries forward. Donors are never
+          asked about gift size.
+        </p>
+        <p>
+          Kaelyn Brooks and Tayloe Hansen are building this pilot with a focus
+          on relationships and character, especially the practice of generosity.
         </p>
         <h2 className="pt-5 font-serif text-2xl">
           The research gives us a reason to explore.
