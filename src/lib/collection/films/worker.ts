@@ -23,6 +23,7 @@ import {
 } from "./jobstore";
 import { fileHash, privateJson, probeFilm } from "./render";
 import { prepareAutomaticSources } from "./automatic";
+import { SOURCE_MATCH_REVISION } from "./word-matching";
 import { prepareOriginalChapter, renderOriginalFilm } from "./original-render";
 import { TransientFilmError } from "./transcription";
 import { sha256 } from "./plan";
@@ -272,6 +273,10 @@ export async function processFilmJob(
       claimed.preparation === "automatic" &&
       claimed.chapters.some((chapter) => !chapter.sourceEdit)
     ) {
+      claimed = await updateFilmJob(claimed.id, token, (job) => ({
+        ...job,
+        sourceMatchRevision: SOURCE_MATCH_REVISION,
+      }));
       const chapters = await prepareAutomaticSources(
         claimed,
         path.join(dataRoot, "film-work", claimed.id),

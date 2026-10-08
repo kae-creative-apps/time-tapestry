@@ -512,15 +512,108 @@ function alignSourceWords(
   };
 }
 
+type MatchOptions = { allowShort?: boolean; speakerSubset?: boolean };
+
+function speakerDuration(words: SourceWord[], speaker: string) {
+  return words.reduce((total, word) => {
+    if (word.speakerId !== speaker) return total;
+    const span = word.endMs - word.startMs;
+    return total + (Number.isFinite(span) && span > 0 ? span : 1);
+  }, 0);
+}
+
+/** Interviewer words between a saved answer are insertions. They can exceed the
+ * confidence limit before the later speaker drop runs. Retry each labeled
+ * speaker, plus unlabeled words, and keep a unique match.
+ */
+function matchSavedAnswerOnOneSpeaker(
+  reference: string,
+  words: SourceWord[],
+  options: MatchOptions,
+  error: unknown,
+) {
+  if (options.speakerSubset || !(error instanceof Error)) return null;
+  if (
+    !/could not be matched confidently|did not preserve enough of the complete answer|boundaries could not be verified|more than once/.test(
+      error.message,
+    )
+  )
+    return null;
+  const speakers = [
+    ...new Set(words.map((word) => word.speakerId).filter(Boolean)),
+  ] as string[];
+  if (speakers.length < 2) return null;
+  const successes: {
+    speaker: string;
+    duration: number;
+    match: ReturnType<typeof alignSourceWords>;
+  }[] = [];
+  for (const speaker of speakers) {
+    const subset = words.filter(
+      (word) => !word.speakerId || word.speakerId === speaker,
+    );
+    if (!subset.length || subset.length === words.length) continue;
+    try {
+      const aligned = matchSourceWords(reference, subset, {
+        ...options,
+        speakerSubset: true,
+      });
+      const firstWord = subset[aligned.firstWordIndex];
+      const lastWord = subset[aligned.lastWordIndex];
+      const firstWordIndex = words.indexOf(firstWord);
+      const lastWordIndex = words.indexOf(lastWord);
+      if (firstWordIndex < 0 || lastWordIndex < firstWordIndex) continue;
+      successes.push({
+        speaker,
+        duration: speakerDuration(words, speaker),
+        match: {
+          ...aligned,
+          firstWordIndex,
+          lastWordIndex,
+        },
+      });
+    } catch {
+      // This speaker does not contain the saved answer.
+    }
+  }
+  if (!successes.length) return null;
+  // A real repeated passage still cannot choose a speaker. Interviewer audio
+  // only explains the duplicate when one speaker contains the saved answer.
+  if (/more than once/.test(error.message))
+    return successes.length === 1 ? successes[0].match : null;
+  successes.sort(
+    (left, right) =>
+      right.match.confidence - left.match.confidence ||
+      right.duration - left.duration ||
+      left.speaker.localeCompare(right.speaker),
+  );
+  const best = successes[0];
+  const next = successes[1];
+  if (
+    !next ||
+    best.match.confidence > next.match.confidence ||
+    best.duration >= next.duration * SPEAKER_MAJORITY
+  )
+    return best.match;
+  return null;
+}
+
 /** Semi-global token alignment. Source timestamps alone determine the edit. */
 export function matchSourceWords(
   reference: string,
   words: SourceWord[],
-  options: { allowShort?: boolean } = {},
+  options: MatchOptions = {},
 ) {
   try {
     return alignSourceWords(reference, words, options);
   } catch (error) {
+    const spoken = matchSavedAnswerOnOneSpeaker(
+      reference,
+      words,
+      options,
+      error,
+    );
+    if (spoken) return spoken;
     // A written prefix the recording replaced with a filler ("I had" / "uh").
     // Dropping it is accepted only when the kept source words are fillers.
     // An unrepeated content prefix with nothing spoken in its place still fails.
@@ -559,6 +652,9 @@ export function matchSourceWords(
 }
 
 const SPEAKER_MAJORITY = 1.5;
+
+/** Bump when alignment can resolve an older confident-match failure without new audio. */
+export const SOURCE_MATCH_REVISION = 2;
 
 /** Spoken duration of each diarized speaker. Unlabeled words are not a speaker. */
 export function dominantSpeaker(words: SourceWord[]): string | null {
@@ -619,6 +715,23 @@ export function captionsForWords(words: SourceWord[]): SourceCaption[] {
   return captions;
 }
 
+function otherSpeakerLiesBetween(
+  allWords: SourceWord[],
+  left: SourceWord,
+  right: SourceWord,
+) {
+  if (left.mediaId !== right.mediaId) return false;
+  const kept = [left.speakerId, right.speakerId].filter(Boolean);
+  if (!kept.length) return false;
+  const sameFile = allWords.filter((word) => word.mediaId === left.mediaId);
+  const start = sameFile.indexOf(left);
+  const end = sameFile.indexOf(right);
+  if (start < 0 || end <= start + 1) return false;
+  return sameFile
+    .slice(start + 1, end)
+    .some((word) => word.speakerId && !kept.includes(word.speakerId));
+}
+
 export function cutsForMatchedWords(
   words: SourceWord[],
   allWords: SourceWord[],
@@ -627,9 +740,14 @@ export function cutsForMatchedWords(
   assertTimedSourceWords(words);
   const groups: SourceWord[][] = [];
   for (const word of words) {
-    if (!groups.length || groups.at(-1)!.at(-1)!.mediaId !== word.mediaId)
-      groups.push([]);
-    groups.at(-1)!.push(word);
+    const previous = groups.at(-1)?.at(-1);
+    if (
+      !previous ||
+      previous.mediaId !== word.mediaId ||
+      otherSpeakerLiesBetween(allWords, previous, word)
+    )
+      groups.push([word]);
+    else groups.at(-1)!.push(word);
   }
   return groups.map((group) => {
     const mediaId = group[0].mediaId;
@@ -647,6 +765,40 @@ export function cutsForMatchedWords(
       throw new Error(
         "A selected passage needs verified original source bounds.",
       );
+    const labeled = new Set(
+      group.map((word) => word.speakerId).filter(Boolean),
+    );
+    const groupSpeaker = labeled.size === 1 ? [...labeled][0] : null;
+    const previous = sameFile[first - 1];
+    const next = sameFile[last + 1];
+    const otherNeighbor = (word?: SourceWord) =>
+      Boolean(
+        word?.speakerId && groupSpeaker && word.speakerId !== groupSpeaker,
+      );
+    if (otherNeighbor(previous) || otherNeighbor(next)) {
+      const groupStart = group[0].startMs;
+      const groupEnd = Math.max(...group.map((word) => word.endMs));
+      let inMs = Math.max(0, groupStart - 140);
+      let outMs = Math.min(durationMs!, groupEnd + 180);
+      if (previous && otherNeighbor(previous))
+        inMs =
+          previous.endMs <= groupStart
+            ? Math.max(inMs, previous.endMs)
+            : groupStart;
+      if (next && otherNeighbor(next))
+        outMs =
+          next.startMs >= groupEnd ? Math.min(outMs, next.startMs) : groupEnd;
+      if (!(outMs > inMs))
+        throw new Error(
+          "A selected passage needs verified original source bounds.",
+        );
+      return {
+        mediaId,
+        inMs,
+        outMs,
+        captions: captionsForWords(group),
+      };
+    }
     // Untimed tokens inside the span are skipped. They are not given a duration,
     // and they are not used as the edge of the continuous cut.
     const span = sameFile.slice(first, last + 1);

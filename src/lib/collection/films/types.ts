@@ -151,6 +151,8 @@ export type StoryFilmJob = {
   updatedAt: string;
   scriptsApprovedAt: string;
   attempts: number;
+  /** Matcher generation that last attempted this job. Absent on older jobs. */
+  sourceMatchRevision?: number;
   nextAttemptAt?: string;
   error?: string;
   lease?: { token: string; expiresAt: number };
