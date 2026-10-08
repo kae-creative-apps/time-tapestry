@@ -103,7 +103,7 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
       ...job!,
       status: "failed",
       attempts: 2,
-      sourceMatchRevision: 3,
+      sourceMatchRevision: 4,
       error: confident,
     }),
   );
@@ -111,6 +111,24 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
   await assert.rejects(
     jobs.retryStoryFilms(c, queued.id, true),
     /editor check/,
+  );
+  const olderMatcher = await store.mutateRecord<StoryFilmJob>(
+    queued.id,
+    (job) => ({
+      ...job!,
+      status: "failed",
+      attempts: 3,
+      sourceMatchRevision: 3,
+      error: confident,
+    }),
+  );
+  assert.equal(jobs.filmJobView(olderMatcher).retryAllowed, true);
+  assert.equal(
+    jobs.filmJobView({
+      ...olderMatcher,
+      error: `${confident} Match distance 0.42.`,
+    }).retryAllowed,
+    true,
   );
   for (const error of [
     "The same answer occurs more than once in its recordings. Automatic editing could not choose a unique passage.",
