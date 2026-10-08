@@ -325,3 +325,87 @@ test("a single speaker still stops when saved words cannot be matched", () => {
     /could not be matched/,
   );
 });
+
+test("a one-word scribe disagreement still covers the saved answer", () => {
+  const { session } = fixture();
+  session.turns.push(
+    utterance("saved-answer", "My grandmother helped me every morning."),
+  );
+  const next = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: [
+        word("My", 1000),
+        word("grandmother", 1500),
+        word("helped", 2000),
+        word("me", 2500),
+        word("each", 3000),
+        word("morning.", 3500),
+        word("Later", 20000),
+        word("note.", 20400),
+      ],
+    },
+  ]);
+  assert.equal(
+    next.filter((turn) => turn.text.includes("grandmother")).length,
+    1,
+  );
+  assert.equal(next.filter((turn) => turn.id.startsWith("source-")).length, 1);
+  assert.match(next.at(-1)?.text ?? "", /Later note/);
+});
+
+test("one unmatched answer does not stop the rest of a single-speaker interview", () => {
+  const { session } = fixture();
+  session.turns.push(utterance("saved-answer", "My grandmother helped."));
+  session.turns.push(
+    utterance(
+      "saved-other",
+      "My grandmother helped me every single morning.",
+      "q2",
+    ),
+  );
+  const next = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: [
+        word("My", 1000),
+        word("grandmother", 1500),
+        word("helped.", 2000),
+        word("The", 8000),
+        word("weather", 8500),
+        word("was", 9000),
+        word("beautiful", 9500),
+      ],
+    },
+  ]);
+  assert.deepEqual(next, session.turns);
+});
+
+test("an excluded answer the scribe heard differently is not added back", () => {
+  const { session } = fixture();
+  session.turns.push(
+    utterance("excluded-2", "My grandmother helped me every morning."),
+  );
+  session.excludedTurnIds.push("excluded-2");
+  const next = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: [
+        word("My", 1000),
+        word("grandmother", 1500),
+        word("helped", 2000),
+        word("me", 2500),
+        word("each", 3000),
+        word("morning.", 3500),
+      ],
+    },
+  ]);
+  assert.equal(next.length, session.turns.length);
+  assert.equal(
+    next.some((turn) => turn.id.startsWith("source-")),
+    false,
+  );
+});
