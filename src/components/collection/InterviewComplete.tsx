@@ -255,7 +255,7 @@ export default function InterviewComplete({
       : ready
         ? "Your four stories, four videos, and postcard drafts are ready for you to review. You can make changes before sharing."
         : needsAttention
-          ? "Your saved recording is kept. Preparation needs attention before your stories and videos can be finished."
+          ? "Your recording is saved. Films need another look."
           : preparation?.status === "queued"
             ? "Your interview is queued to prepare four stories, four videos, and postcard drafts from your recording. You can leave this page while preparation is queued."
             : accepted
@@ -311,25 +311,9 @@ export default function InterviewComplete({
       {needsAttention && (
         <div className={`${dash.card} mb-5 text-base leading-7`}>
           <p>{preparation.error || "Please check preparation again."}</p>
-          {preparation.canRetry === false &&
-            !preparation.missingAreas?.length && (
-              <p className="mt-3">
-                Automatic attempts have stopped. Contact the Time Tapestry team
-                with your private collection link so they can check preparation.
-                Your saved recordings do not need to be submitted again.
-              </p>
-            )}
           {canUseFullInterview ? (
             <div className="mt-4 border-t border-warmgray-200 pt-4">
-              <p>
-                Your full interview is saved. You can prepare it instead of the
-                later recordings.
-              </p>
-              <p className="mt-3">
-                Use every answer from your saved interview, including answers
-                previously left out. Your later recordings will stay saved. You
-                review the stories and videos before sharing.
-              </p>
+              <p>Use your full interview instead. Later recordings stay saved.</p>
               <button
                 type="button"
                 className={`${primary} mt-4`}

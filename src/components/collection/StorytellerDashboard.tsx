@@ -92,7 +92,7 @@ export function StorytellerDashboard({
     : copy.title(name);
   const heroDetail = needsAttention
     ? preparation?.error ||
-      "Your saved recording is kept. Preparation needs attention before the stories and videos can be finished."
+      "Your recording is saved. Films need another look."
     : plan.current.id === "prepared" && preparation?.status === "queued"
       ? "Your interview is queued. You can leave this page and return through your private link."
       : copy.detail(name);
