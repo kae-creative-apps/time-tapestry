@@ -116,6 +116,24 @@ test("ellipsis and controls do not mark coverage or hide a preserved original fr
   assert.equal(session.turns[0].text, "...");
 });
 
+test("a short chapter retake still recovers the rest of its recording", () => {
+  const { session } = fixture();
+  session.replacesChapterId = "q4";
+  session.turns = [
+    utterance("short-1", "Courage.", "q4"),
+    utterance("short-2", "Plant sunflowers nearby.", "q4"),
+  ];
+  assert.equal(interviewSessionNeedsTranscriptRecovery(session), true);
+  session.turns.push(
+    utterance(
+      "long-3",
+      "I hope you carry courage and plant sunflowers wherever you settle.",
+      "q4",
+    ),
+  );
+  assert.equal(interviewSessionNeedsTranscriptRecovery(session), false);
+});
+
 test("a completed partial transcript remains recoverable while intentionally excluded speech stays excluded", () => {
   const { c, session } = fixture();
   session.turns = [utterance("speech-1", "My grandmother was kind.")];

@@ -1,4 +1,5 @@
 import type { InterviewSession } from "./types";
+import { sourceTokenCount } from "./films/word-matching";
 
 /** Lexical evidence only, not a quality or length judgment about an answer. */
 export function isMeaningfulInterviewSpeech(text: unknown): text is string {
@@ -28,11 +29,14 @@ export function interviewSessionNeedsTranscriptRecovery(
       !session.excludedTurnIds.includes(turn.id) && !superseded.has(turn.id),
   );
   if (!included.length) return spoken.length === 0;
-  if (
-    session.replacesChapterId &&
-    included.some((turn) => turn.chapterId === session.replacesChapterId)
-  )
-    return false;
+  if (session.replacesChapterId) {
+    const retake = included.filter(
+      (turn) => turn.chapterId === session.replacesChapterId,
+    );
+    // A complete retake is the chapter. A few short fragments are not, so the
+    // rest of that recording can still be recovered.
+    if (retake.some((turn) => sourceTokenCount(turn.text) >= 4)) return false;
+  }
   if (included.some((turn) => !turn.chapterId)) return true;
   if (new Set(included.map((turn) => turn.chapterId)).size === 4) return false;
   return (

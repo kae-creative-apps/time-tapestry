@@ -300,6 +300,27 @@ export async function enqueueInterviewPreparation(
               nextAttemptAt: undefined,
               updatedAt: iso(),
             };
+          // A finished run can still be missing the rest of a short retake.
+          // Recover that recording once more, then write the stories again.
+          if (
+            options.retry &&
+            existing.status === "films_queued" &&
+            linkedFilm?.status === "ready" &&
+            (c.interviews ?? []).some(interviewSessionNeedsTranscriptRecovery)
+          )
+            return {
+              ...existing,
+              status: "queued",
+              recoveredInterviews: undefined,
+              recoveredSelectedTakeIds: undefined,
+              drafts: undefined,
+              recoveryInputSha256: inputs.sourceSha256,
+              error: undefined,
+              missingAreas: undefined,
+              lease: undefined,
+              nextAttemptAt: undefined,
+              updatedAt: iso(),
+            };
           return existing;
         }
         const timestamp = iso();

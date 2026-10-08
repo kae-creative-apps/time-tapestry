@@ -1430,3 +1430,68 @@ test("a newer ready film replaces a stale failed preparation film", async () => 
   assert.notEqual(view?.status, "needs_attention");
   assert.equal(view?.error, undefined);
 });
+
+test("a finished preparation retries when a short retake still needs recovery", async () => {
+  let c = await liveFixture();
+  c = recovered(c);
+  const mediaId = c.interviews![0].segments[0].mediaId;
+  c.interviews!.push({
+    id: `retake_${randomUUID()}`,
+    provider: "elevenlabs",
+    status: "completed",
+    startedAt: c.createdAt,
+    replacesChapterId: "q4",
+    replacementCommittedAt: c.createdAt,
+    excludedTurnIds: [],
+    segments: [
+      {
+        id: `retake_segment_${randomUUID()}`,
+        mediaId,
+        kind: "voice",
+        startMs: 0,
+        durationMs: 12_000,
+        createdAt: c.createdAt,
+      },
+    ],
+    turns: [
+      {
+        id: "retake-short",
+        sequence: 0,
+        role: "user",
+        text: "Courage.",
+        capturedAt: c.createdAt,
+        chapterId: "q4",
+        timing: "unaligned",
+      },
+    ],
+  });
+  c.chapters = await draft(c);
+  c.status = "draft";
+  c.draftOutdated = false;
+  await store.putCollection(c);
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  await attachSyntheticInteractivePlayback((await store.getCollection(c.id))!);
+  const film = await films.latestFilmJob(c.id);
+  assert.equal(film?.status, "ready");
+  const filmId = film!.id;
+  await store.mutateRecord<InterviewPreparationJob>(
+    queued.preparation.id,
+    (job) => ({
+      ...job!,
+      status: "films_queued",
+      filmJobId: filmId,
+      recoveredInterviews: structuredClone(c.interviews),
+      drafts: c.chapters,
+    }),
+  );
+  const retry = await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  assert.equal(retry.preparation.status, "queued");
+  const job = await preparation.getInterviewPreparationJob(
+    queued.preparation.id,
+  );
+  assert.equal(job?.recoveredInterviews, undefined);
+  assert.equal(job?.drafts, undefined);
+});
