@@ -1573,3 +1573,55 @@ test("a finished preparation with a complete retake is not prepared again", asyn
   assert.ok(job?.recoveredInterviews);
   assert.ok(job?.drafts);
 });
+
+test("a retry writes the drafts again when they list answers that are no longer selected", async () => {
+  const { c, preparationId } = await finishedRetakePreparation(
+    "I hope you carry courage and plant sunflowers wherever you settle.",
+  );
+  const readyFilm = (await films.latestFilmJob(c.id))!;
+  // Drafted while a retake fragment was still counted beside its whole recording.
+  const outdated = (chapters: ChapterPackage[]) =>
+    chapters.map((chapter) =>
+      chapter.id === "q4"
+        ? {
+            ...chapter,
+            content: `Courage.\n${chapter.content}`,
+            sourceTakeIds: ["live-retake-fragment", ...chapter.sourceTakeIds],
+          }
+        : chapter,
+    );
+  await store.mutateRecord<InterviewPreparationJob>(preparationId, (job) => ({
+    ...job!,
+    drafts: outdated(job!.drafts!),
+  }));
+  const saved = (await store.getCollection(c.id))!;
+  saved.chapters = outdated(saved.chapters);
+  await store.putCollection(saved);
+  const retry = await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  assert.equal(retry.preparation.status, "queued");
+  const done = await preparation.runInterviewPreparationOnce("test-worker", {
+    onlyId: preparationId,
+    reconcile: async (current) => current,
+    draft,
+    enqueueFilms: (current, options) =>
+      films.enqueueAutomaticOriginalFilms(current, options),
+  });
+  assert.equal(done?.status, "films_queued");
+  assert.equal(done?.error, undefined);
+  const after = (await store.getCollection(c.id))!;
+  const q4 = after.chapters.find((chapter) => chapter.id === "q4")!;
+  assert.deepEqual(
+    q4.sourceTakeIds,
+    content.selectedAnswers(after, "q4").map((answer) => answer.id),
+  );
+  assert.equal(q4.content.startsWith("Courage."), false);
+  // These drafts are again the ones the ready film was cut from.
+  assert.equal(done?.filmJobId, readyFilm.id);
+  assert.equal(
+    (await preparation.getInterviewPreparationView(after))?.ready,
+    true,
+  );
+});

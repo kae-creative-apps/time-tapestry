@@ -54,6 +54,18 @@ export class InterviewPreparationError extends Error {
   }
 }
 
+/** A film is cut from exactly the answers its written story was drafted from. */
+function draftsMatchAnswers(drafts: ChapterPackage[], c: Collection) {
+  return CHAPTERS.every(({ id }) => {
+    const answers = selectedAnswers(c, id).map((answer) => answer.id);
+    const drafted = drafts.find((chapter) => chapter.id === id);
+    return (
+      drafted?.sourceTakeIds.length === answers.length &&
+      answers.every((answer) => drafted.sourceTakeIds.includes(answer))
+    );
+  });
+}
+
 export function interviewPreparationJobView(
   job: InterviewPreparationJob,
 ): InterviewPreparationView {
@@ -689,7 +701,9 @@ export async function runInterviewPreparationOnce(
       await publishStatus(job);
       return job;
     }
-    if (!job.drafts) {
+    // Saved drafts can still list answers that are no longer counted the same
+    // way, such as a retake's fragments. Write them again from these answers.
+    if (!job.drafts || !draftsMatchAnswers(job.drafts, c)) {
       await currentInputs(job);
       if (options.shouldStop?.()) throw new Error("Worker stopping");
       if (process.env.GLOO_API_KEY?.trim())
