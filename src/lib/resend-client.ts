@@ -29,10 +29,37 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+const mockOutbox: Array<{ to: string; subject: string }> = [];
+
+/** Test-only record of messages that were not handed to Resend. */
+export function mockOutboxSnapshot() {
+  return mockOutbox.map((item) => ({ ...item }));
+}
+
+export function clearMockOutbox() {
+  mockOutbox.length = 0;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) =>
+    character === "&"
+      ? "&amp;"
+      : character === "<"
+        ? "&lt;"
+        : character === ">"
+          ? "&gt;"
+          : character === '"'
+            ? "&quot;"
+            : "&#39;",
+  );
+}
+
 export async function sendEmail({ to, subject, html, text }: EmailOptions) {
+  if (process.env.RESEND_TEST_FAIL === "1")
+    return { success: false, error: { message: "Mailbox unavailable" } };
   if (!resend) {
+    mockOutbox.push({ to, subject });
     console.log("[EMAIL - MOCK MODE]", { to, subject });
-    console.log("Text:", text || stripHtml(html));
     return { success: true, mock: true };
   }
 
@@ -80,6 +107,30 @@ function emailShell(title: string, bodyHtml: string) {
     </div>
   </body>
 </html>`;
+}
+
+export function donorInvitationEmail(
+  donorName: string,
+  organizationName: string,
+  interviewUrl: string,
+  recipientName?: string,
+) {
+  const subject = `${organizationName} invited you to tell the story of your generosity`;
+  const forRecipient = recipientName?.trim()
+    ? ` for ${escapeHtml(recipientName.trim())}`
+    : "";
+  const html = emailShell(
+    subject,
+    `<h1>Dear ${escapeHtml(donorName)},</h1>
+    <p>${escapeHtml(organizationName)} invited you to tell the story of your generosity${forRecipient}.</p>
+    <p>It is a short guided conversation about why you give — the joy, the faith, the relationships, and the lives changed. It is never about gift amounts.</p>
+    <p style="text-align: center;">
+      <a href="${escapeHtml(interviewUrl)}" class="button">Start your conversation</a>
+    </p>
+    <p>If the button does not work, copy this link into your browser:</p>
+    <p style="word-break: break-all; font-size: 14px;">${escapeHtml(interviewUrl)}</p>`,
+  );
+  return { subject, html };
 }
 
 export function invitationEmail(
