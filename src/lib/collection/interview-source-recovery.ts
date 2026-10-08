@@ -44,6 +44,83 @@ const normalized = (value: string) =>
     .toLocaleLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, "");
 
+type TimedSourceWord = {
+  word: SourceWord;
+  segment: InterviewSegment;
+  startMs: number;
+  endMs: number;
+};
+
+/** Prefer the speaker who matches saved answers, then a clear duration majority. */
+function selectStorytellerEntries(
+  entries: TimedSourceWord[],
+  turns: InterviewTurn[],
+): { entries: TimedSourceWord[]; filtered: boolean } | null {
+  const speakers = [
+    ...new Set(entries.map((entry) => entry.word.speakerId).filter(Boolean)),
+  ] as string[];
+  if (speakers.length <= 1) return { entries, filtered: false };
+  const meaningful = turns.filter(
+    (turn) => turn.role === "user" && isMeaningfulInterviewSpeech(turn.text),
+  );
+  const scores = new Map<string, number>();
+  for (const speaker of speakers) {
+    const words = entries
+      .filter(
+        (entry) => !entry.word.speakerId || entry.word.speakerId === speaker,
+      )
+      .map((entry) => entry.word);
+    let hits = 0;
+    for (const turn of meaningful) {
+      try {
+        matchSourceWords(turn.text, words, { allowShort: true });
+        hits += 1;
+      } catch {
+        // This speaker does not contain that saved answer.
+      }
+    }
+    scores.set(speaker, hits);
+  }
+  const rankedHits = [...scores.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+  );
+  let chosen: string | null = null;
+  if (
+    rankedHits[0] &&
+    rankedHits[0][1] > 0 &&
+    (rankedHits.length < 2 || rankedHits[0][1] > rankedHits[1][1])
+  )
+    chosen = rankedHits[0][0];
+  if (!chosen) {
+    const weights = new Map<string, number>();
+    for (const entry of entries) {
+      const id = entry.word.speakerId;
+      if (!id) continue;
+      const span = entry.word.endMs - entry.word.startMs;
+      weights.set(
+        id,
+        (weights.get(id) ?? 0) +
+          (Number.isFinite(span) && span > 0 ? span : 1),
+      );
+    }
+    const ranked = [...weights.entries()].sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    );
+    if (
+      ranked[0] &&
+      (ranked.length === 1 || ranked[0][1] >= ranked[1][1] * 1.5)
+    )
+      chosen = ranked[0][0];
+  }
+  if (!chosen) return null;
+  return {
+    filtered: true,
+    entries: entries.filter(
+      (entry) => !entry.word.speakerId || entry.word.speakerId === chosen,
+    ),
+  };
+}
+
 /** Word timestamps recover source text. Prompt times attribute topics only, never authorize an edit. */
 export function recoverInterviewSourceWords(
   session: InterviewSession,
@@ -96,14 +173,17 @@ export function recoverInterviewSourceWords(
     throw new InterviewSourceRecoveryError(
       "The saved original did not contain recognizable speech. Your recording is preserved. Replay it before deciding whether another recording is needed.",
     );
-  const speakers = new Set(
-    unique.map(({ word }) => word.speakerId).filter(Boolean),
-  );
-  if (speakers.size > 1)
-    throw new InterviewSourceRecoveryError(
-      "The saved original contains more than one detected speaker. It needs a source review before words can be assigned to your stories. Your recording is preserved.",
-    );
-  const words = unique.map(({ word }) => word);
+  // A second voice, often the interviewer played through speakers, must not
+  // stop the storyteller. Keep her speaker, or her saved answers.
+  const selected = selectStorytellerEntries(unique, session.turns);
+  if (!selected) return originalTurns;
+  const spoken = selected.entries;
+  if (
+    selected.filtered &&
+    !spoken.some(({ word }) => isMeaningfulInterviewSpeech(word.text))
+  )
+    return originalTurns;
+  const words = spoken.map(({ word }) => word);
   const alreadySaved = new Set<number>();
   for (const turn of session.turns.filter(
     (turn) => turn.role === "user" && isMeaningfulInterviewSpeech(turn.text),
@@ -117,16 +197,18 @@ export function recoverInterviewSourceWords(
       )
         alreadySaved.add(index);
     } catch {
-      // Unaligned excluded or existing words cannot safely be copied into a new included turn.
+      // A filtered second speaker can leave a saved answer unmatched. Keep that
+      // answer instead of stopping the interview. A single speaker still stops.
+      if (selected.filtered) return originalTurns;
       throw new InterviewSourceRecoveryError(
         "Some saved or excluded words could not be matched to the original recording. A source review is needed before recovery can continue. Your recordings and choices are preserved.",
       );
     }
   }
-  type Group = { chapterId?: InterviewChapterId; entries: typeof unique };
+  type Group = { chapterId?: InterviewChapterId; entries: typeof spoken };
   const groups: Group[] = [];
   let current: Group | undefined;
-  for (const [index, entry] of unique.entries()) {
+  for (const [index, entry] of spoken.entries()) {
     if (alreadySaved.has(index)) {
       current = undefined;
       continue;
@@ -173,10 +255,12 @@ export function recoverInterviewSourceWords(
     originalTurns.length > 300 ||
     originalTurns.reduce((length, turn) => length + turn.text.length, 0) >
       200000
-  )
+  ) {
+    if (selected.filtered) return session.turns;
     throw new InterviewSourceRecoveryError(
       "The recovered interview needs an editor to organize its saved words. Your complete original and transcription are preserved.",
     );
+  }
   return originalTurns;
 }
 
