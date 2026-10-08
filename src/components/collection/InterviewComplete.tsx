@@ -3,17 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
-import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
+import { StorytellerDashboard } from "@/components/collection/StorytellerDashboard";
 import { collectionRequest } from "@/lib/collection/client-request";
 import { CHAPTERS } from "@/lib/interview-state";
 import type { CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
+import dash from "@/components/collection/StorytellerDashboard.module.css";
 
 const primary =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-espresso px-6 py-3 text-base font-medium text-white hover:bg-espresso-600 disabled:opacity-50";
-const secondary =
-  "inline-flex min-h-12 items-center justify-center rounded-full border border-warmgray-200 bg-white px-5 py-3 text-base font-medium text-ink-700 hover:bg-paper-200 disabled:opacity-50";
 
 function preparationLabel(preparation: InterviewPreparationView) {
   if (preparation.ready) return "Ready for your review";
@@ -239,7 +238,8 @@ export default function InterviewComplete({
     .at(-1);
   const canUseFullInterview = Boolean(latestFullInterview);
 
-  const ready = preparation?.ready === true;
+  const ready =
+    preparation?.ready === true || collection?.status === "approved";
   const needsAttention = preparation?.status === "needs_attention";
   const accepted = Boolean(preparation);
   const heading = loading
@@ -269,150 +269,135 @@ export default function InterviewComplete({
               ? "Your four stories, four videos, and postcard drafts are being prepared from your recording. You can leave this page and return through your private link."
               : "Return to your conversation to finish saving and submitting your recording.";
 
+  const preparationActions = (
+    <>
+      {ready ? (
+        <Link
+          className={dash.heroPrimary}
+          href={`/collection/${encodeURIComponent(collectionId)}/review${query}`}
+        >
+          Review your stories and videos
+          <AppIcon name="arrowRight" size={20} />
+        </Link>
+      ) : needsAttention &&
+        preparation.canRetry !== false &&
+        !canUseFullInterview &&
+        !preparation.missingAreas?.length ? (
+        <button
+          type="button"
+          className={dash.heroPrimary}
+          disabled={busy || checking}
+          onClick={() => void retryPreparation()}
+        >
+          {busy ? "Requesting preparation…" : "Retry preparation"}
+        </button>
+      ) : null}
+      {(!accepted || needsAttention) && !loading && (
+        <Link
+          className={dash.heroSecondary}
+          href={`/record/${encodeURIComponent(collectionId)}${query}${preparation?.missingAreas?.[0] ? `&classic=1&chapter=${encodeURIComponent(preparation.missingAreas[0].id)}` : ""}`}
+        >
+          Continue conversation
+        </Link>
+      )}
+      {!ready && (
+        <button
+          type="button"
+          className={dash.heroSecondary}
+          disabled={checking || busy}
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          {checking ? "Checking progress…" : "Check preparation"}
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <main className="mx-auto max-w-4xl px-5 pb-12 pt-5 text-ink-700 sm:px-8 sm:pt-8">
-      <header className="mb-8 border-b border-warmgray-200 pb-5">
+    <main className="mx-auto max-w-5xl px-5 pb-16 pt-5 text-ink-700 sm:px-8 sm:pt-8">
+      <header className="mb-8">
         <Logo />
       </header>
-      <section className="overflow-hidden rounded-2xl border border-warmgray-200 bg-white shadow-soft">
-        <div className="brand-gradient-chocolate relative isolate overflow-hidden p-7 text-white sm:p-10">
-          <BrandPattern
-            variant="ribbon"
-            className="pointer-events-none absolute -bottom-20 -right-28 -z-10 h-96 w-96 text-white opacity-[0.07]"
-          />
-          <p className="mb-5 text-sm font-medium uppercase tracking-[0.14em] text-paper">
-            A gift of your stories
-          </p>
-          <h1 className="max-w-2xl font-serif text-3xl leading-tight sm:text-4xl">
-            {heading}
-          </h1>
-          <p className="mt-5 max-w-2xl text-base leading-8 text-paper sm:text-lg">
-            {description}
-          </p>
+      {error && (
+        <p role="alert" className={`${dash.alert} mb-5`}>
+          {error}
+        </p>
+      )}
+      {needsAttention && (
+        <div className={`${dash.card} mb-5 text-base leading-7`}>
+          <p>{preparation.error || "Please check preparation again."}</p>
+          {preparation.canRetry === false &&
+            !preparation.missingAreas?.length && (
+              <p className="mt-3">
+                Automatic attempts have stopped. Contact the Time Tapestry team
+                with your private collection link so they can check preparation.
+                Your saved recordings do not need to be submitted again.
+              </p>
+            )}
+          {canUseFullInterview ? (
+            <div className="mt-4 border-t border-warmgray-200 pt-4">
+              <p>
+                Your full interview is saved. You can prepare it instead of the
+                later recordings.
+              </p>
+              <p className="mt-3">
+                Use every answer from your saved interview, including answers
+                previously left out. Your later recordings will stay saved. You
+                review the stories and videos before sharing.
+              </p>
+              <button
+                type="button"
+                className={`${primary} mt-4`}
+                disabled={busy || checking}
+                onClick={() => void restoreFullInterview()}
+              >
+                {busy
+                  ? "Selecting your full interview…"
+                  : "Use my full interview"}
+              </button>
+            </div>
+          ) : (
+            Boolean(preparation.missingAreas?.length) && (
+              <p className="mt-3">
+                Continue the conversation to share a little more for{" "}
+                {preparation.missingAreas?.map((area) => area.title).join(", ")}
+                .
+              </p>
+            )
+          )}
+        </div>
+      )}
+      {collection ? (
+        <StorytellerDashboard
+          collection={collection}
+          accessKey={accessKey}
+          preparation={preparation}
+        >
           {preparation && (
-            <p
-              role="status"
-              aria-live="polite"
-              className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/25 px-4 py-2 text-base"
-            >
-              <AppIcon name={ready ? "check" : "conversation"} size={20} />
+            <p role="status" aria-live="polite" className={dash.heroSecondary}>
+              <AppIcon name={ready ? "check" : "conversation"} size={18} />
               {preparationLabel(preparation)}
             </p>
           )}
-        </div>
-        <div className="p-7 sm:p-10">
-          {error && (
-            <p
-              role="alert"
-              className="mb-6 rounded-xl border border-clay-300 bg-clay-50 p-4 text-base leading-7"
-            >
-              {error}
+          {accepted && (
+            <p className={dash.heroSecondary}>
+              {ready
+                ? "Nothing is mailed until you approve your gift."
+                : collection.capabilities.email
+                  ? "We’ll email you when everything is ready to review."
+                  : "Return through your private link to check progress."}
             </p>
           )}
-          {needsAttention && (
-            <div className="mb-6 rounded-xl bg-paper-100 p-5 text-base leading-7">
-              <p>{preparation.error || "Please check preparation again."}</p>
-              {preparation.canRetry === false &&
-                !preparation.missingAreas?.length && (
-                  <p className="mt-3">
-                    Automatic attempts have stopped. Contact the Time Tapestry
-                    team with your private collection link so they can check
-                    preparation. Your saved recordings do not need to be
-                    submitted again.
-                  </p>
-                )}
-              {canUseFullInterview ? (
-                <div className="mt-4 border-t border-warmgray-200 pt-4">
-                  <p>
-                    Your full interview is saved. You can prepare it instead of
-                    the later recordings.
-                  </p>
-                  <p className="mt-3">
-                    Use every answer from your saved interview, including
-                    answers previously left out. Your later recordings will stay
-                    saved. You review the stories and videos before sharing.
-                  </p>
-                  <button
-                    type="button"
-                    className={`${primary} mt-4`}
-                    disabled={busy || checking}
-                    onClick={() => void restoreFullInterview()}
-                  >
-                    {busy
-                      ? "Selecting your full interview…"
-                      : "Use my full interview"}
-                  </button>
-                </div>
-              ) : (
-                Boolean(preparation.missingAreas?.length) && (
-                  <p className="mt-3">
-                    Continue the conversation to share a little more for{" "}
-                    {preparation.missingAreas
-                      ?.map((area) => area.title)
-                      .join(", ")}
-                    .
-                  </p>
-                )
-              )}
-            </div>
-          )}
-          {accepted && (
-            <>
-              <h2 className="text-xl font-medium">
-                You decide when it is ready to share.
-              </h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
-                {ready
-                  ? "Read each story, watch each video, and review the postcard drafts. Nothing is mailed until you approve your gift."
-                  : collection?.capabilities.email
-                    ? "We’ll email you when everything is ready to review. Nothing is mailed until you approve your gift."
-                    : "Return here through your private link to check progress and review everything when it is ready. Email notifications are not available on this page yet. Nothing is mailed until you approve your gift."}
-              </p>
-            </>
-          )}
-          <div className="mt-7 flex flex-wrap gap-3">
-            {ready ? (
-              <Link
-                className={primary}
-                href={`/collection/${encodeURIComponent(collectionId)}/review${query}`}
-              >
-                Review your stories and videos
-                <AppIcon name="arrowRight" size={20} />
-              </Link>
-            ) : needsAttention &&
-              preparation.canRetry !== false &&
-              !canUseFullInterview &&
-              !preparation.missingAreas?.length ? (
-              <button
-                type="button"
-                className={primary}
-                disabled={busy || checking}
-                onClick={() => void retryPreparation()}
-              >
-                {busy ? "Requesting preparation…" : "Retry preparation"}
-              </button>
-            ) : null}
-            {(!accepted || needsAttention) && !loading && (
-              <Link
-                className={secondary}
-                href={`/record/${encodeURIComponent(collectionId)}${query}${preparation?.missingAreas?.[0] ? `&classic=1&chapter=${encodeURIComponent(preparation.missingAreas[0].id)}` : ""}`}
-              >
-                Continue conversation
-              </Link>
-            )}
-            {!ready && (
-              <button
-                type="button"
-                className={secondary}
-                disabled={checking || busy}
-                onClick={() => setRevision((value) => value + 1)}
-              >
-                {checking ? "Checking progress…" : "Check preparation"}
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
+          {preparationActions}
+        </StorytellerDashboard>
+      ) : (
+        <section className={dash.hero} aria-busy={loading}>
+          <p className={dash.eyebrow}>What’s left to do</p>
+          <h1 className={dash.title}>{heading}</h1>
+          <p className={dash.lede}>{description}</p>
+          <div className={dash.actions}>{preparationActions}</div>
+        </section>
+      )}
     </main>
   );
 }

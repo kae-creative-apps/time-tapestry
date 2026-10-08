@@ -1,0 +1,396 @@
+.root {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #432e23;
+  color: #fbfaf8;
+  padding: 1.75rem 1.25rem 1.35rem;
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+}
+
+.orbRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e6d7ca;
+}
+
+.title {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(2rem, 4vw, 3.35rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.lede {
+  margin: 0.9rem 0 0;
+  max-width: 38rem;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: #f6efe8;
+}
+
+.pattern {
+  pointer-events: none;
+  position: absolute;
+  right: -4.5rem;
+  bottom: -4.5rem;
+  z-index: 0;
+  width: 18rem;
+  height: 18rem;
+  color: #fff;
+  opacity: 0.08;
+}
+
+.tasks {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.55rem;
+  margin: 1.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  background: #ffffff14;
+  color: inherit;
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  text-decoration: none;
+}
+
+.task:hover {
+  background: #ffffff22;
+}
+
+.current {
+  background: #fbfaf8;
+  color: #432e23;
+}
+
+.current:hover {
+  background: #fff;
+}
+
+.done {
+  background: #ffffff10;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  border: 1.5px solid #ffffff55;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.current .mark {
+  border-color: #432e23;
+  background: #432e23;
+  color: #fbfaf8;
+}
+
+.done .mark {
+  border-color: #dadecf;
+  background: #dadecf;
+  color: #432e23;
+}
+
+.ready .mark {
+  border-color: #e5c8bb;
+  color: #f6efe8;
+}
+
+.taskTitle {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.taskDetail {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  opacity: 0.86;
+}
+
+.actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.15rem;
+}
+
+.heroPrimary,
+.heroSecondary {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.7rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.heroPrimary {
+  background: #fbfaf8;
+  color: #432e23;
+}
+
+.heroSecondary {
+  border: 1px solid #ffffff55;
+  color: #fbfaf8;
+  background: transparent;
+}
+
+.callout {
+  display: grid;
+  gap: 1rem;
+  border-radius: 28px;
+  border: 1px solid #c18f7b;
+  background:
+    radial-gradient(circle at 100% 0%, #e5c8bb 0%, transparent 42%), #f1e6db;
+  color: #432e23;
+  padding: 1.35rem 1.2rem 1.25rem;
+}
+
+.callout h2 {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.callout p {
+  margin: 0.7rem 0 0;
+  max-width: 40rem;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.calloutActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.1rem;
+}
+
+.calloutActions a,
+.calloutActions button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+.card,
+.preview {
+  border-radius: 28px;
+  border: 1px solid #e7dfd6;
+  background: #fff;
+  color: #432e23;
+  padding: 1.25rem 1.15rem 1.2rem;
+}
+
+.card h2,
+.preview h2 {
+  margin: 0.3rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.card p,
+.sectionNote {
+  margin: 0.65rem 0 0;
+  max-width: 40rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #5c4a40;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #756454;
+}
+
+.previewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.tile {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid #e7dfd6;
+  background: #fbfaf8;
+}
+
+.face {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #432e23;
+}
+
+.face > * {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
+.tileBody {
+  padding: 0.85rem 0.9rem 1rem;
+}
+
+.tileLabel {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #756454;
+}
+
+.tileTitle {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display), "Quicksand", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.tileNote {
+  margin: 0.45rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #5c4a40;
+}
+
+.filmStage {
+  display: grid;
+  min-height: 9.5rem;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 40%, #e5c8bb 0%, transparent 58%), #432e23;
+  color: #fbfaf8;
+}
+
+.sectionLabel {
+  margin: 1.35rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.alert {
+  border-radius: 16px;
+  border: 1px solid #c18f7b;
+  background: #fbf6f3;
+  color: #432e23;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.library {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  margin-top: 0.9rem;
+  font-weight: 600;
+  text-underline-offset: 4px;
+}
+
+@media (max-width: 720px) {
+  .previewHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 900px) {
+  .hero {
+    padding: 2.2rem 2rem 1.6rem;
+  }
+
+  .callout,
+  .card,
+  .preview {
+    padding: 1.6rem 1.6rem 1.45rem;
+  }
+
+  .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task,
+  .heroPrimary,
+  .heroSecondary {
+    transition: none;
+  }
+}
