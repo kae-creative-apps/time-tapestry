@@ -919,6 +919,85 @@ test("a recovered short retake is cut once as the whole part", async () => {
   assert.equal(caption.includes("listen"), false);
 });
 
+test("a short recovered retake is cut whole when a one-word fragment is its last word", async () => {
+  const f = fixture();
+  const original = f.c.interviews![0];
+  const previous = original.turns.find((turn) => turn.chapterId === "q4")!;
+  original.excludedTurnIds.push(previous.id);
+  const mediaId = "retake_media";
+  const retakeWords: SourceWord[] = ["Keep", "going", "bravely"].map(
+    (text, index) => ({
+      text,
+      startMs: 1000 + index * 900,
+      endMs: 1500 + index * 900,
+      mediaId,
+      speakerId: "speaker_0",
+      languageCode: "eng",
+    }),
+  );
+  const retake: InterviewSession = {
+    id: "retake_session",
+    provider: "elevenlabs",
+    status: "completed",
+    startedAt: f.c.createdAt,
+    replacesChapterId: "q4",
+    excludedTurnIds: [],
+    segments: [
+      {
+        id: "retake_segment",
+        mediaId,
+        kind: "voice",
+        startMs: 0,
+        durationMs: 6000,
+        createdAt: f.c.createdAt,
+      },
+    ],
+    turns: ["Bravely.", "Keep going bravely."].map((text, index) => ({
+      id: `retake_${index}`,
+      role: "user" as const,
+      chapterId: "q4" as const,
+      sequence: index,
+      capturedAt: f.c.createdAt,
+      timing: "unaligned" as const,
+      text,
+    })),
+  };
+  retake.turns = recoverInterviewSourceWords(retake, [
+    { segment: retake.segments[0], durationMs: 6000, words: retakeWords },
+  ]);
+  assert.equal(retake.turns.length, 3);
+  f.c.interviews!.push(retake);
+  const { result } = await withMatchLogs(() =>
+    assembleSourceEdits(
+      f.c,
+      f.job,
+      new Map([
+        [f.words[0].mediaId, f.words],
+        [mediaId, retakeWords],
+      ]),
+      new Map([...f.durations, [mediaId, 6000]]),
+      [],
+    ),
+  );
+  const q4 = (result as Awaited<ReturnType<typeof assembleSourceEdits>>)
+    .chapters[3];
+  assert.equal(q4.status, "preparing");
+  const clips = q4.sourceEdit!.clips;
+  assert.equal(clips.length, 1);
+  assert.ok(
+    clips[0].inMs <= retakeWords[0].startMs,
+    "The cut starts before the first retake word.",
+  );
+  assert.ok(
+    clips[0].outMs >= retakeWords.at(-1)!.endMs,
+    "The cut ends after the last retake word.",
+  );
+  assert.deepEqual(
+    clips[0].captions?.map((caption) => caption.text),
+    ["Keep going bravely"],
+  );
+});
+
 test("a short answer with no neighbor still stops outside a chapter retake", async () => {
   const f = fixture();
   const session = f.c.interviews![0];

@@ -10,6 +10,7 @@ import { detectInterviewThemeFromQuestion } from "./interview-progress";
 import {
   interviewSessionNeedsTranscriptRecovery,
   isMeaningfulInterviewSpeech,
+  RECOVERED_TURN_PREFIX,
 } from "./interview-speech";
 import { sourceMetadataHash } from "./films/original-plan";
 import { stageOriginalSource, originalAudioCopy } from "./films/source-media";
@@ -282,7 +283,7 @@ export function recoverInterviewSourceWords(
     if (!isMeaningfulInterviewSpeech(text)) continue;
     const first = group.entries[0],
       last = group.entries.at(-1)!;
-    const id = `source-${hash(`${session.id}:${first.word.mediaId}:${first.word.startMs}:${last.word.endMs}:${text}`).slice(0, 48)}`;
+    const id = `${RECOVERED_TURN_PREFIX}${hash(`${session.id}:${first.word.mediaId}:${first.word.startMs}:${last.word.endMs}:${text}`).slice(0, 48)}`;
     if (originalTurns.some((turn) => turn.id === id)) continue;
     originalTurns.push({
       id,

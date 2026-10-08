@@ -1,4 +1,7 @@
-import { isMeaningfulInterviewSpeech } from "./interview-speech";
+import {
+  isMeaningfulInterviewSpeech,
+  isRecoveredRecordingTurn,
+} from "./interview-speech";
 import type {
   AnswerTake,
   Collection,
@@ -126,13 +129,22 @@ export function interviewAnswers(
 ): AnswerTake[] {
   return (c.interviews ?? []).flatMap((session) => {
     const ordered = [...session.turns].sort((a, b) => a.sequence - b.sequence);
-    return ordered
+    const spoken = ordered.filter(
+      (turn) =>
+        turn.role === "user" &&
+        turn.chapterId === chapterId &&
+        isMeaningfulInterviewSpeech(turn.text),
+    );
+    // A recovered retake holds that whole recording, minus left-out words.
+    // Its live fragments are the same speech, so they are not told twice.
+    const recovered =
+      session.replacesChapterId === chapterId &&
+      spoken.some(isRecoveredRecordingTurn);
+    return spoken
       .filter(
         (turn) =>
-          turn.role === "user" &&
-          turn.chapterId === chapterId &&
-          isMeaningfulInterviewSpeech(turn.text) &&
-          !session.excludedTurnIds.includes(turn.id),
+          !session.excludedTurnIds.includes(turn.id) &&
+          (!recovered || isRecoveredRecordingTurn(turn)),
       )
       .map((turn) => {
         const aligned =
@@ -145,9 +157,12 @@ export function interviewAnswers(
             (segment.startMs < turn.endMs! &&
               segment.startMs + segment.durationMs > turn.startMs!),
         );
+        // Recovered words are saved after the conversation's closing words.
+        // They answer the question that opened the retake.
+        const asked = recovered ? spoken[0] : turn;
         const preceding = ordered
           .filter(
-            (item) => item.role === "agent" && item.sequence < turn.sequence,
+            (item) => item.role === "agent" && item.sequence < asked.sequence,
           )
           .at(-1);
         return {
