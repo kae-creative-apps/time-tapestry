@@ -618,3 +618,65 @@ test("legacy gift capabilities remain valid and malformed join locators are reje
   ])
     assert.equal(parseOrganizationJoinToken(token), null);
 });
+
+test("a new donor invitation is emailed, and replacing the link is not", async () => {
+  const mail = await import("../src/lib/resend-client");
+  mail.clearMockOutbox();
+  const g = await group(1);
+  const issued = await giftsPost(
+    req(giftsUrl(g), {
+      name: "Kaelyn",
+      email: "donor@example.com",
+      designatedRecipient: {
+        name: "Sammie",
+        email: "sammie@example.com",
+      },
+    }),
+    context(g.id),
+  );
+  assert.equal(issued.status, 201);
+  const body = await issued.json();
+  assert.equal(body.invitationDelivery.status, "sent");
+  assert.equal(mail.mockOutboxSnapshot().length, 1);
+  assert.equal(mail.mockOutboxSnapshot()[0].to, "donor@example.com");
+  assert.match(
+    mail.mockOutboxSnapshot()[0].subject,
+    /Example Church invited you to tell the story of your generosity/,
+  );
+  const giftId = parseOrganizationJoinToken(body.giftUrl.split("/").at(-1)!)!
+    .giftId;
+  const manager = await view(g);
+  assert.equal(manager.gifts[0].invitationDelivery.status, "sent");
+  assert.equal(JSON.stringify(manager).includes("invitationSecret"), false);
+  const stored = await store.readRecord<OrganizationRecord>(`org-${g.id}`);
+  assert.ok(stored!.gifts[0].invitationSecret);
+  assert.equal(stored!.gifts[0].key, undefined);
+  const replaced = await giftsPost(
+    req(giftsUrl(g), { action: "replace_link", giftId }),
+    context(g.id),
+  );
+  assert.equal(replaced.status, 200);
+  assert.equal(mail.mockOutboxSnapshot().length, 1);
+  assert.equal((await view(g)).gifts[0].invitationDelivery, undefined);
+  const resent = await giftsPost(
+    req(giftsUrl(g), { action: "resend_invitation", giftId }),
+    context(g.id),
+  );
+  assert.equal(resent.status, 200);
+  assert.equal(mail.mockOutboxSnapshot().length, 2);
+  assert.equal((await view(g)).gifts[0].invitationDelivery.status, "sent");
+});
+
+test("a failed invitation email stays on the gift and the link is still returned", async () => {
+  process.env.RESEND_TEST_FAIL = "1";
+  try {
+    const g = await group(1);
+    const gift = await issue(g);
+    assert.match(gift.url, /^\/join\//);
+    const delivery = (await view(g)).gifts[0].invitationDelivery;
+    assert.equal(delivery?.status, "failed");
+    assert.match(delivery?.error || "", /Mailbox unavailable/);
+  } finally {
+    delete process.env.RESEND_TEST_FAIL;
+  }
+});

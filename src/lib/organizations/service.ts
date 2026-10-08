@@ -11,11 +11,13 @@ import type {
   GiftView,
   OrganizationGift,
   OrganizationRecord,
+  InvitationDelivery,
   OrganizationType,
   OrganizationView,
 } from "./types";
 import { organizationChapterProgress } from "./progress";
 import { organizationJoinUrl } from "./join-token";
+import { appUrl, donorInvitationEmail, sendEmail } from "../resend-client";
 
 export class OrganizationError extends Error {
   constructor(
@@ -115,6 +117,9 @@ export function organizationView(
       email: gift.email,
       status: gift.status,
       createdAt: gift.createdAt,
+      ...(gift.invitationDelivery
+        ? { invitationDelivery: gift.invitationDelivery }
+        : {}),
       ...(gift.designatedRecipient
         ? {
             designatedRecipient: {
@@ -216,6 +221,69 @@ export async function getOrganizationForManager(id: string, key: string) {
   return view;
 }
 
+function deliveryError(error: unknown, secret: string) {
+  const raw =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: unknown }).message)
+      : "";
+  const cleaned = raw
+    .split(secret)
+    .join("")
+    .replace(/\b[a-f0-9]{32,}\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  return cleaned || "The invitation email could not be sent.";
+}
+
+async function deliverDonorInvitation(
+  id: string,
+  managerKey: string,
+  gift: OrganizationGift,
+  accessKey: string,
+): Promise<InvitationDelivery> {
+  const organization = requireManager(
+    await readRecord<OrganizationRecord>(keyFor(id)),
+    managerKey,
+  );
+  const interviewUrl = new URL(
+    organizationJoinUrl(id, gift.id, accessKey),
+    appUrl,
+  ).href;
+  let delivery: InvitationDelivery;
+  try {
+    const { subject, html } = donorInvitationEmail(
+      gift.name,
+      organization.organizationName,
+      interviewUrl,
+      gift.designatedRecipient?.name,
+    );
+    const result = await sendEmail({ to: gift.email, subject, html });
+    const at = new Date().toISOString();
+    delivery = result.success
+      ? { status: "sent", at }
+      : {
+          status: "failed",
+          at,
+          error: deliveryError(result.error, accessKey),
+        };
+  } catch (error) {
+    delivery = {
+      status: "failed",
+      at: new Date().toISOString(),
+      error: deliveryError(error, accessKey),
+    };
+  }
+  await mutateRecord<OrganizationRecord>(keyFor(id), (stored) => {
+    const current = requireManager(stored, managerKey);
+    const saved = requireGift(current, gift.id);
+    saved.invitationDelivery = delivery;
+    current.updatedAt = delivery.at;
+    return current;
+  });
+  return delivery;
+}
+
 export async function issueGift(id: string, key: string, value: unknown) {
   const b = inputObject(value);
   let issued: OrganizationGift | undefined;
@@ -249,18 +317,27 @@ export async function issueGift(id: string, key: string, value: unknown) {
         : {}),
       status: "issued",
       createdAt: new Date().toISOString(),
+      invitationSecret: accessKey,
     };
     organization.gifts.push(issued);
     organization.updatedAt = issued.createdAt;
     return organization;
   });
+  const giftUrl = organizationJoinUrl(id, issued!.id, accessKey);
+  const invitationDelivery = await deliverDonorInvitation(
+    id,
+    key,
+    issued!,
+    accessKey,
+  );
   return {
     organization: await getOrganizationForManager(id, key),
-    giftUrl: organizationJoinUrl(id, issued!.id, accessKey),
+    giftUrl,
+    invitationDelivery,
   };
 }
 
-/** Returning a new capability invalidates the previous invitation; raw secrets stay out of the ledger. */
+/** A new link invalidates the previous one and is not emailed until someone asks. */
 export async function replaceGiftLink(id: string, key: string, giftId: string) {
   const accessKey = secret();
   await mutateRecord<OrganizationRecord>(keyFor(id), (stored) => {
@@ -273,12 +350,47 @@ export async function replaceGiftLink(id: string, key: string, giftId: string) {
       );
     delete gift.key;
     gift.keyHash = hash(accessKey);
+    gift.invitationSecret = accessKey;
+    delete gift.invitationDelivery;
     organization.updatedAt = new Date().toISOString();
     return organization;
   });
   return {
     organization: await getOrganizationForManager(id, key),
     giftUrl: organizationJoinUrl(id, giftId, accessKey),
+  };
+}
+
+/** Mail the current invitation again. Replacing a link does not do this. */
+export async function resendGiftInvitation(
+  id: string,
+  key: string,
+  giftId: string,
+) {
+  const organization = requireManager(
+    await readRecord<OrganizationRecord>(keyFor(id)),
+    key,
+  );
+  const gift = requireGift(organization, giftId);
+  if (gift.status !== "issued")
+    throw new OrganizationError(
+      "Only an unused invitation can be emailed again.",
+      409,
+    );
+  if (!gift.invitationSecret)
+    throw new OrganizationError(
+      "Replace the invitation link, then send that new link.",
+      409,
+    );
+  const invitationDelivery = await deliverDonorInvitation(
+    id,
+    key,
+    gift,
+    gift.invitationSecret,
+  );
+  return {
+    organization: await getOrganizationForManager(id, key),
+    invitationDelivery,
   };
 }
 

@@ -5,6 +5,12 @@ export type OrganizationType =
   "church" | "nonprofit" | "retirement_community" | "family" | "other";
 export type GiftStatus = "issued" | "redeeming" | "redeemed" | "revoked";
 
+export type InvitationDelivery = {
+  status: "sent" | "failed";
+  at: string;
+  error?: string;
+};
+
 export type OrganizationGift = {
   id: string;
   name: string;
@@ -17,6 +23,9 @@ export type OrganizationGift = {
   createdAt: string;
   redeemedAt?: string;
   revokedAt?: string;
+  /** Server-only capability so an explicit resend can mail the same link. Never return it. */
+  invitationSecret?: string;
+  invitationDelivery?: InvitationDelivery;
   claim?: {
     tokenHash: string;
     collectionId: string;
@@ -57,6 +66,7 @@ export type OrganizationView = {
     status: GiftStatus;
     createdAt: string;
     designatedRecipient?: Contact;
+    invitationDelivery?: InvitationDelivery;
     progress: OrganizationChapterProgress[];
   }>;
 };

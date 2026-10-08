@@ -83,6 +83,7 @@ export function OrganizationDashboard({
       const result = await requestJson<{
         organization: Organization;
         giftUrl: string;
+        invitationDelivery?: { status: "sent" | "failed"; error?: string };
       }>(`${endpoint}/gifts${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +103,9 @@ export function OrganizationDashboard({
       setOrganization(result.organization);
       setNewGift({ name, url: result.giftUrl });
       setNotice(
-        `Gift link ready for ${name}. Copy it below and share it with them.`,
+        result.invitationDelivery?.status === "sent"
+          ? `Invitation emailed to ${name}. You can also copy the link below.`
+          : `The invitation for ${name} is saved, but the email could not be sent. Copy the link below.`,
       );
       formElement.reset();
       setAssignRecipient(false);
@@ -130,7 +133,40 @@ export function OrganizationDashboard({
       setNewGift({ name: gift.name, url: result.giftUrl });
       setConfirmReplacement("");
       setNotice(
-        `A new invitation is ready for ${gift.name}. Their previous link no longer works.`,
+        `A new link is ready for ${gift.name}. It has not been emailed. Their previous link no longer works.`,
+      );
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function resend(gift: OrganizationGift) {
+    if (busy || loading) return;
+    setBusy(`resend:${gift.id}`);
+    setError("");
+    setNotice("");
+    try {
+      const result = await requestJson<{ organization: Organization }>(
+        `${endpoint}/gifts${query}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "resend_invitation",
+            giftId: gift.id,
+          }),
+        },
+      );
+      setOrganization(result.organization);
+      const delivery = result.organization.gifts.find(
+        (item) => item.id === gift.id,
+      )?.invitationDelivery;
+      setNotice(
+        delivery?.status === "sent"
+          ? `Invitation emailed to ${gift.name} again.`
+          : `The invitation for ${gift.name} could not be emailed again.`,
       );
     } catch (cause) {
       setError(errorMessage(cause));
@@ -401,8 +437,8 @@ export function OrganizationDashboard({
                 </button>
               </fieldset>
               <p className="mt-4 text-sm leading-6 text-ink-500">
-                You’ll copy and share the link yourself. Creating a gift link
-                does not send an email.
+                We’ll email this invitation. You can also copy the link and
+                share it yourself.
               </p>
             </form>
           )}
@@ -503,6 +539,30 @@ export function OrganizationDashboard({
                         <p className="font-medium">
                           {statusLabels[gift.status]}
                         </p>
+                        {gift.invitationDelivery?.status === "sent" && (
+                          <p className="mt-2 leading-6 text-ink-500">
+                            Emailed{" "}
+                            {new Date(gift.invitationDelivery.at).toLocaleString(
+                              undefined,
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </p>
+                        )}
+                        {gift.invitationDelivery?.status === "failed" && (
+                          <p className="mt-2 leading-6 text-oxblood">
+                            Email was not sent. {gift.invitationDelivery.error}
+                          </p>
+                        )}
+                        {gift.status === "issued" && !gift.invitationDelivery && (
+                          <p className="mt-2 leading-6 text-ink-500">
+                            This link has not been emailed.
+                          </p>
+                        )}
                         {gift.status === "issued" && (
                           <div className="mt-2 space-y-2">
                             {confirmReplacement === gift.id ? (
@@ -528,14 +588,26 @@ export function OrganizationDashboard({
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                disabled={!!busy || loading}
-                                onClick={() => setConfirmReplacement(gift.id)}
-                                className="block min-h-11 underline underline-offset-4"
-                              >
-                                Replace invitation link
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={!!busy || loading}
+                                  onClick={() => void resend(gift)}
+                                  className="block min-h-11 underline underline-offset-4"
+                                >
+                                  {busy === `resend:${gift.id}`
+                                    ? "Sending…"
+                                    : "Resend invitation"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!!busy || loading}
+                                  onClick={() => setConfirmReplacement(gift.id)}
+                                  className="block min-h-11 underline underline-offset-4"
+                                >
+                                  Replace invitation link
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
