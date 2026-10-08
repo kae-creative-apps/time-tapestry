@@ -766,3 +766,99 @@ test("a chapter fails alone when its own answers are missing from the recording"
   assert.match(logged, new RegExp(q4Turn.id));
   assert.equal(logged.includes("orchard"), false);
 });
+
+test("a chapter retake made only of short answers is still cut", async () => {
+  const f = fixture();
+  const original = f.c.interviews![0];
+  const previous = original.turns.find((turn) => turn.chapterId === "q4")!;
+  original.excludedTurnIds.push(previous.id);
+  const mediaId = "retake_media";
+  const lines = ["Courage.", "Plant sunflowers nearby."];
+  f.c.interviews!.push({
+    id: "retake_session",
+    provider: "elevenlabs",
+    status: "completed",
+    startedAt: f.c.createdAt,
+    replacesChapterId: "q4",
+    excludedTurnIds: [],
+    segments: [
+      {
+        id: "retake_segment",
+        mediaId,
+        kind: "voice",
+        startMs: 0,
+        durationMs: 12000,
+        createdAt: f.c.createdAt,
+      },
+    ],
+    turns: lines.map((text, index) => ({
+      id: `retake_${index}`,
+      role: "user" as const,
+      chapterId: "q4" as const,
+      sequence: index,
+      capturedAt: f.c.createdAt,
+      timing: "unaligned" as const,
+      text,
+    })),
+  });
+  let tick = 0;
+  const retakeWords: SourceWord[] = lines.flatMap((line) => {
+    const words = line
+      .replace(/[.]/g, "")
+      .split(" ")
+      .filter(Boolean)
+      .map((text) => {
+        const word: SourceWord = {
+          text,
+          startMs: tick,
+          endMs: tick + 200,
+          mediaId,
+          speakerId: "speaker_0",
+          languageCode: "eng",
+        };
+        tick += 400;
+        return word;
+      });
+    tick += 800;
+    return words;
+  });
+  const result = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([
+      [f.words[0].mediaId, f.words],
+      [mediaId, retakeWords],
+    ]),
+    new Map([...f.durations, [mediaId, 12000]]),
+    [],
+  );
+  assert.equal(result.chapters[0].status, "preparing");
+  assert.ok(result.chapters[0].sourceEdit!.clips.length > 0);
+  const q4 = result.chapters[3];
+  assert.equal(q4.status, "preparing");
+  const caption = JSON.stringify(q4.sourceEdit!.clips);
+  assert.match(caption, /Courage/);
+  assert.match(caption, /sunflowers/);
+  assert.equal(caption.includes("listen"), false);
+});
+
+test("a short answer with no neighbor still stops outside a chapter retake", async () => {
+  const f = fixture();
+  const session = f.c.interviews![0];
+  session.turns.forEach((turn, index) => {
+    if (index === 0) turn.text = "Yes";
+    else if (!session.excludedTurnIds.includes(turn.id))
+      session.excludedTurnIds.push(turn.id);
+  });
+  await assert.rejects(
+    () =>
+      assembleSourceEdits(
+        f.c,
+        f.job,
+        new Map([[f.words[0].mediaId, f.words]]),
+        f.durations,
+        [],
+      ),
+    /neighboring answer/,
+  );
+});
