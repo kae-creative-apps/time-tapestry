@@ -47,6 +47,10 @@ import {
   InterviewPreparationError,
 } from "@/lib/collection/interview-preparation";
 import { restoreCompletedInterview } from "@/lib/collection/interview-restoration";
+import {
+  applyStuckChapterAssignment,
+  repairStuckChapterAssignment,
+} from "@/lib/collection/repair-stuck-chapters";
 import { validateReplyRecording } from "@/lib/collection/reply-media";
 import { playbackReady } from "@/lib/collection/playback";
 import {
@@ -78,10 +82,15 @@ export async function GET(
         },
         { status: 404, headers: noStore },
       );
+    let saved = c;
+    if (role === "owner" && applyStuckChapterAssignment(structuredClone(c))) {
+      await repairStuckChapterAssignment(id);
+      saved = (await getCollection(id)) ?? c;
+    }
     return NextResponse.json(
       {
         collection: {
-          ...publicView(c, role, access?.recipientId),
+          ...publicView(saved, role, access?.recipientId),
           ...(role === "owner"
             ? { usage: await getCollectionUsage(c.id) }
             : {}),
