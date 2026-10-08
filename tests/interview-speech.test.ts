@@ -209,7 +209,7 @@ test("raw recovery never reintroduces excluded source words", () => {
   assert.deepEqual(next, session.turns);
 });
 
-test("silent or ambiguous recordings do not create a spoken answer", () => {
+test("silent recordings do not create a spoken answer", () => {
   const { session } = fixture();
   assert.throws(
     () =>
@@ -222,6 +222,92 @@ test("silent or ambiguous recordings do not create a spoken answer", () => {
       ]),
     /recognizable speech/,
   );
+});
+
+test("a second speaker never blocks recovery", () => {
+  const { session } = fixture();
+  const tied = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: [
+        word("Hello", 1000),
+        { ...word("there", 2000), speakerId: "speaker_1" },
+      ],
+    },
+  ]);
+  assert.deepEqual(tied, session.turns);
+
+  const dominant = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: [
+        word("My", 1000),
+        word("grandmother", 1500),
+        word("helped", 2000),
+        word("every", 2500),
+        word("morning", 3000),
+        { ...word("Next", 8000), speakerId: "speaker_1", endMs: 8200 },
+      ],
+    },
+  ]);
+  const recovered = dominant.map((turn) => turn.text).join(" ");
+  assert.match(recovered, /My grandmother helped every morning/);
+  assert.doesNotMatch(recovered, /Next/);
+
+  const saved = fixture().session;
+  saved.turns.push(utterance("saved-answer", "My grandmother helped."));
+  const matched = recoverInterviewSourceWords(saved, [
+    {
+      segment: saved.segments[0],
+      durationMs: 300000,
+      words: [
+        { ...word("What", 0), speakerId: "speaker_1", endMs: 5000 },
+        { ...word("is", 5100), speakerId: "speaker_1", endMs: 9000 },
+        { ...word("your", 9100), speakerId: "speaker_1", endMs: 14000 },
+        { ...word("story", 14100), speakerId: "speaker_1", endMs: 20000 },
+        word("My", 21000),
+        word("grandmother", 21400),
+        word("helped.", 21800),
+      ],
+    },
+  ]);
+  assert.equal(
+    matched.some((turn) => turn.text.includes("What is your story")),
+    false,
+  );
+  assert.equal(
+    matched.some((turn) => turn.text.includes("grandmother")),
+    true,
+  );
+
+  const unmatched = fixture().session;
+  unmatched.turns.push(
+    utterance("saved-other", "My grandmother helped me every single morning."),
+  );
+  const kept = recoverInterviewSourceWords(unmatched, [
+    {
+      segment: unmatched.segments[0],
+      durationMs: 300000,
+      words: [
+        word("The", 1000),
+        word("weather", 1500),
+        word("was", 2000),
+        word("beautiful", 2500),
+        word("today", 3000),
+        { ...word("Okay", 8000), speakerId: "speaker_1", endMs: 8200 },
+      ],
+    },
+  ]);
+  assert.deepEqual(kept, unmatched.turns);
+});
+
+test("a single speaker still stops when saved words cannot be matched", () => {
+  const { session } = fixture();
+  session.turns.push(
+    utterance("saved-other", "My grandmother helped me every single morning."),
+  );
   assert.throws(
     () =>
       recoverInterviewSourceWords(session, [
@@ -229,11 +315,13 @@ test("silent or ambiguous recordings do not create a spoken answer", () => {
           segment: session.segments[0],
           durationMs: 300000,
           words: [
-            word("Hello", 1000),
-            { ...word("there", 2000), speakerId: "speaker_1" },
+            word("The", 1000),
+            word("weather", 1500),
+            word("was", 2000),
+            word("beautiful", 2500),
           ],
         },
       ]),
-    /more than one detected speaker/,
+    /could not be matched/,
   );
 });

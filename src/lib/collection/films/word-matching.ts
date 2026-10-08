@@ -461,7 +461,7 @@ function alignSourceWords(
   }
   // An untimed token has no span, so it cannot move a cut. Leave its timestamps
   // untouched and continue with the timed words around it.
-  const passage = enclosingPassage.filter((word, offset) => {
+  let passage = enclosingPassage.filter((word, offset) => {
     const bound = bounds.get(word.mediaId);
     return (
       bound &&
@@ -476,6 +476,8 @@ function alignSourceWords(
     );
   assertTimedSourceWords(passage);
   // Diarization is evidence only, never a guess about a person's identity.
+  // A second voice (often the interviewer through the speakers) must not stop the cut.
+  const droppedSpeakers = new Set<SourceWord>();
   for (const mediaId of new Set(passage.map((word) => word.mediaId))) {
     const speakers = new Map<string, number>();
     for (const word of passage) {
@@ -483,18 +485,24 @@ function alignSourceWords(
       speakers.set(word.speakerId, (speakers.get(word.speakerId) ?? 0) + 1);
     }
     if (speakers.size <= 1) continue;
-    const dominant = [...speakers.entries()].sort(
+    const ranked = [...speakers.entries()].sort(
       (left, right) => right[1] - left[1],
-    )[0][0];
+    );
+    const dominant = ranked[0][0];
     const fileWords = passage.filter((word) => word.mediaId === mediaId);
     const flicker = fileWords.every((word, index) => {
       if (!word.speakerId || word.speakerId === dominant) return true;
       return index < 3 || index === fileWords.length - 1;
     });
-    if (!flicker)
-      throw new Error(
-        "This matched passage contains more than one detected speaker. It needs review before a clean storyteller-only cut can be made.",
-      );
+    // Edge flicker stays in the passage. A tie also stays, rather than blocking.
+    if (flicker || ranked[0][1] < ranked[1][1] * 1.5) continue;
+    for (const word of fileWords)
+      if (word.speakerId && word.speakerId !== dominant)
+        droppedSpeakers.add(word);
+  }
+  if (droppedSpeakers.size) {
+    const kept = passage.filter((word) => !droppedSpeakers.has(word));
+    if (kept.length) passage = kept;
   }
   return {
     words: passage,
@@ -548,6 +556,36 @@ export function matchSourceWords(
     }
     throw error;
   }
+}
+
+const SPEAKER_MAJORITY = 1.5;
+
+/** Spoken duration of each diarized speaker. Unlabeled words are not a speaker. */
+export function dominantSpeaker(words: SourceWord[]): string | null {
+  const weights = new Map<string, number>();
+  for (const word of words) {
+    if (!word.speakerId) continue;
+    const span = word.endMs - word.startMs;
+    const weight = Number.isFinite(span) && span > 0 ? span : 1;
+    weights.set(word.speakerId, (weights.get(word.speakerId) ?? 0) + weight);
+  }
+  const ranked = [...weights.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+  );
+  if (!ranked.length) return null;
+  if (ranked.length === 1 || ranked[0][1] >= ranked[1][1] * SPEAKER_MAJORITY)
+    return ranked[0][0];
+  return null;
+}
+
+/** Keep one clear speaker and any unlabeled words. A tie keeps the full passage. */
+export function storytellerWords(words: SourceWord[]): SourceWord[] {
+  const speaker = dominantSpeaker(words);
+  if (!speaker) return words;
+  const kept = words.filter(
+    (word) => !word.speakerId || word.speakerId === speaker,
+  );
+  return kept.length ? kept : words;
 }
 
 export function captionsForWords(words: SourceWord[]): SourceCaption[] {

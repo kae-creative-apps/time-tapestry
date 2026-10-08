@@ -7,6 +7,7 @@ import {
   matchSourceWords,
   sourceTokenCount,
   sessionWordTimeline,
+  storytellerWords,
   type SourceWord,
 } from "./word-matching";
 import type { OriginalChapterEdit, StoryFilmJob } from "./types";
@@ -80,14 +81,7 @@ export async function assembleSourceEdits(
         throw new Error(
           "An answer has no authorized original recording. Its written story is preserved.",
         );
-      const words = wordsByMedia.get(source.mediaId)!;
-      const speakers = new Set(
-        words.map((word) => word.speakerId).filter(Boolean),
-      );
-      if (speakers.size > 1)
-        throw new Error(
-          "A question recording contains multiple detected speakers and needs an editor check.",
-        );
+      const words = storytellerWords(wordsByMedia.get(source.mediaId)!);
       addPassage(
         chapter.chapterId,
         {

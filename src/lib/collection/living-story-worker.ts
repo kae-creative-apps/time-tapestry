@@ -35,6 +35,7 @@ import {
 import {
   assertTimedSourceWords,
   captionsForWords,
+  storytellerWords,
 } from "./films/word-matching";
 import {
   prepareOriginalChapter,
@@ -305,11 +306,8 @@ export async function processLivingStoryMoment(
       },
     });
     assertTimedSourceWords(words);
-    if (new Set(words.map((word) => word.speakerId).filter(Boolean)).size > 1)
-      throw new Error(
-        "This recording contains multiple detected speakers and needs an editor check.",
-      );
-    const sourceTranscript = words.map((word) => word.text).join(" ");
+    const spoken = storytellerWords(words);
+    const sourceTranscript = spoken.map((word) => word.text).join(" ");
     await assertCurrent();
     phase = "source cleanup";
     const waveform = await originalAudioCopy(staged, false);

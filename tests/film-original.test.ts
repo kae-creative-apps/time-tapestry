@@ -107,10 +107,12 @@ test("ambiguous, unrelated, multiple speaker and out of range timestamps stop au
   );
   const mixed = words("I remember the blue bicycle");
   mixed[3].speakerId = "speaker_1";
-  assert.throws(
-    () => matchSourceWords("I remember the blue bicycle", mixed),
-    /more than one/,
+  const keptSpeaker = matchSourceWords("I remember the blue bicycle", mixed);
+  assert.equal(
+    keptSpeaker.words.map((word) => word.text).join(" "),
+    "I remember the bicycle",
   );
+  assert.ok(keptSpeaker.words.every((word) => word.speakerId !== "speaker_1"));
   assert.throws(
     () => validateSourceWords(words("hello there"), 500, "source_123"),
     /timestamps outside/,
@@ -361,9 +363,22 @@ test("the recorded interview edges cut without swapping a content word", () => {
   );
   const mixed = words("I remember the blue bicycle");
   mixed[3].speakerId = "speaker_1";
-  assert.throws(
-    () => matchSourceWords("I remember the blue bicycle", mixed),
-    /more than one/,
+  assert.equal(
+    matchSourceWords("I remember the blue bicycle", mixed).words.map(
+      (word) => word.text,
+    ).join(" "),
+    "I remember the bicycle",
+  );
+  const tied = words(
+    "I remember the blue bicycle beside the quiet kitchen window",
+  );
+  for (const index of [3, 4, 5, 6, 7]) tied[index].speakerId = "speaker_1";
+  assert.equal(
+    matchSourceWords(
+      "I remember the blue bicycle beside the quiet kitchen window",
+      tied,
+    ).words.length,
+    tied.length,
   );
 });
 
