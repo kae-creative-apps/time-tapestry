@@ -1,5 +1,18 @@
-import type { InterviewSession } from "./types";
+import type { InterviewSession, InterviewTurn } from "./types";
 import { sourceTokenCount } from "./films/word-matching";
+
+/** Live turns use random ids. Only recovery names words it read from a saved original. */
+export const RECOVERED_TURN_PREFIX = "source-";
+
+export function isRecoveredRecordingTurn(
+  turn: Pick<InterviewTurn, "id" | "role" | "timing">,
+): boolean {
+  return (
+    turn.role === "user" &&
+    turn.timing === "unaligned" &&
+    turn.id.startsWith(RECOVERED_TURN_PREFIX)
+  );
+}
 
 /** Lexical evidence only, not a quality or length judgment about an answer. */
 export function isMeaningfulInterviewSpeech(text: unknown): text is string {

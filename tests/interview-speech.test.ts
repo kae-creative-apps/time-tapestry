@@ -4,6 +4,7 @@ import { prepareCollection } from "../src/lib/collection/create";
 import { publicView } from "../src/lib/collection/access";
 import {
   isMeaningfulInterviewSpeech,
+  isRecoveredRecordingTurn,
   interviewSessionNeedsTranscriptRecovery,
 } from "../src/lib/collection/interview-speech";
 import { recordedInterviewChapterIds } from "../src/lib/collection/interview-resume";
@@ -219,6 +220,64 @@ test("a corrected retake fragment does not keep its own speech out", () => {
   assert.deepEqual(
     recovered.map((turn) => turn.text),
     [retakeWords.join(" ")],
+  );
+});
+
+test("a recovered short retake is told once after the question that opened it", () => {
+  const { c, session } = fixture();
+  const agent = (
+    id: string,
+    text: string,
+    sequence: number,
+  ): InterviewTurn => ({
+    id,
+    text,
+    role: "agent",
+    sequence,
+    capturedAt: startedAt,
+    timing: "unaligned",
+  });
+  session.replacesChapterId = "q4";
+  session.turns = [
+    agent("ask-0", "What would you like them to carry forward?", 0),
+    utterance("short-1", "Courage.", "q4"),
+    utterance("short-2", "I hope settle.", "q4"),
+    agent("thanks-3", "Thank you for sharing that.", 3),
+  ];
+  assert.deepEqual(
+    interviewAnswers(c, "q4").map((answer) => answer.id),
+    ["live-short-1", "live-short-2"],
+  );
+  session.turns = recoverInterviewSourceWords(session, [
+    {
+      segment: session.segments[0],
+      durationMs: 300000,
+      words: retakeWords.map((text, index) => word(text, 1000 + index * 500)),
+    },
+  ]);
+  const recovered = session.turns.find(isRecoveredRecordingTurn)!;
+  const answers = interviewAnswers(c, "q4");
+  assert.equal(answers.length, 1);
+  assert.equal(answers[0].id, `live-${recovered.id}`);
+  assert.equal(answers[0].text, retakeWords.join(" "));
+  assert.equal(answers[0].prompt, "What would you like them to carry forward?");
+  // Leaving the recovered words out does not bring their fragments back.
+  session.excludedTurnIds.push(recovered.id);
+  assert.deepEqual(interviewAnswers(c, "q4"), []);
+});
+
+test("a full interview keeps its live answers beside recovered words", () => {
+  const { c, session } = fixture();
+  session.turns = [
+    utterance("speech-1", "Courage.", "q4"),
+    {
+      ...utterance("speech-2", "Plant sunflowers wherever you settle.", "q4"),
+      id: "source-0123456789abcdef0123456789abcdef0123456789abcdef",
+    },
+  ];
+  assert.deepEqual(
+    interviewAnswers(c, "q4").map((answer) => answer.text),
+    ["Courage.", "Plant sunflowers wherever you settle."],
   );
 });
 
