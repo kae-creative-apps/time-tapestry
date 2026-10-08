@@ -897,8 +897,8 @@ export async function getInterviewPreparationView(c: Collection) {
       canRetry: linked.status === "failed" && linked.attempts < MAX_ATTEMPTS,
       error:
         linked.attempts >= MAX_ATTEMPTS
-          ? "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your stories and recordings are saved."
-          : "Film preparation needs attention. Your written stories and original recordings are saved.",
+          ? "Films stopped. Contact us with your private link. Your stories are saved."
+          : "Films need attention. Your stories and recordings are saved.",
     };
   return view;
 }
