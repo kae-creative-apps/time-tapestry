@@ -1500,6 +1500,66 @@ test("a finished preparation retries when a short retake still needs recovery", 
   assert.equal(job?.drafts, undefined);
 });
 
+test("a reopened short retake does not inherit the finished run's attempts", async () => {
+  const { c, preparationId } = await finishedRetakePreparation("Courage.");
+  await store.mutateRecord<InterviewPreparationJob>(preparationId, (job) => ({
+    ...job!,
+    attempts: 3,
+  }));
+  await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  const claimed = await preparation.claimInterviewPreparation(
+    "retake-worker",
+    Date.now(),
+    preparationId,
+  );
+  assert.equal(claimed?.status, "preparing");
+  assert.equal(claimed?.attempts, 1);
+});
+
+test("a short retake pass stopped by the attempt limit can be reopened", async () => {
+  const { c, preparationId } = await finishedRetakePreparation("Courage.");
+  await store.mutateRecord<InterviewPreparationJob>(preparationId, (job) => ({
+    ...job!,
+    status: "needs_attention",
+    attempts: 3,
+    recoveredInterviews: undefined,
+    drafts: undefined,
+    error:
+      "Preparation needs a setup check after three attempts. Your original recordings and saved progress are preserved.",
+  }));
+  const retry = await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  assert.equal(retry.preparation.status, "queued");
+  const job = await preparation.getInterviewPreparationJob(preparationId);
+  assert.equal(job?.attempts, 0);
+  assert.equal(job?.error, undefined);
+});
+
+test("a stopped preparation with a complete retake still stops", async () => {
+  const { c, preparationId } = await finishedRetakePreparation(
+    "I hope you carry courage and plant sunflowers wherever you settle.",
+  );
+  await store.mutateRecord<InterviewPreparationJob>(preparationId, (job) => ({
+    ...job!,
+    status: "needs_attention",
+    attempts: 3,
+  }));
+  await assert.rejects(
+    preparation.enqueueInterviewPreparation(c.id, {
+      ...consent,
+      retry: true,
+    }),
+    (error: unknown) =>
+      error instanceof preparation.InterviewPreparationError &&
+      error.status === 409,
+  );
+});
+
 test("a finished preparation with a complete retake is not prepared again", async () => {
   const { c, preparationId } = await finishedRetakePreparation(
     "I hope you carry courage and plant sunflowers wherever you settle.",
