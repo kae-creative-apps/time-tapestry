@@ -1431,10 +1431,11 @@ test("a newer ready film replaces a stale failed preparation film", async () => 
   assert.equal(view?.error, undefined);
 });
 
-test("a finished preparation retries when a short retake still needs recovery", async () => {
+async function finishedRetakePreparation(retakeText: string) {
   let c = await liveFixture();
   c = recovered(c);
   const mediaId = c.interviews![0].segments[0].mediaId;
+  c.interviews![0].excludedTurnIds.push("fictional-turn-q4");
   c.interviews!.push({
     id: `retake_${randomUUID()}`,
     provider: "elevenlabs",
@@ -1455,10 +1456,10 @@ test("a finished preparation retries when a short retake still needs recovery", 
     ],
     turns: [
       {
-        id: "retake-short",
+        id: "retake-answer",
         sequence: 0,
         role: "user",
-        text: "Courage.",
+        text: retakeText,
         capturedAt: c.createdAt,
         chapterId: "q4",
         timing: "unaligned",
@@ -1484,14 +1485,31 @@ test("a finished preparation retries when a short retake still needs recovery", 
       drafts: c.chapters,
     }),
   );
+  return { c, preparationId: queued.preparation.id };
+}
+
+test("a finished preparation retries when a short retake still needs recovery", async () => {
+  const { c, preparationId } = await finishedRetakePreparation("Courage.");
   const retry = await preparation.enqueueInterviewPreparation(c.id, {
     ...consent,
     retry: true,
   });
   assert.equal(retry.preparation.status, "queued");
-  const job = await preparation.getInterviewPreparationJob(
-    queued.preparation.id,
-  );
+  const job = await preparation.getInterviewPreparationJob(preparationId);
   assert.equal(job?.recoveredInterviews, undefined);
   assert.equal(job?.drafts, undefined);
+});
+
+test("a finished preparation with a complete retake is not prepared again", async () => {
+  const { c, preparationId } = await finishedRetakePreparation(
+    "I hope you carry courage and plant sunflowers wherever you settle.",
+  );
+  const retry = await preparation.enqueueInterviewPreparation(c.id, {
+    ...consent,
+    retry: true,
+  });
+  assert.equal(retry.preparation.status, "films_queued");
+  const job = await preparation.getInterviewPreparationJob(preparationId);
+  assert.ok(job?.recoveredInterviews);
+  assert.ok(job?.drafts);
 });

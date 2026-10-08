@@ -302,11 +302,17 @@ export async function enqueueInterviewPreparation(
             };
           // A finished run can still be missing the rest of a short retake.
           // Recover that recording once more, then write the stories again.
+          // An older session always looks partial once a retake replaces one
+          // of its parts, so only the retake itself can ask for this.
           if (
             options.retry &&
             existing.status === "films_queued" &&
             linkedFilm?.status === "ready" &&
-            (c.interviews ?? []).some(interviewSessionNeedsTranscriptRecovery)
+            (c.interviews ?? []).some(
+              (session) =>
+                Boolean(session.replacesChapterId) &&
+                interviewSessionNeedsTranscriptRecovery(session),
+            )
           )
             return {
               ...existing,
