@@ -100,6 +100,10 @@ test("optional note fields stay exact and bounded, with no invented summary or a
     "People and causes: My neighbor\n\nHow I was involved:   I visited\nwhen I could.  \n\nWhat I know about the impact: I do not know what changed.",
   );
   assert.equal(formatGenerosityNotes({ ...emptyValues }), "");
+  assert.equal(
+    formatGenerosityNotes({ ...emptyValues, amount: "a private figure" }),
+    "",
+  );
   assert.deepEqual(normalizeGenerosityNotesValues({}), emptyValues);
   for (const input of [
     null,

@@ -110,6 +110,8 @@ export type FilmChapter = {
   chapterId: string;
   chapterNumber: 1 | 2 | 3 | 4;
   title: string;
+  /** Interviewer's saved opening question, shown on the automatic film card. */
+  openingQuestion?: string;
   content: string;
   script: string;
   sourceTakeIds: string[];

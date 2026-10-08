@@ -8,8 +8,8 @@ import { OwnerReplies } from "./OwnerReplies";
 import { hasChapterPlayback } from "@/lib/audio/playback-types";
 import { FilmGenerationPanel, StoryExportPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
-import { ApprovedStories } from "./ApprovedStories";
 import { PostcardProof } from "./PostcardProof";
+import { StorytellerDashboard } from "./StorytellerDashboard";
 import { storyOriginals } from "./story-originals";
 import { collectionRequest } from "@/lib/collection/client-request";
 import {
@@ -291,23 +291,39 @@ export default function Review({
         collectionPath={`/collection/${encodeURIComponent(id)}?key=${encodeURIComponent(accessKey)}`}
       >
         <div ref={flowTop} className="scroll-mt-5">
-          <header className="mb-5">
-            <p className="brand-eyebrow text-taupe-600">
-              {approved ? "Your gift is approved" : "Your recordings are saved"}
-            </p>
-            <h1
-              ref={flowHeading}
-              tabIndex={-1}
-              className="mt-2 scroll-mt-5 font-display text-3xl font-medium sm:text-4xl"
-            >
-              {approved ? `For ${c.recipient.name}, from you.` : steps[step]}
-            </h1>
-            <p className="mt-2 max-w-3xl text-base leading-7 text-ink-600">
-              {approved
-                ? "Your own voice, preserved for someone you love."
-                : "Your original recordings stay saved. Nothing is shared until your final approval."}
-            </p>
-          </header>
+          <StorytellerDashboard
+            collection={c}
+            accessKey={accessKey}
+            headingRef={approved ? flowHeading : undefined}
+            onOpenStep={changeStep}
+            onOpenChapter={(chapterId) => {
+              setActiveChapter(chapterId);
+              rememberReviewLocation(window.location, window.history, {
+                step: 0,
+                chapterId,
+              });
+              setStep(0);
+              setNavigationRevision((value) => value + 1);
+            }}
+          />
+          {!approved && (
+            <header className="mb-5 mt-8">
+              <p className="brand-eyebrow text-taupe-600">
+                Your recordings are saved
+              </p>
+              <h1
+                ref={flowHeading}
+                tabIndex={-1}
+                className="mt-2 scroll-mt-5 font-display text-3xl font-medium sm:text-4xl"
+              >
+                {steps[step]}
+              </h1>
+              <p className="mt-2 max-w-3xl text-base leading-7 text-ink-600">
+                Your original recordings stay saved. Nothing is shared until
+                your final approval.
+              </p>
+            </header>
+          )}
           {!approved && c.chapters.length > 0 && (
             <nav
               aria-label="Finish your gift"
@@ -340,39 +356,14 @@ export default function Review({
         </div>
         {approved ? (
           <>
-            <section className="mb-6 rounded-2xl border border-warmgray-200 bg-white p-6">
-              <h2 className="font-display text-2xl font-semibold">
-                Keep your story growing.
-              </h2>
-              <p className="mt-3 text-lg leading-8">
-                Your original gift is complete. Add a memory, answer a family
-                question, or revisit your stories.
-              </p>
-              <a
-                className={`${portalPrimary} mt-5`}
-                href={`/collection/${encodeURIComponent(id)}/stories?key=${encodeURIComponent(accessKey)}`}
-              >
-                Open my story library
-              </a>
-            </section>
-            <CollectionSharing
-              collection={c}
-              busy={busy}
-              act={act}
-              onRefresh={load}
-            />
-            <details className="mt-6 rounded-2xl border border-warmgray-200 bg-white p-5">
-              <summary className="min-h-12 cursor-pointer text-lg font-semibold">
-                Watch your approved stories
-              </summary>
-              <div className="mt-4">
-                <ApprovedStories
-                  collection={c}
-                  accessKey={accessKey}
-                  onRefresh={load}
-                />
-              </div>
-            </details>
+            <div className="mt-8">
+              <CollectionSharing
+                collection={c}
+                busy={busy}
+                act={act}
+                onRefresh={load}
+              />
+            </div>
             <OwnerReplies
               collection={c}
               accessKey={accessKey}
@@ -490,15 +481,6 @@ export default function Review({
                     : "Continue to postcards"}
                 </button>
               </nav>
-              <a
-                className="inline-flex min-h-12 items-center gap-2 text-base font-medium underline underline-offset-4"
-                href={`/api/collection/${encodeURIComponent(id)}/book?key=${encodeURIComponent(accessKey)}&draft=1`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <AppIcon name="download" size={18} /> Preview the complete story
-                book (PDF)
-              </a>
               {!filmsReady && (
                 <div className="mt-5">
                   <FilmGenerationPanel

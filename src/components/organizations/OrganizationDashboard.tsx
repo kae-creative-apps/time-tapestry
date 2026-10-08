@@ -170,12 +170,12 @@ export function OrganizationDashboard({
       <OrganizationShell>
         <main className="mx-auto max-w-2xl px-5 py-16 sm:px-8">
           <p className="brand-eyebrow mb-4 text-taupe-600">
-            Private group dashboard
+            Donor pilot
           </p>
-          <h1 className="mb-6 text-4xl font-medium">Your group gifts</h1>
+          <h1 className="mb-6 text-4xl font-medium">Your donor pilot</h1>
           {loading ? (
             <p role="status" className="text-lg text-ink-500">
-              Opening your group…
+              Opening your pilot…
             </p>
           ) : (
             <>
@@ -193,7 +193,7 @@ export function OrganizationDashboard({
                 href="/for-organizations"
                 className="mt-6 block py-3 underline underline-offset-4"
               >
-                About free group gifting
+                About the donor pilot
               </Link>
             </>
           )}
@@ -209,14 +209,14 @@ export function OrganizationDashboard({
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="brand-eyebrow mb-4 text-taupe-600">
-              Free group gifting pilot
+              Donor legacy pilot
             </p>
             <h1 className="break-words font-display text-4xl font-medium leading-tight sm:text-5xl">
               {organization.organizationName}
             </h1>
             <p className="mt-4 text-base leading-7 text-ink-500">
-              {organization.seats.total} free gifts for the people in your
-              community.
+              {organization.seats.total} donor invitations for your
+              organization.
             </p>
           </div>
           <button
@@ -312,11 +312,12 @@ export function OrganizationDashboard({
             />
             <div>
               <h2 id="invite-heading" className="text-2xl font-semibold">
-                Create a storyteller’s gift link.
+                Invite a donor.
               </h2>
               <p className="mt-2 text-base leading-7 text-ink-500">
-                Add the person who will share their stories. They can choose a
-                recipient, or you can assign one for this gift.
+                Add the donor who will tell the story of their generosity. They
+                can choose a child or grandchild, or you can name that person
+                for this invitation.
               </p>
             </div>
           </div>
@@ -395,7 +396,7 @@ export function OrganizationDashboard({
                   )}
                 </div>
                 <button className={`${primaryClass} w-full`} type="submit">
-                  {busy === "invite" ? "Creating…" : "Create gift link"}
+                  {busy === "invite" ? "Creating…" : "Create donor invitation"}
                   <AppIcon name="arrowRight" size={18} />
                 </button>
               </fieldset>
@@ -422,7 +423,7 @@ export function OrganizationDashboard({
         <section aria-labelledby="gifts-heading" className="mt-10">
           <div className="mb-5">
             <h2 id="gifts-heading" className="text-2xl font-semibold">
-              Your gift invitations
+              Your donor invitations
             </h2>
             <p className="mt-2 text-base leading-7 text-ink-500">
               Follow each storyteller’s four chapters. Completed means the
@@ -438,10 +439,10 @@ export function OrganizationDashboard({
                 className="mx-auto text-taupe-600"
               />
               <p className="mt-4 font-medium">
-                Your first invitation can begin a family’s collection.
+                Your first invitation can begin a donor’s collection for their family.
               </p>
               <p className="mt-2 text-base leading-7 text-ink-500">
-                Add a storyteller above when you’re ready.
+                Add a donor above when you’re ready.
               </p>
             </div>
           ) : (

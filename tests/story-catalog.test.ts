@@ -90,4 +90,18 @@ test("new prompt cards have readable opening time while original four-film timin
     } as never),
     10 * VIDEO_FPS,
   );
+  assert.equal(
+    chapterIntroSeconds({
+      questionCard: {
+        question: "Who showed you kindness?",
+        label: "Kindness",
+        durationMs: 5000,
+        music: {
+          relativePath: "question-card-music.wav",
+          sha256: "ab".repeat(32),
+        },
+      },
+    }),
+    5,
+  );
 });

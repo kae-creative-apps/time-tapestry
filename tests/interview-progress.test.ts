@@ -48,6 +48,32 @@ test("planned area questions are recognized without treating closing or follow-u
     "q3",
   );
   assert.equal(
+    detectInterviewThemeFromQuestion("What made you become so generous?"),
+    "q1",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion("How has your faith shaped why you give?"),
+    "q2",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "What values have guided the way you give?",
+    ),
+    "q2",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "Why did you fall in love with these ministries you give to?",
+    ),
+    "q3",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "What do you hope Sammie carries from your life of giving?",
+    ),
+    "q4",
+  );
+  assert.equal(
     detectInterviewThemeFromQuestion(
       "As we move to our final theme, what do you want Sam to remember?",
     ),
@@ -103,6 +129,8 @@ test("four shared answers are not a claim of recording or approval", () => {
 });
 
 test("legacy beliefs framing retains the same second area without a faith label", () => {
-  assert.equal(interviewChapterTitle("q2", "beliefs"), "Choices and beliefs");
-  assert.equal(interviewChapterTitle("q2", "faith"), "A life of faith");
+  assert.equal(interviewChapterTitle("q2", "beliefs"), "Why I give");
+  assert.equal(interviewChapterTitle("q2", "faith"), "Why I give");
+  assert.equal(interviewChapterTitle("q1"), "Roots of generosity");
+  assert.equal(interviewChapterTitle("q3"), "Lives I’ve seen flourish");
 });

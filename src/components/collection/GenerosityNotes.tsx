@@ -63,7 +63,7 @@ const fields = [
   [
     "involvement",
     "How were you involved?",
-    "What did you give, and how often? This might be time, financial support or hospitality.",
+    "What you did alongside them. This might be time, care, hospitality, or showing up.",
   ],
   [
     "years",
@@ -311,9 +311,9 @@ export function GenerosityNotes({
           Keep the details behind your generosity.
         </h3>
         <p className="mt-3 text-base leading-7 text-ink-600">
-          Remember the people, churches and causes you supported, what drew you
-          to them, and what you hope continues. Time, hospitality and practical
-          care matter here too. Amounts are optional.
+          Remember the people, ministries and causes you love, what drew you
+          to them, and what you hope continues. Time, care, hospitality and
+          the lives you have seen flourish belong here.
         </p>
         <p className="mt-3 text-sm leading-7 text-ink-500">
           These notes stay in your private workspace. They are not used to
@@ -394,35 +394,6 @@ export function GenerosityNotes({
               />
             </div>
           ))}
-          <details className="rounded-xl border border-sage-200 bg-white/60 p-4">
-            <summary className="min-h-12 cursor-pointer text-base font-medium">
-              An amount or range, if you want to include it
-            </summary>
-            <label
-              htmlFor={`${id}-amount`}
-              className="mt-2 block text-base font-medium"
-            >
-              Amount or range (optional)
-            </label>
-            <p
-              id={`${id}-amount-help`}
-              className="mt-1 text-sm leading-6 text-ink-500"
-            >
-              You can leave this blank. If you add a figure, say whether it was
-              one gift, regular giving or an estimate over time. Include the
-              currency and anything you are unsure of, or whether you checked a
-              record.
-            </p>
-            <textarea
-              id={`${id}-amount`}
-              aria-describedby={`${id}-amount-help`}
-              rows={3}
-              maxLength={generosityNotesLimits.amount}
-              className={portalField}
-              value={values.amount}
-              onChange={(event) => change("amount", event.target.value)}
-            />
-          </details>
         </fieldset>
         <p className="mt-4 text-sm leading-6 text-ink-500">
           Save before leaving this page. Unsaved private notes are kept only
@@ -480,7 +451,7 @@ export function GenerosityNotes({
               id={`${id}-preview-help`}
               className="mt-2 text-base leading-7 text-ink-600"
             >
-              Edit or remove anything below, including names or amounts. These
+              Edit or remove anything below, including names. These
               words will be added to your written story draft. Original
               recordings stay unchanged. Save, review and approve the story
               before sharing it.

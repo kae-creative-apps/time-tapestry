@@ -142,9 +142,7 @@ export default function LiveInterview({
   const connectionTypeRef = useRef<InterviewConnection>("webrtc");
   const connectionAttempt = useRef(0);
   const [connectionSound, setConnectionSound] = useState(true);
-  const [question, setQuestion] = useState(
-    "Tell me about someone whose kindness has stayed with you.",
-  );
+  const [question, setQuestion] = useState<string>(CHAPTERS[0].question);
   const [pending, setPending] = useState<InterviewCommand[]>([]);
   const [savingWords, setSavingWords] = useState(false);
   const [working, setWorking] = useState(false);

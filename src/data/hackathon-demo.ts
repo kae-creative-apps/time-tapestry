@@ -21,7 +21,7 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
   {
     number: 1,
     path: "/hackathon-demo-1",
-    title: "Kindness received",
+    title: "Roots of generosity",
     theme: "kindness",
     story: kindness,
     transcript:
@@ -39,12 +39,12 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
       "That was the first time I understood that generosity is a kind of noticing.",
       "You do not have to be rich to be generous.",
     ],
-    next: { href: "/hackathon-demo-2", label: "Next chapter: A life of faith" },
+    next: { href: "/hackathon-demo-2", label: "Next chapter: Why I give" },
   },
   {
     number: 2,
     path: "/hackathon-demo-2",
-    title: "A life of faith",
+    title: "Why I give",
     theme: "faith",
     story: faith,
     transcript:
@@ -62,12 +62,15 @@ export const hackathonDemoChapters: readonly HackathonDemoChapter[] = [
       "These are not just causes. They are people I have prayed for by name.",
       "I want my giving to keep noticing people long after I am gone.",
     ],
-    next: { href: "/hackathon-demo-3", label: "Next chapter: What you sowed" },
+    next: {
+      href: "/hackathon-demo-3",
+      label: "Next chapter: Lives I’ve seen flourish",
+    },
   },
   {
     number: 3,
     path: "/hackathon-demo-3",
-    title: "What you sowed",
+    title: "Lives I’ve seen flourish",
     theme: "generosity",
     story: table,
     transcript: "In our house, giving started at the supper table.",

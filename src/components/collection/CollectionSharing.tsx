@@ -458,6 +458,8 @@ Alex <alex@example.com>"
       </section>
       <details
         ref={postcardsSection}
+        id="recipient-mailing-address"
+        {...(c.addressConfirmed ? {} : { open: true })}
         className="scroll-mt-5 rounded-2xl border border-warmgray-200 bg-white p-5 sm:p-7"
       >
         <summary className="min-h-11 cursor-pointer text-lg font-semibold">
