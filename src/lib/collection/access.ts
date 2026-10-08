@@ -207,5 +207,5 @@ export function requireOwner(c: Collection, role: string | null) {
   if (role !== "owner")
     throw new Error("Open your interview link to make changes.");
   if (c.status === "approved")
-    throw new Error("These approved stories cannot be edited in this pilot.");
+    throw new Error("These approved stories cannot be edited.");
 }

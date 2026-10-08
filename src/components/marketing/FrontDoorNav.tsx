@@ -39,8 +39,8 @@ export function FrontDoorNav() {
           <Link href="/account" className={styles.accountLink}>
             Donor sign-in
           </Link>
-          <Link href="/for-organizations" className={styles.navStart}>
-            Start a pilot <AppIcon name="arrowUpRight" size={18} />
+          <Link href="/for-organizations#invite-donors" className={styles.navStart}>
+            Invite your donors <AppIcon name="arrowUpRight" size={18} />
           </Link>
         </div>
         <button
@@ -79,11 +79,11 @@ export function FrontDoorNav() {
             Donor sign-in <AppIcon name="arrowUpRight" size={18} />
           </Link>
           <Link
-            href="/for-organizations"
+            href="/for-organizations#invite-donors"
             className={styles.mobileStart}
             onClick={() => setOpen(false)}
           >
-            Start a pilot <AppIcon name="arrowUpRight" size={18} />
+            Invite your donors <AppIcon name="arrowUpRight" size={18} />
           </Link>
         </nav>
       )}

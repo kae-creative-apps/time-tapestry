@@ -21,8 +21,9 @@ export default function About() {
           asked about gift size.
         </p>
         <p>
-          Kaelyn Brooks and Tayloe Hansen are building this pilot with a focus
-          on relationships and character, especially the practice of generosity.
+          Kaelyn Brooks and Tayloe Hansen are building Time Tapestry with a
+          focus on relationships and character, especially the practice of
+          generosity.
         </p>
         <h2 className="pt-5 font-serif text-2xl">
           The research gives us a reason to explore.
@@ -65,8 +66,8 @@ export default function About() {
           .
         </p>
         <p>
-          Our pilot will look at completed interviews, approved stories and
-          replies, then ask families whether the experience led to a meaningful
+          We will look at completed interviews, approved stories and replies,
+          then ask families whether the experience led to a meaningful
           conversation.
         </p>
       </div>

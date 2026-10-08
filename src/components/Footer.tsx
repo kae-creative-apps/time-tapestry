@@ -37,7 +37,7 @@ export function Footer() {
               href="/pricing"
               className="inline-flex items-center hover:underline"
             >
-              Pilot
+              Pricing
             </Link>
             <Link
               href="/privacy"

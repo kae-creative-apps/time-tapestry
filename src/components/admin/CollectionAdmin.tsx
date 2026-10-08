@@ -151,7 +151,7 @@ export function CollectionAdminList() {
                   by the browser.
                 </p>
                 <p className="mt-3 leading-7">
-                  Pilot allowance:{" "}
+                  Conversation allowance:{" "}
                   {data.health.limits.collectionBytes
                     ? bytes(data.health.limits.collectionBytes)
                     : "configuration needed"}{" "}

@@ -287,7 +287,7 @@ export async function applyInterviewAction(
         : 100;
     if (c.interviews.length >= conversationLimit)
       return fail(
-        "This gift has reached its pilot conversation allowance. Your existing recordings are saved. Contact the Time Tapestry team to request more space.",
+        "This gift has reached its conversation allowance. Your existing recordings are saved. Contact the Time Tapestry team to request more space.",
       );
     if (c.interviews.some((item) => item.status === "active"))
       return fail(

@@ -16,9 +16,10 @@ const inter = Inter({
   display: "swap",
 });
 
-const title = "Time Tapestry | A donor’s legacy of generosity";
+const title =
+  "Time Tapestry | Helping your donors pass on a legacy of generosity";
 const description =
-  "For ministries, nonprofits, foundations, and advancement teams. Time Tapestry helps a major donor pass the story of their generosity — why they give, what it meant, and what they hope their family carries — to their children and grandchildren.";
+  "Helping your donors pass on a legacy of generosity. Ministries, nonprofits, foundations, and advancement teams invite major donors to share why they give — the joy, the faith, the relationships, the lives changed — with their children and grandchildren.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://timetapestry.app"),

@@ -13,9 +13,9 @@ import styles from "@/components/marketing/FrontDoor.module.css";
 const steps = [
   {
     number: "01",
-    title: "Open a pilot.",
+    title: "Invite your donors.",
     description:
-      "Tell us about your ministry, nonprofit, foundation, or advancement team. Choose how many donors to invite. The pilot is free.",
+      "Tell us about your ministry, nonprofit, foundation, or advancement team. Choose how many donors to invite.",
     icon: "handHeart",
   },
   {
@@ -94,7 +94,7 @@ export default function Home() {
               For ministries, nonprofits, and advancement teams
             </p>
             <h1 id="hero-heading">
-              Help your donors pass on
+              Helping your donors pass on
               <br className={styles.heroBreak} /> a legacy of generosity.
             </h1>
             <p className={styles.heroDescription}>
@@ -103,16 +103,13 @@ export default function Home() {
               children and grandchildren.
             </p>
             <div className={styles.actions}>
-              <Link href="/for-organizations" className={styles.primaryButton}>
-                Bring Time Tapestry to your donors{" "}
+              <Link href="/for-organizations#invite-donors" className={styles.primaryButton}>
+                Invite your donors{" "}
                 <AppIcon name="arrowUpRight" size={20} />
               </Link>
-              <Link href="/for-organizations#start-pilot" className={styles.secondaryButton}>
-                Start a pilot <AppIcon name="arrowUpRight" size={20} />
-              </Link>
             </div>
-            <p className={styles.pilotNote}>
-              Free during the pilot. Donors are never asked about gift size.
+            <p className={styles.assuranceNote}>
+              Donors are never asked about gift size.
             </p>
           </div>
           <div className={styles.showcase}>
@@ -278,8 +275,8 @@ export default function Home() {
               Faith questions stay optional. Donors share what is true for them,
               and they are never asked how much they give.
             </p>
-            <Link href="/for-organizations" className={styles.textLink}>
-              Start a pilot for your donors{" "}
+            <Link href="/for-organizations#invite-donors" className={styles.textLink}>
+              Invite your donors{" "}
               <AppIcon name="arrowRight" size={20} />
             </Link>
           </div>
@@ -337,8 +334,8 @@ export default function Home() {
             <p className={styles.eyebrow}>For your organization</p>
             <h2 id="begin-heading">Offer this to the donors you serve.</h2>
             <p>
-              Start a pilot, or read how the free pilot works for ministries,
-              nonprofits, foundations, and advancement teams.
+              Invite major donors at ministries, nonprofits, foundations, and
+              advancement teams to record the story of their generosity.
             </p>
           </div>
           <div className={styles.beginChoices}>
@@ -346,34 +343,21 @@ export default function Home() {
               <AppIcon name="handHeart" size={30} />
               <h3>Bring it to your donors.</h3>
               <p>
-                Set up a pilot and invite major donors to record the story of
-                their generosity for their children and grandchildren.
+                Invite major donors to record the story of their generosity
+                for their children and grandchildren.
               </p>
-              <Link href="/for-organizations" className={styles.primaryButton}>
-                Start a pilot <AppIcon name="arrowUpRight" size={20} />
-              </Link>
-            </div>
-            <div className={`${styles.beginChoice} ${styles.inviteChoice}`}>
-              <AppIcon name="conversation" size={30} />
-              <h3>Talk with us.</h3>
-              <p>
-                The pilot is free, with room for up to 100 donor invitations.
-                Physical postcards are still being tested. Share your
-                organization on the pilot form to begin.
-              </p>
-              <Link href="/pricing" className={styles.secondaryButton}>
-                About the pilot <AppIcon name="arrowUpRight" size={20} />
+              <Link href="/for-organizations#invite-donors" className={styles.primaryButton}>
+                Invite your donors <AppIcon name="arrowUpRight" size={20} />
               </Link>
             </div>
           </div>
-          <p className={styles.beginPilot}>
-            Time Tapestry is free during the pilot. No payment details. Donors
-            are never asked about gift size.{" "}
-            <Link href="/pricing">Pilot details</Link>
+          <p className={styles.beginNote}>
+            No payment details. Donors are never asked about gift size.{" "}
+            <Link href="/pricing">How invitations work</Link>
           </p>
           <div className={styles.organizationLine}>
             <p>A legacy of generosity, in their own voice.</p>
-            <Link href="/for-organizations#start-pilot" className={styles.textLink}>
+            <Link href="/for-organizations#invite-donors" className={styles.textLink}>
               Talk with us <AppIcon name="arrowUpRight" size={20} />
             </Link>
           </div>
