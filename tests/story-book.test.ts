@@ -76,6 +76,7 @@ async function readPdf(bytes: Uint8Array) {
       .filter(
         (line) =>
           !/^TIME TAPESTRY  \/  STORY \d+$/.test(line) &&
+          !/^(?:Kindness|Faith|Generosity|Encouragement)$/.test(line) &&
           !/^\d+ \/ \d+$/.test(line),
       )
       .join(" ")
@@ -105,7 +106,7 @@ test("the printable book contains the cover and all four complete approved chapt
   const bytes = await renderStoryBook(snapshot);
   assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), "%PDF-");
   const { document, text } = await readPdf(bytes);
-  assert.equal(document.getPageCount(), 6);
+  assert.equal(document.getPageCount(), 4);
   assert.match(text, /From Élodie O’Connor/);
   assert.match(text, /For André Example/);
   for (const chapter of c.chapters) {
@@ -138,7 +139,7 @@ test("long stories paginate completely, including the last paragraph", async () 
   const { document, text } = await readPdf(
     await renderStoryBook(storyBookSnapshot(c, c.recipient.name)),
   );
-  assert.ok(document.getPageCount() > 8);
+  assert.ok(document.getPageCount() > 4);
   assert.equal(text.split(paragraph).length - 1, 75);
   assert.match(text, /The last memory stays here too\./);
   for (const chapter of c.chapters.slice(1))
@@ -158,6 +159,75 @@ test("wrapping preserves long words and unsupported characters fail clearly rath
     (error: unknown) =>
       error instanceof StoryBookError && /U\+1F9F5/.test(error.message),
   );
+});
+
+test("each chapter opens with the question asked for that chapter", () => {
+  const c = syntheticFilmCollection();
+  c.status = "approved";
+  c.interviews = [
+    {
+      id: "session",
+      provider: "guided",
+      status: "completed",
+      startedAt: c.createdAt,
+      turns: [
+        {
+          id: "ask-1",
+          sequence: 1,
+          role: "agent",
+          text: "Tell me about kindness.",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "answer-1",
+          sequence: 2,
+          role: "user",
+          text: "A neighbor helped.",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "follow-1",
+          sequence: 3,
+          role: "agent",
+          text: "What did that help mean to you?",
+          chapterId: "q1",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "ask-2",
+          sequence: 4,
+          role: "agent",
+          text: "Tell me about a decision you made while following Jesus.",
+          chapterId: "q2",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+        {
+          id: "answer-2",
+          sequence: 5,
+          role: "user",
+          text: "I stayed.",
+          chapterId: "q2",
+          capturedAt: c.createdAt,
+          timing: "unaligned",
+        },
+      ],
+      segments: [],
+      excludedTurnIds: [],
+    },
+  ];
+  const book = storyBookSnapshot(c, "Sam Example");
+  assert.equal(book.chapters[0].question, "Tell me about kindness.");
+  assert.equal(
+    book.chapters[1].question,
+    "Tell me about a decision you made while following Jesus.",
+  );
+  assert.equal(book.chapters[0].label, "Kindness");
 });
 
 test("draft or incomplete collections cannot become a downloadable book", () => {
@@ -292,7 +362,7 @@ test("mixed Chinese, Japanese, Korean and Latin names and story text remain comp
     c.chapters[0].content,
   ])
     assert.ok(compact.includes(value.replace(/\s/g, "")), value);
-  assert.equal(document.getPageCount(), 6);
+  assert.equal(document.getPageCount(), 4);
 });
 
 test("new editions append only published stories, retain real quotes, and keep the original book available", async () => {
@@ -373,5 +443,5 @@ test("new editions append only published stories, retain real quotes, and keep t
   assert.ok(text.includes(c.livingStory.moments[0].sourceQuote!));
   assert.ok(text.includes(c.livingStory.moments[0].content!));
   assert.equal(text.includes("PRIVATE DRAFT"), false);
-  assert.equal(document.getPageCount(), 8);
+  assert.equal(document.getPageCount(), 5);
 });

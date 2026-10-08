@@ -26,6 +26,8 @@ COPY video/remotion ./video/remotion
 COPY video/templates ./video/templates
 COPY public/brand/film-closer-v2.mp4 ./public/brand/film-closer-v2.mp4
 COPY public/brand/fonts/quicksand-latin.woff2 ./public/brand/fonts/quicksand-latin.woff2
+COPY public/brand/fonts/inter-latin-400.woff2 ./public/brand/fonts/inter-latin-400.woff2
+COPY public/brand/audio/question-card-bed.wav ./public/brand/audio/question-card-bed.wav
 
 ENV NODE_ENV=production \
     STORY_FILM_WORKER_HOSTED=true \
