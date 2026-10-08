@@ -67,6 +67,16 @@ async function main() {
     const font = path.resolve("public/brand/fonts/quicksand-latin.woff2");
     const fontBytes = await readFile(font);
     assert.equal(fontBytes.subarray(0, 4).toString("ascii"), "wOF2");
+    const questionFont = path.resolve(
+      "public/brand/fonts/inter-latin-400.woff2",
+    );
+    const questionFontBytes = await readFile(questionFont);
+    assert.equal(questionFontBytes.subarray(0, 4).toString("ascii"), "wOF2");
+    const questionMusic = path.resolve(
+      "public/brand/audio/question-card-bed.wav",
+    );
+    const questionMusicStat = await stat(questionMusic);
+    assert(questionMusicStat.size > 44, "question-card music is empty");
     const closer = path.resolve("public/brand/film-closer-v2.mp4");
     const closerProbe = await probeFilm(closer);
     assert(closerProbe.types.includes("video"));
