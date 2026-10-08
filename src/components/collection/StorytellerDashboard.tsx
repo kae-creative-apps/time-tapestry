@@ -19,7 +19,9 @@ import {
 import type { CollectionView } from "@/lib/collection/types";
 import type { InterviewPreparationView } from "@/lib/collection/interview-preparation-types";
 import type { PostcardProofSnapshot } from "@/lib/collection/postcard-proofs";
+import { hasChapterPlayback } from "@/lib/audio/playback-types";
 import { hasRecordedVoiceFilm } from "./recorded-films";
+import { StoryFilmPlayer } from "./StoryFilmPlayer";
 import { mediaPath } from "./PortalUI";
 import styles from "./StorytellerDashboard.module.css";
 
@@ -449,7 +451,19 @@ function GiftPreview({
           <div className={styles.strip}>
             {chapters.map((chapter) => (
               <article key={`${chapter.id}-film`} className={styles.tile}>
-                {hasRecordedVoiceFilm(chapter) ? (
+                {chapter.playback && hasChapterPlayback(chapter) ? (
+                  <StoryFilmPlayer
+                    title={chapter.title}
+                    storytellerName={collection.storyteller.name}
+                    src={mediaPath(
+                      collection.id,
+                      chapter.playback.mediaId,
+                      accessKey,
+                    )}
+                    playback={chapter.playback}
+                    preload="none"
+                  />
+                ) : hasRecordedVoiceFilm(chapter) ? (
                   <StoryMediaPlayer
                     label={chapter.title}
                     src={mediaPath(

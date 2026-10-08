@@ -72,6 +72,46 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
   );
   assert.equal((await jobs.getFilmJob(failed.id))!.attempts, 1);
   assert.equal((await jobs.getFilmJob(failed.id))!.status, "failed");
+  const confident =
+    "The saved answer could not be matched confidently to its original recording. No automatic cut was made.";
+  const staleMatcher = await store.mutateRecord<StoryFilmJob>(
+    queued.id,
+    (job) => {
+      const next = { ...job! };
+      delete next.sourceMatchRevision;
+      return {
+        ...next,
+        status: "failed",
+        attempts: 1,
+        error: confident,
+        chapters: job!.chapters.map((chapter) => ({
+          ...chapter,
+          status: "failed",
+          error: confident,
+        })),
+      };
+    },
+  );
+  assert.equal(jobs.filmJobView(staleMatcher).retryAllowed, true);
+  assert.equal(
+    (await jobs.retryStoryFilms(c, queued.id, true)).status,
+    "queued",
+  );
+  const currentMatcher = await store.mutateRecord<StoryFilmJob>(
+    queued.id,
+    (job) => ({
+      ...job!,
+      status: "failed",
+      attempts: 2,
+      sourceMatchRevision: 2,
+      error: confident,
+    }),
+  );
+  assert.equal(jobs.filmJobView(currentMatcher).retryAllowed, false);
+  await assert.rejects(
+    jobs.retryStoryFilms(c, queued.id, true),
+    /editor check/,
+  );
   for (const error of [
     "The same answer occurs more than once in its recordings. Automatic editing could not choose a unique passage.",
     "The complete answer boundaries could not be verified. No partial-thought cut was made.",

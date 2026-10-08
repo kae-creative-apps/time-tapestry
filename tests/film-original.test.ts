@@ -125,6 +125,97 @@ test("ambiguous, unrelated, multiple speaker and out of range timestamps stop au
       ),
     /measured length/,
   );
+  const unrelated = [
+    ...words("I remember the blue bicycle"),
+    ...words("beside the quiet kitchen window").map((word) => ({
+      ...word,
+      speakerId: "speaker_1",
+      startMs: word.startMs + 8000,
+      endMs: word.endMs + 8000,
+    })),
+  ];
+  assert.throws(
+    () =>
+      matchSourceWords("the garden was a very different place", unrelated),
+    /confidently|more than once/,
+  );
+  const repeatedSpeakers = [
+    ...words("I remember the blue bicycle"),
+    ...words("I remember the blue bicycle").map((word) => ({
+      ...word,
+      speakerId: "speaker_1",
+      startMs: word.startMs + 8000,
+      endMs: word.endMs + 8000,
+    })),
+  ];
+  assert.throws(
+    () => matchSourceWords("I remember the blue bicycle", repeatedSpeakers),
+    /more than once/,
+  );
+});
+test("interviewer speech inside a saved answer is not charged against the match and is left out of the cut", () => {
+  const answer =
+    "I learned patience while fixing a bicycle and then I rode it home to my grandmother";
+  const question =
+    "Can you say more about the bicycle and the ride home today";
+  const mediaId = "source_123";
+  let tick = 100;
+  const speak = (text: string, speakerId: string) =>
+    text.split(" ").map((text): SourceWord => {
+      const word = {
+        text,
+        mediaId,
+        startMs: tick,
+        endMs: tick + 250,
+        speakerId,
+      };
+      tick += 400;
+      return word;
+    });
+  const halves = answer.split(" fixing ");
+  const source = [
+    ...speak(`${halves[0]} fixing`, "speaker_0"),
+    ...speak(question, "speaker_1"),
+    ...speak(halves[1], "speaker_0"),
+  ];
+  const matched = matchSourceWords(answer, source);
+  assert.equal(matched.words.map((word) => word.text).join(" "), answer);
+  assert.ok(matched.words.every((word) => word.speakerId === "speaker_0"));
+  const cuts = cutsForMatchedWords(
+    matched.words,
+    source,
+    new Map([[mediaId, 60000]]),
+  );
+  assert.equal(cuts.length, 2);
+  const caption = cuts
+    .flatMap((cut) => cut.captions ?? [])
+    .map((item) => item.text)
+    .join(" ");
+  assert.equal(caption.includes("say more"), false);
+  assert.ok(cuts[0].outMs <= source.find((word) => word.speakerId === "speaker_1")!.startMs);
+  assert.ok(
+    cuts[1].inMs >=
+      source.filter((word) => word.speakerId === "speaker_1").at(-1)!.endMs,
+  );
+});
+test("a same-speaker pause stays one continuous cut", () => {
+  const source = words(
+    "I learned patience while fixing a bicycle beside the window",
+  );
+  for (const word of source.slice(4)) {
+    word.startMs += 2500;
+    word.endMs += 2500;
+  }
+  const matched = matchSourceWords(
+    "I learned patience while fixing a bicycle beside the window",
+    source,
+  );
+  const cuts = cutsForMatchedWords(
+    matched.words,
+    source,
+    new Map([["source_123", 20000]]),
+  );
+  assert.equal(cuts.length, 1);
 });
 test("manual edit protects stale tabs and rejects unrelated or foreign media", async () => {
   const c = await fixture();

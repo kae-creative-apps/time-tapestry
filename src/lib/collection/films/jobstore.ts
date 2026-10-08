@@ -28,6 +28,7 @@ import {
   AUTOMATIC_TEMPLATE_VERSION,
   ORIGINAL_TEMPLATE_VERSION,
 } from "./original-plan";
+import { SOURCE_MATCH_REVISION } from "./word-matching";
 import type { FilmJobView, FilmVoice, StoryFilmJob } from "./types";
 
 const registryKey = "story-film-registry";
@@ -70,16 +71,34 @@ export async function latestFilmJob(collectionId: string) {
   return index?.ids.length ? getFilmJob(index.ids.at(-1)!) : null;
 }
 
+const DETERMINISTIC_SOURCE_FAILURE =
+  /selected source word has no verified positive duration|same answer occurs more than once|complete answer boundaries could not be verified|source-word match did not preserve|saved answer could not be matched confidently|overlapping source words need review|short answer needs a verified neighboring answer|short answer could not be verified|recorded answer is too short to match uniquely|answer needs a smaller source search|multiple detected speakers|source transcription cache failed verification/i;
+
+function sourceFailureErrors(job: StoryFilmJob) {
+  return [job.error, ...job.chapters.map((chapter) => chapter.error)]
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** These checks use the same cached word timing on every retry. A worker or
  * editor must repair the source evidence before trying that version again. */
 function deterministicSourceFailure(job: StoryFilmJob) {
   if (job.preparation !== "automatic") return false;
-  const errors = [job.error, ...job.chapters.map((chapter) => chapter.error)]
-    .filter(Boolean)
-    .join("\n");
-  return /selected source word has no verified positive duration|same answer occurs more than once|complete answer boundaries could not be verified|source-word match did not preserve|saved answer could not be matched confidently|overlapping source words need review|short answer needs a verified neighboring answer|short answer could not be verified|recorded answer is too short to match uniquely|answer needs a smaller source search|multiple detected speakers|source transcription cache failed verification/i.test(
-    errors,
+  return DETERMINISTIC_SOURCE_FAILURE.test(sourceFailureErrors(job));
+}
+
+/** An older confident-match failure can be retried once after the matcher changes.
+ * The same failure from the current matcher stays blocked. */
+function confidentMatchAwaitingCurrentMatcher(job: StoryFilmJob) {
+  if ((job.sourceMatchRevision ?? 0) >= SOURCE_MATCH_REVISION) return false;
+  const errors = sourceFailureErrors(job);
+  if (!/saved answer could not be matched confidently/i.test(errors))
+    return false;
+  const remainder = errors.replace(
+    /the saved answer could not be matched confidently to its original recording\. no automatic cut was made\./gi,
+    "",
   );
+  return !DETERMINISTIC_SOURCE_FAILURE.test(remainder);
 }
 
 export function filmRetryEligibility(job: StoryFilmJob): {
@@ -98,7 +117,10 @@ export function filmRetryEligibility(job: StoryFilmJob): {
       retryBlockedReason:
         "This film job needs an operator check after three attempts. Completed work and original recordings are preserved.",
     };
-  if (deterministicSourceFailure(job))
+  if (
+    deterministicSourceFailure(job) &&
+    !confidentMatchAwaitingCurrentMatcher(job)
+  )
     return {
       retryAllowed: false,
       retryBlockedReason:
@@ -370,6 +392,7 @@ export async function enqueueAutomaticOriginalFilms(
       originalSources: prepared.snapshots,
       automaticPresentation: presentation,
       processingConsentAt: timestamp,
+      sourceMatchRevision: SOURCE_MATCH_REVISION,
       createdAt: timestamp,
       updatedAt: timestamp,
       scriptsApprovedAt: timestamp,
