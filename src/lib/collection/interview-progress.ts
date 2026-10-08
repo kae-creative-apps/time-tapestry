@@ -64,6 +64,7 @@ export function detectInterviewThemeFromQuestion(
     return "q1";
   if (
     /how has your faith shaped why you give/.test(question) ||
+    /how your faith has shaped why you give/.test(question) ||
     /what values have guided the way you give/.test(question) ||
     /(?:decision|choice).{0,100}(?:following jesus|guided by (?:your|their) beliefs).{0,100}(?:changed|affected).{0,40}(?:life|better)/.test(
       question,
@@ -75,6 +76,7 @@ export function detectInterviewThemeFromQuestion(
     return "q2";
   if (
     /why did you fall in love with (?:these|the) ministries/.test(question) ||
+    /why did you fall in love with the ones you give to/.test(question) ||
     /when you think about helping others over the years.{0,90}(?:person|story).{0,40}comes to mind/.test(
       question,
     )
@@ -82,6 +84,9 @@ export function detectInterviewThemeFromQuestion(
     return "q3";
   if (
     /what do you hope .+carr(?:y|ies) from (?:your|a) life of giving/.test(
+      question,
+    ) ||
+    /what is one thing you hope they carry forward from your story of generosity/.test(
       question,
     ) ||
     /looking back at these stories.{0,150}(?:carry|carried).{0,40}(?:life|lives)/.test(

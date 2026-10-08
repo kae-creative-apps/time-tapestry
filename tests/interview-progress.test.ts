@@ -81,6 +81,24 @@ test("planned area questions are recognized without treating closing or follow-u
   );
   assert.equal(
     detectInterviewThemeFromQuestion(
+      "Since we have explored these roots of your generosity, I would love to hear how your faith has shaped why you give.",
+    ),
+    "q2",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "Thinking about the ministries you have supported, why did you fall in love with the ones you give to?",
+    ),
+    "q3",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
+      "As you look toward a grandchild, what is one thing you hope they carry forward from your story of generosity?",
+    ),
+    "q4",
+  );
+  assert.equal(
+    detectInterviewThemeFromQuestion(
       "Is there anything else you would like to say before we finish?",
     ),
     null,
