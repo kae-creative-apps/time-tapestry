@@ -111,7 +111,7 @@ export function filmRetryEligibility(job: StoryFilmJob): {
     !filmTemplateCurrent(job)
   )
     return { retryAllowed: false };
-  if (job.attempts >= 3)
+  if (job.attempts >= 3 && !confidentMatchAwaitingCurrentMatcher(job))
     return {
       retryAllowed: false,
       retryBlockedReason:

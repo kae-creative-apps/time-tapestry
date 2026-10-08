@@ -218,14 +218,27 @@ function alignSourceWords(
     const current = new Uint16Array(width);
     current[0] = i;
     for (let j = 1; j < width; j++) {
-      const diagonal =
-        previous[j - 1] + (query[i - 1] === source[j - 1].text ? 0 : 1);
+      const matchedToken = query[i - 1] === source[j - 1].text;
+      const diagonal = previous[j - 1] + (matchedToken ? 0 : 1);
       const deletion = previous[j] + 1,
         insertion =
           current[j - 1] + (options.ignoreInsertions ? 0 : 1);
       current[j] = Math.min(diagonal, deletion, insertion);
-      trace[i * width + j] =
-        current[j] === diagonal ? 1 : current[j] === deletion ? 2 : 3;
+      // Free insertions must skip a different source word. A tied substitution
+      // would spend the saved word on the interviewer and fail the edge check.
+      trace[i * width + j] = options.ignoreInsertions
+        ? matchedToken && diagonal === current[j]
+          ? 1
+          : insertion === current[j]
+            ? 3
+            : deletion === current[j]
+              ? 2
+              : 1
+        : current[j] === diagonal
+          ? 1
+          : current[j] === deletion
+            ? 2
+            : 3;
     }
     previous = current;
   }
@@ -406,11 +419,17 @@ function alignSourceWords(
   const relaxed = Boolean(
     disputedOpening(best.ops) || pronounEdge(best.ops) || trailingOnly,
   );
-  if (!relaxed && bestCost / query.length > 0.1)
+  // A dedicated recording is matched to its own transcript. A live answer is
+  // an ElevenLabs turn against a scribe transcript of the room mix, so a few
+  // more substitutions are still the same answer. Unrelated text stays near 1.
+  const distanceLimit = options.ignoreInsertions ? 0.4 : 0.1;
+  const coverageLimit = options.ignoreInsertions ? 0.6 : 0.9;
+  const distance = bestCost / query.length;
+  if (!relaxed && distance > distanceLimit)
     throw new Error(
-      "The saved answer could not be matched confidently to its original recording. No automatic cut was made.",
+      `The saved answer could not be matched confidently to its original recording. No automatic cut was made. Match distance ${distance.toFixed(2)}.`,
     );
-  if (!relaxed && (best.matched / query.length < 0.9 || !best.indices.length))
+  if (!relaxed && (best.matched / query.length < coverageLimit || !best.indices.length))
     throw new Error(
       "The source-word match did not preserve enough of the complete answer.",
     );
@@ -434,13 +453,27 @@ function alignSourceWords(
   const trailingOf = (candidate: { ops: AlignOp[]; end: number }) =>
     edgeDrift([...candidate.ops].reverse(), trailingEdgeTokens) ??
     trailingUnspoken(candidate);
-  const verified = candidates
+  const strict = candidates
     .filter((candidate) => leadingOf(candidate.ops) && trailingOf(candidate))
     .sort(
       (left, right) => right.end - right.start - (left.end - left.start),
     )[0];
-  const leading = verified && leadingOf(verified.ops);
-  const trailing = verified && trailingOf(verified);
+  // ElevenLabs and Scribe disagree on a few words of the same answer. The
+  // distance check already required most tokens in order. Start the cut at the
+  // first word both transcripts share instead of rejecting that opener.
+  const liveAligned =
+    !strict && options.ignoreInsertions
+      ? candidates.find(
+          (candidate) =>
+            candidate.ops.some((op) => op.kind === "match") &&
+            candidate.ops.every((op) => op.kind !== "substitute"),
+        )
+      : undefined;
+  const verified = strict ?? liveAligned;
+  const leading =
+    verified && (leadingOf(verified.ops) ?? (liveAligned ? [] : null));
+  const trailing =
+    verified && (trailingOf(verified) ?? (liveAligned ? [] : null));
   if (!verified || !leading || !trailing)
     throw new Error(
       "The complete answer boundaries could not be verified. No partial-thought cut was made.",
@@ -687,7 +720,7 @@ export function matchSourceWords(
 const SPEAKER_MAJORITY = 1.5;
 
 /** Bump when alignment can resolve an older confident-match failure without new audio. */
-export const SOURCE_MATCH_REVISION = 3;
+export const SOURCE_MATCH_REVISION = 4;
 
 /** Spoken duration of each diarized speaker. Unlabeled words are not a speaker. */
 export function dominantSpeaker(words: SourceWord[]): string | null {

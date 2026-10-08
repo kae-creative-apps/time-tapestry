@@ -198,6 +198,43 @@ test("interviewer speech inside a saved answer is not charged against the match 
       source.filter((word) => word.speakerId === "speaker_1").at(-1)!.endMs,
   );
 });
+test("a room recording can skip extra words without accepting an unrelated answer", () => {
+  const source = words(
+    "I learned patience while fixing a bicycle and then I rode it home to my grandmother",
+  );
+  assert.throws(
+    () =>
+      matchSourceWords(
+        "the garden was a very different place entirely yesterday",
+        source,
+        { ignoreInsertions: true },
+      ),
+    /confidently|more than once|did not preserve/,
+  );
+});
+test("a live answer still matches when the room transcript heard some different words", () => {
+  const spoken =
+    "I learned patience while fixing a bicycle and then I rode it home to my grandmother after school";
+  const source = words(
+    `well so ${spoken.replaceAll(" patience ", " calm ").replaceAll(" bicycle ", " bike ").replaceAll(" grandmother ", " grandma ")}`,
+  );
+  const matched = matchSourceWords(
+    `actually honestly ${spoken} today really`,
+    source,
+    { ignoreInsertions: true },
+  );
+  assert.equal(matched.words[0].text, "I");
+  assert.equal(matched.words.at(-1)!.text, "school");
+  assert.equal(
+    matched.words.some((word) => word.text === "well"),
+    false,
+  );
+  assert.ok(matched.confidence >= 0.6);
+  assert.throws(
+    () => matchSourceWords(`actually honestly ${spoken} today really`, source),
+    /confidently|boundaries|did not preserve/,
+  );
+});
 test("a same-speaker pause stays one continuous cut", () => {
   const source = words(
     "I learned patience while fixing a bicycle beside the window",
