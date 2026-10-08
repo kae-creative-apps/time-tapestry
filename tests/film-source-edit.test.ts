@@ -676,3 +676,93 @@ test("cached untimed alignment tokens are reused unchanged without a second tran
     "selected timing failure must not re-spend on Scribe",
   );
 });
+
+async function withMatchLogs(run: () => Promise<unknown>) {
+  const logs: string[] = [];
+  const original = console.info;
+  console.info = (...args: unknown[]) => {
+    logs.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    return { result: await run(), logs };
+  } finally {
+    console.info = original;
+  }
+}
+
+test("an answer missing from the recording is logged and the later answers still match", async () => {
+  const f = fixture();
+  const skipped =
+    "The orchard was a very different place entirely yesterday afternoon";
+  const turn = {
+    id: "synthetic_turn_unmatched",
+    role: "user" as const,
+    chapterId: "q1" as const,
+    sequence: -1,
+    capturedAt: f.c.createdAt,
+    timing: "unaligned" as const,
+    text: skipped,
+  };
+  f.c.interviews![0].turns.unshift(turn);
+  f.c.chapters[0].sourceTakeIds.unshift(`live-${turn.id}`);
+  const { result, logs } = await withMatchLogs(() =>
+    assembleSourceEdits(
+      f.c,
+      f.job,
+      new Map([[f.words[0].mediaId, f.words]]),
+      f.durations,
+      [],
+    ),
+  );
+  const assembled = result as Awaited<ReturnType<typeof assembleSourceEdits>>;
+  const q1 = assembled.chapters[0];
+  assert.equal(q1.status, "preparing");
+  assert.equal(q1.error, undefined);
+  assert.ok(q1.sourceEdit!.clips.length >= 1);
+  assert.match(JSON.stringify(q1.sourceEdit!.clips), /grandmother/);
+  assert.ok(q1.sourceEdit!.clips[0].inMs <= f.wordGroups[0][0].startMs + 1);
+  const logged = logs.join("\n");
+  assert.match(logged, /film_answer_not_in_recording/);
+  assert.match(logged, /synthetic_turn_unmatched/);
+  assert.equal(logged.includes("orchard"), false);
+  assert.equal(logged.includes(skipped), false);
+  for (const chapter of assembled.chapters.slice(1)) {
+    assert.equal(chapter.status, "preparing");
+    assert.equal(chapter.error, undefined);
+  }
+});
+
+test("a chapter fails alone when its own answers are missing from the recording", async () => {
+  const f = fixture();
+  const skipped =
+    "The orchard was a very different place entirely yesterday afternoon";
+  const q4Turn = f.c.interviews![0].turns[5];
+  q4Turn.text = skipped;
+  const { result, logs } = await withMatchLogs(() =>
+    assembleSourceEdits(
+      f.c,
+      f.job,
+      new Map([[f.words[0].mediaId, f.words]]),
+      f.durations,
+      [],
+    ),
+  );
+  const assembled = result as Awaited<ReturnType<typeof assembleSourceEdits>>;
+  const q4 = assembled.chapters[3];
+  assert.equal(q4.status, "failed");
+  assert.equal(q4.sourceEdit, undefined);
+  assert.equal(
+    q4.error,
+    "This chapter's saved answers could not be matched to its original recording. No automatic cut was made.",
+  );
+  for (const chapter of assembled.chapters.slice(0, 3)) {
+    assert.equal(chapter.status, "preparing");
+    assert.equal(chapter.error, undefined);
+    assert.ok(chapter.sourceEdit!.clips.length >= 1);
+    assert.equal(JSON.stringify(chapter).includes(q4.error!), false);
+  }
+  const logged = logs.join("\n");
+  assert.match(logged, /film_answer_not_in_recording/);
+  assert.match(logged, new RegExp(q4Turn.id));
+  assert.equal(logged.includes("orchard"), false);
+});

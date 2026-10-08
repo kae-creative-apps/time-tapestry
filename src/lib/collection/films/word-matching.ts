@@ -720,7 +720,7 @@ export function matchSourceWords(
 const SPEAKER_MAJORITY = 1.5;
 
 /** Bump when alignment can resolve an older confident-match failure without new audio. */
-export const SOURCE_MATCH_REVISION = 4;
+export const SOURCE_MATCH_REVISION = 5;
 
 /** Spoken duration of each diarized speaker. Unlabeled words are not a speaker. */
 export function dominantSpeaker(words: SourceWord[]): string | null {
