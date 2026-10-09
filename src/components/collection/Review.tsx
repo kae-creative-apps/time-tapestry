@@ -6,6 +6,7 @@ import { useCollection } from "./useCollection";
 import { CollectionSharing } from "./CollectionSharing";
 import { OwnerReplies } from "./OwnerReplies";
 import { hasChapterPlayback } from "@/lib/audio/playback-types";
+import { hasRecordedVoiceFilm } from "./recorded-films";
 import { FilmGenerationPanel, StoryExportPanel } from "./FilmGenerationPanel";
 import { StoryReviewPanel } from "./StoryReviewPanel";
 import { PostcardProof } from "./PostcardProof";
@@ -253,6 +254,9 @@ export default function Review({
   const approved = c.status === "approved";
   const playbackReady =
     c.chapters.length === 4 && c.chapters.every(hasChapterPlayback);
+  const readyCount = c.chapters.filter(
+    (chapter) => hasChapterPlayback(chapter) || hasRecordedVoiceFilm(chapter),
+  ).length;
   const filmsReady =
     playbackReady ||
     (c.chapters.length === 4 &&
@@ -415,6 +419,12 @@ export default function Review({
               </section>
             )}
             <div hidden={step !== 0}>
+              {readyCount > 0 && readyCount < 4 && (
+                <p className="mb-4 rounded-xl bg-paper p-4 text-base leading-7">
+                  {readyCount} of 4 stories are ready. You can watch them.
+                  Sharing waits until all four are ready.
+                </p>
+              )}
               <nav
                 aria-label="Choose a chapter"
                 className="mb-3 grid grid-cols-4 gap-2"
@@ -614,8 +624,8 @@ export default function Review({
               </label>
               {!filmsReady && (
                 <p className="mt-3 text-base leading-7 text-ink-600">
-                  Approval opens when all four stories are ready. You can leave
-                  and return to your saved gift.
+                  Sharing waits until all four stories are ready. You can watch
+                  the ones that are ready now.
                 </p>
               )}
               {postcardPending && (

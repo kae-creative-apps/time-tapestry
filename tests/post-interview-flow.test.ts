@@ -85,7 +85,7 @@ test("legacy narrated films and unverified saved videos are not offered as finis
       html,
       /<video|legacy-synthetic-voice|AI voice reads|AI narration/,
     );
-    assert.match(html, /The finished chapter film is not ready yet/);
+    assert.match(html, /This story is not ready yet/);
     assert.match(html, /blue notebook/);
   }
 });

@@ -604,7 +604,12 @@ test("all four outputs attach atomically and repeated attachment preserves revie
     Date.now(),
     queued.id,
   ))!;
-  await assert.rejects(jobs.attachReadyFilms(claimed), /All four/);
+  await jobs.attachReadyFilms(claimed);
+  assert.ok(
+    (await store.getCollection(c.id))!.chapters.every(
+      (chapter) => !chapter.film,
+    ),
+  );
   for (const chapter of claimed.chapters) {
     const mediaId = `synthetic_media_${c.id}_${chapter.chapterId}`;
     await store.putMedia({
@@ -664,6 +669,12 @@ test("all four outputs attach atomically and repeated attachment preserves revie
     attached.chapters.every(
       (chapter) => chapter.film && !chapter.editorialReviewed,
     ),
+  );
+  assert.equal(
+    attached.notifications.filter((notice) =>
+      notice.id.includes(":films-ready:"),
+    ).length,
+    1,
   );
   attached.chapters[0].editorialReviewed = true;
   await store.putCollection(attached);
@@ -778,6 +789,20 @@ test("a matcher miss queues one storyteller attention notice and does not duplic
   const result = await processFilmJob(claimed);
   assert.equal(result?.status, "failed");
   const saved = (await store.getCollection(c.id))!;
+  assert.equal(
+    saved.chapters.filter((chapter) => chapter.film).length,
+    3,
+  );
+  assert.equal(
+    saved.chapters.find((chapter) => chapter.id === missed.chapterId)?.film,
+    undefined,
+  );
+  assert.equal(
+    saved.notifications.filter((notice) =>
+      notice.id.includes(":films-ready:"),
+    ).length,
+    0,
+  );
   const notices = saved.notifications.filter(
     (notice) => notice.kind === "preparation_attention",
   );
@@ -794,6 +819,48 @@ test("a matcher miss queues one storyteller attention notice and does not duplic
     ).length,
     1,
   );
+});
+
+test("finished films attach when one chapter is still missing", async () => {
+  const { c, claimed } = await completedClaim();
+  const missed = claimed.chapters[2];
+  missed.artifact = undefined;
+  missed.status = "failed";
+  await jobs.updateFilmJob(claimed.id, claimed.lease!.token, () => claimed);
+  await jobs.attachReadyFilms(claimed);
+  const saved = (await store.getCollection(c.id))!;
+  assert.equal(saved.chapters.filter((chapter) => chapter.film).length, 3);
+  assert.equal(
+    saved.chapters.find((chapter) => chapter.id === missed.chapterId)?.film,
+    undefined,
+  );
+  assert.equal(
+    saved.notifications.filter((notice) =>
+      notice.id.includes(":films-ready:"),
+    ).length,
+    0,
+  );
+  const { approveCollection } = await import("../src/lib/collection/content");
+  const reviewedFilmHashes = Object.fromEntries(
+    saved.chapters
+      .filter((chapter) => chapter.film)
+      .map((chapter) => [chapter.id, chapter.film!.outputSha256]),
+  );
+  assert.throws(
+    () =>
+      approveCollection(saved, saved.createdAt, {
+        recordingsReviewed: true,
+        reviewedFilmHashes,
+      }),
+    /all four/i,
+  );
+});
+
+test("downloadable exports still wait for all four films", async () => {
+  const { claimed } = await completedClaim();
+  claimed.sourceJobId = "film_source";
+  claimed.chapters[0].artifact = undefined;
+  await assert.rejects(jobs.attachReadyFilms(claimed), /All four/);
 });
 
 test("worker completion reuses four preserved artifacts and settles ready without provider calls", async () => {

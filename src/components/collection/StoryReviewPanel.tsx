@@ -144,8 +144,8 @@ export function StoryReviewPanel({
         ) : (
           <>
             <p className="mb-4 rounded-xl bg-paper p-4 text-base leading-7">
-              The finished chapter film is not ready yet. The recording below is
-              your full interview, not the film your family will receive.
+              This story is not ready yet. You can still listen to your
+              recording.
             </p>
             {original}
           </>

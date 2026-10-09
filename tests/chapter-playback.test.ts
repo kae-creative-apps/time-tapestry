@@ -197,6 +197,35 @@ test("finished chapter audio can attach after a retry left those chapters prepar
   assert.ok(saved.chapters.every((chapter) => chapter.playback?.mediaId));
 });
 
+test("finished chapter audio attaches when one chapter is still missing", async () => {
+  const { c, job } = await fixture();
+  await store.mutateCollection(c.id, (current) => {
+    for (const chapter of current.chapters) chapter.playback = undefined;
+    current.notifications = current.notifications.filter(
+      (notice) => !notice.id.includes(":playback-ready:"),
+    );
+    return current;
+  });
+  const missed = job.chapters[1];
+  missed.playback = undefined;
+  missed.status = "failed";
+  await store.mutateRecord(job.id, () => job);
+  await jobs.attachReadyFilms(job);
+  const saved = (await store.getCollection(c.id))!;
+  assert.equal(saved.chapters.filter((chapter) => chapter.playback).length, 3);
+  assert.equal(
+    saved.chapters.find((chapter) => chapter.id === missed.chapterId)?.playback,
+    undefined,
+  );
+  assert.equal(await playback.playbackReady(saved, job), false);
+  assert.equal(
+    saved.notifications.filter((notice) =>
+      notice.id.includes(":playback-ready:"),
+    ).length,
+    0,
+  );
+});
+
 test("reattaching an identical playback checkpoint retains review marks", async () => {
   const { c, job } = await fixture();
   const reviewed = await store.mutateCollection(c.id, (current) => {

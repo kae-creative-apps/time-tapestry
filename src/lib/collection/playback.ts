@@ -52,6 +52,31 @@ export function playbackJobMatchesCollection(job: StoryFilmJob, c: Collection) {
     }),
   );
 }
+async function chapterPlaybackStored(
+  c: Collection,
+  job: StoryFilmJob,
+  chapter: Collection["chapters"][number],
+) {
+  const p = chapter.playback;
+  if (!p) return false;
+  const saved = job.chapters.find((item) => item.chapterId === chapter.id);
+  const m = await getMedia(p.mediaId);
+  return Boolean(
+    saved?.playback &&
+    saved.status === "ready" &&
+    p.jobId === job.id &&
+    samePlayback(p, saved.playback) &&
+    p.mediaId === playbackMediaId(p) &&
+    m &&
+    m.collectionId === c.id &&
+    m.role === "owner" &&
+    m.provenance === "chapter_playback" &&
+    m.mimeType === "audio/mp4" &&
+    m.bytes > 0 &&
+    (m.url || m.localPath),
+  );
+}
+
 export async function playbackReady(c: Collection, job?: StoryFilmJob | null) {
   if (
     c.draftOutdated ||
@@ -74,26 +99,7 @@ export async function playbackReady(c: Collection, job?: StoryFilmJob | null) {
   )
     return false;
   for (const chapter of c.chapters) {
-    const p = chapter.playback!;
-    const saved = current.chapters.find(
-      (item) => item.chapterId === chapter.id,
-    );
-    const m = await getMedia(p.mediaId);
-    if (
-      !saved?.playback ||
-      saved.status !== "ready" ||
-      p.jobId !== current.id ||
-      !samePlayback(p, saved.playback) ||
-      p.mediaId !== playbackMediaId(p) ||
-      !m ||
-      m.collectionId !== c.id ||
-      m.role !== "owner" ||
-      m.provenance !== "chapter_playback" ||
-      m.mimeType !== "audio/mp4" ||
-      m.bytes <= 0 ||
-      !(m.url || m.localPath)
-    )
-      return false;
+    if (!(await chapterPlaybackStored(c, current, chapter))) return false;
   }
   return true;
 }
@@ -132,12 +138,10 @@ export async function playbackExportReady(c: Collection, job: StoryFilmJob) {
   return true;
 }
 export async function attachChapterPlayback(job: StoryFilmJob) {
-  if (
-    job.outputMode !== "interactive" ||
-    job.chapters.length !== 4 ||
-    job.chapters.some((chapter) => !chapter.playback)
-  )
-    throw new Error("All four chapters must finish before sharing.");
+  if (job.outputMode !== "interactive" || job.chapters.length !== 4)
+    throw new Error("This chapter preparation is incomplete.");
+  const finished = job.chapters.filter((chapter) => chapter.playback);
+  if (!finished.length) return;
   return mutateCollection(job.collectionId, async (c) => {
     const latest = await getFilmJob(job.id);
     if (
@@ -166,7 +170,7 @@ export async function attachChapterPlayback(job: StoryFilmJob) {
         return c;
       throw new Error("Approved chapter playback cannot be replaced.");
     }
-    for (const item of job.chapters) {
+    for (const item of finished) {
       const target = c.chapters.find(
         (chapter) => chapter.id === item.chapterId,
       );
@@ -182,8 +186,14 @@ export async function attachChapterPlayback(job: StoryFilmJob) {
       target.editorialReviewed = false;
       target.reviewedPlaybackSha256 = undefined;
     }
-    if (!(await playbackReady(c, job)))
-      throw new Error("Chapter playback storage verification failed.");
+    for (const item of finished) {
+      const target = c.chapters.find(
+        (chapter) => chapter.id === item.chapterId,
+      );
+      if (!target || !(await chapterPlaybackStored(c, job, target)))
+        throw new Error("Chapter playback storage verification failed.");
+    }
+    if (!(await playbackReady(c, job))) return c;
     const id = `${c.id}:playback-ready:${job.id}`;
     if (!c.notifications.some((notice) => notice.id === id))
       c.notifications.push({

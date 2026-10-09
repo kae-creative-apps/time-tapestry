@@ -87,7 +87,7 @@ function PreparationPanel({
     ).catch(() => {
       if (alive.current)
         setError(
-          "Your stories are ready, but this page could not refresh. Check your connection, then check progress again. Your stories will not be remade.",
+          "This page could not refresh. Check your connection, then check progress again. Your stories will not be remade.",
         );
     });
   }, []);

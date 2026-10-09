@@ -407,6 +407,7 @@ export async function processFilmJob(
           !chapter.sourceEdit?.clips.length),
     );
     if (blocked.length) {
+      await attachReadyFilms(finished);
       clearInterval(heartbeat);
       await heartbeatWrite;
       const everyChapter = blocked.length === finished.chapters.length;
