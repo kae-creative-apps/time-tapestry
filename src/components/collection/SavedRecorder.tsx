@@ -156,8 +156,10 @@ export default function SavedRecorder(props: SavedRecorderProps) {
             className={`mb-4 aspect-video w-full rounded-md bg-ink-800 ${phase === "starting" || phase === "recording" ? "" : "hidden"}`}
           />
         )}
-        <p className="text-base text-ink-700">{suggestedDuration}</p>
-        <p className="mt-2 text-sm text-ink-400">
+        {suggestedDuration ? (
+          <p className="text-base text-ink-700">{suggestedDuration}</p>
+        ) : null}
+        <p className={`${suggestedDuration ? "mt-2" : ""} text-sm text-ink-400`}>
           Each clip saves on this device while you record, then backs up to your
           collection after you stop. Recording stops automatically at{" "}
           {Math.floor(limit / 60)} minutes. Your other takes stay available to
