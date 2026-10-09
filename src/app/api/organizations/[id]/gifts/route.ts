@@ -5,6 +5,7 @@ import {
   issueGift,
   revokeGift,
   replaceGiftLink,
+  resendGiftInvitation,
   OrganizationError,
 } from "@/lib/organizations/service";
 import {
@@ -28,23 +29,19 @@ export async function POST(
     if (
       body.action !== undefined &&
       body.action !== "revoke" &&
-      body.action !== "replace_link"
+      body.action !== "replace_link" &&
+      body.action !== "resend_invitation"
     )
       throw new OrganizationError("This gift action is not available.", 400);
+    const giftId = typeof body.giftId === "string" ? body.giftId : "";
     const result =
       body.action === "revoke"
-        ? await revokeGift(
-            id,
-            key,
-            typeof body.giftId === "string" ? body.giftId : "",
-          )
+        ? await revokeGift(id, key, giftId)
         : body.action === "replace_link"
-          ? await replaceGiftLink(
-              id,
-              key,
-              typeof body.giftId === "string" ? body.giftId : "",
-            )
-          : await issueGift(id, key, body);
+          ? await replaceGiftLink(id, key, giftId)
+          : body.action === "resend_invitation"
+            ? await resendGiftInvitation(id, key, giftId)
+            : await issueGift(id, key, body);
     return NextResponse.json(result, {
       status: body.action ? 200 : 201,
       headers: privateHeaders,
