@@ -641,7 +641,7 @@ test("a new donor invitation is emailed, and replacing the link is not", async (
   assert.equal(mail.mockOutboxSnapshot()[0].to, "donor@example.com");
   assert.match(
     mail.mockOutboxSnapshot()[0].subject,
-    /Example Church invited you to tell the story of your generosity/,
+    /Example Church invited you to share the story of your generosity/,
   );
   const giftId = parseOrganizationJoinToken(body.giftUrl.split("/").at(-1)!)!
     .giftId;
