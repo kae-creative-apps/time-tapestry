@@ -7,6 +7,7 @@ import {
   matchSourceWords,
   sourceTokenCount,
   sessionWordTimeline,
+  sourceWordHasPositiveDuration,
   storytellerWords,
   type SourceWord,
 } from "./word-matching";
@@ -281,6 +282,53 @@ export async function assembleSourceEdits(
         sourceTakeIds: [answer.id],
         chapterId: answer.liveSource!.chapterId,
         confidence: match.confidence,
+      });
+    }
+    // A live middle chapter can miss its wording and still have a verified
+    // neighbor on both sides. Cut the storyteller speech between those
+    // neighbors instead of leaving the page with no film.
+    for (const chapter of job.chapters) {
+      const edit = edits.get(chapter.chapterId);
+      if (!edit || edit.clips.length) continue;
+      const indexes = answers
+        .map((answer, index) => [index, answer] as const)
+        .filter(
+          ([, answer]) => answer.liveSource?.chapterId === chapter.chapterId,
+        )
+        .map(([index]) => index);
+      if (!indexes.length) continue;
+      const first = indexes[0];
+      const last = indexes.at(-1)!;
+      const before = [...matches.entries()]
+        .filter(([index]) => index < first)
+        .sort((a, b) => b[0] - a[0])[0]?.[1];
+      const after = [...matches.entries()]
+        .filter(([index]) => index > last)
+        .sort((a, b) => a[0] - b[0])[0]?.[1];
+      if (!before || !after) continue;
+      const gap = matchableWords
+        .slice(before.last + 1, after.first)
+        .filter(sourceWordHasPositiveDuration);
+      const durationMs = gap.reduce(
+        (total, word) => total + word.endMs - word.startMs,
+        0,
+      );
+      if (durationMs < 800) continue;
+      for (const clip of cutsForMatchedWords(gap, allWords, durations))
+        addPassage(
+          chapter.chapterId,
+          clip,
+          gap.filter(
+            (word) =>
+              word.mediaId === clip.mediaId &&
+              word.startMs >= clip.inMs &&
+              word.endMs <= clip.outMs,
+          ),
+        );
+      report.push({
+        sourceTakeIds: indexes.map((index) => answers[index].id),
+        chapterId: chapter.chapterId,
+        confidence: 0.5,
       });
     }
   }
