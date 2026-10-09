@@ -171,6 +171,40 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
   assert.equal(jobs.filmJobView(olderChapterMiss).retryAllowed, true);
 });
 
+test("finished chapter audio is ready even if rematch left those chapters preparing", () => {
+  const playback = {
+    schemaVersion: 1 as const,
+    jobId: "film_test",
+    chapterId: "q2",
+    mediaId: "playbackmedia_test",
+    sourceTakeIds: ["take"],
+    sourceSha256: "a".repeat(64),
+    planSha256: "b".repeat(64),
+    outputSha256: "c".repeat(64),
+    durationMs: 1200,
+    words: [{ text: "Hello", startMs: 0, endMs: 400 }],
+    createdAt: new Date().toISOString(),
+  };
+  const restored = jobs.withFinishedChaptersReady({
+    outputMode: "interactive",
+    chapters: [
+      { chapterId: "q1", status: "ready", progress: 1, playback },
+      {
+        chapterId: "q2",
+        status: "preparing",
+        progress: 0,
+        error: "Chapter playback storage verification failed.",
+        playback,
+      },
+      { chapterId: "q3", status: "queued", progress: 0 },
+    ],
+  } as StoryFilmJob);
+  assert.equal(restored.chapters[0].status, "ready");
+  assert.equal(restored.chapters[1].status, "ready");
+  assert.equal(restored.chapters[1].error, undefined);
+  assert.equal(restored.chapters[2].status, "queued");
+});
+
 test("recoverable film failures retain retry while an exhausted job exposes an explicit hold", async () => {
   const c = await syntheticRecordedFilmCollection();
   await store.putCollection(c);

@@ -170,6 +170,33 @@ test("chapter readiness requires exact saved timeline, derived identity and priv
   );
 });
 
+test("finished chapter audio can attach after a retry left those chapters preparing", async () => {
+  const { c, job } = await fixture();
+  await store.mutateCollection(c.id, (current) => {
+    for (const chapter of current.chapters) {
+      chapter.playback = undefined;
+      chapter.editorialReviewed = false;
+    }
+    return current;
+  });
+  for (const chapter of job.chapters.slice(0, 3)) {
+    chapter.status = "preparing";
+    chapter.progress = 0;
+    chapter.error = "Chapter playback storage verification failed.";
+  }
+  await store.mutateRecord(job.id, () => job);
+  assert.equal(
+    await playback.playbackReady((await store.getCollection(c.id))!, job),
+    false,
+  );
+  const finished = jobs.withFinishedChaptersReady(job);
+  assert.ok(finished.chapters.every((chapter) => chapter.status === "ready"));
+  await jobs.attachReadyFilms(finished);
+  const saved = (await store.getCollection(c.id))!;
+  assert.equal(await playback.playbackReady(saved, finished), true);
+  assert.ok(saved.chapters.every((chapter) => chapter.playback?.mediaId));
+});
+
 test("reattaching an identical playback checkpoint retains review marks", async () => {
   const { c, job } = await fixture();
   const reviewed = await store.mutateCollection(c.id, (current) => {
