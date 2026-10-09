@@ -272,7 +272,7 @@ export default function InterviewComplete({
     ready,
     accepted,
     needsAttention,
-    canRetry: preparation?.canRetry !== false,
+    canRetry: preparation?.canRetry === true,
     canUseFullInterview,
     missingAreaId: preparation?.missingAreas?.[0]?.id,
     preparationStatus: preparation?.status,

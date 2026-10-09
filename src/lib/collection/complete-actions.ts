@@ -34,8 +34,9 @@ export function completePageAction(input: {
       };
     if (input.canRetry) return { kind: "retry", label: "Try again" };
     return {
-      kind: "status",
-      label: "Contact Time Tapestry with your private link.",
+      kind: "link",
+      label: "See your stories",
+      href: input.reviewHref,
     };
   }
   if (!input.accepted)
