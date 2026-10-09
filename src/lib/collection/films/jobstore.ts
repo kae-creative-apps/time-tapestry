@@ -590,8 +590,7 @@ export async function claimNextFilmJob(
 }
 
 /** A retry can keep finished audio while rematch sets those chapters back to
- * preparing. Attach still requires ready chapters, so restore that status
- * before sharing. */
+ * preparing. Attach requires those finished chapters to be marked ready. */
 export function withFinishedChaptersReady(job: StoryFilmJob): StoryFilmJob {
   return {
     ...job,
@@ -632,11 +631,15 @@ export async function updateFilmJob(
 
 export async function attachReadyFilms(job: StoryFilmJob) {
   if (job.outputMode === "interactive") return attachChapterPlayback(job);
-  if (
-    job.chapters.length !== 4 ||
-    job.chapters.some((chapter) => !chapter.artifact)
-  )
-    throw new Error("All four films must finish before attachment.");
+  const finished = job.chapters.filter((chapter) => chapter.artifact);
+  if (job.sourceJobId) {
+    if (job.chapters.length !== 4 || finished.length !== 4)
+      throw new Error("All four films must finish before attachment.");
+  } else if (job.chapters.length !== 4) {
+    throw new Error("This film job is incomplete.");
+  } else if (!finished.length) {
+    return;
+  }
   return mutateCollection(job.collectionId, async (c) => {
     const latest = await getFilmJob(job.id);
     if (
@@ -659,7 +662,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
         "The stories changed while rendering. Completed films are preserved but have not been shared.",
       );
     if (
-      job.chapters.every(
+      finished.every(
         (chapter) =>
           c.chapters.find((entry) => entry.id === chapter.chapterId)?.film
             ?.outputSha256 === chapter.artifact!.outputSha256,
@@ -674,7 +677,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
         "The stories changed while rendering. Completed films are preserved but have not been shared.",
       );
     if (job.mode !== "original") throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
-    for (const chapter of job.chapters) {
+    for (const chapter of finished) {
       const artifact = chapter.artifact!;
       if (artifact.narrationKind !== "original_recording") {
         throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
@@ -688,7 +691,7 @@ export async function attachReadyFilms(job: StoryFilmJob) {
       )
         throw new Error("A finished film is missing private storage.");
     }
-    for (const chapter of job.chapters) {
+    for (const chapter of finished) {
       const target = c.chapters.find(
         (entry) => entry.id === chapter.chapterId,
       )!;
@@ -699,6 +702,11 @@ export async function attachReadyFilms(job: StoryFilmJob) {
         target.playback.exportSha256 = chapter.artifact!.outputSha256;
         continue;
       }
+      if (
+        target.film?.outputSha256 === chapter.artifact!.outputSha256 &&
+        target.videoMediaId === chapter.artifact!.mediaId
+      )
+        continue;
       await preserveGeneratedFilmProvenance(c.id, target, getMedia, putMedia);
       target.playback = undefined;
       target.reviewedPlaybackSha256 = undefined;
@@ -721,7 +729,15 @@ export async function attachReadyFilms(job: StoryFilmJob) {
           dueAt: nowIso(),
           status: "pending",
         });
-    } else queueFilmsReady(c, job.id);
+    } else if (
+      job.chapters.every(
+        (chapter) =>
+          chapter.artifact &&
+          c.chapters.find((entry) => entry.id === chapter.chapterId)?.film
+            ?.outputSha256 === chapter.artifact.outputSha256,
+      )
+    )
+      queueFilmsReady(c, job.id);
     return c;
   });
 }
