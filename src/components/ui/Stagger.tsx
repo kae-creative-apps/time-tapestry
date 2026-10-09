@@ -8,18 +8,22 @@ interface StaggerProps {
   className?: string;
   stagger?: number;
   delay?: number;
+  when?: 'mount' | 'view';
 }
 
-export function Stagger({ children, className = '', stagger = 0.1, delay = 0 }: StaggerProps) {
+export function Stagger({ children, className = '', stagger = 0.1, delay = 0, when = 'mount' }: StaggerProps) {
   const reduceMotion = useReducedMotion();
   return (
     <motion.div
       initial={reduceMotion ? false : "hidden"}
-      animate="visible"
+      animate={when === 'mount' ? "visible" : undefined}
+      whileInView={when === 'view' ? "visible" : undefined}
+      viewport={when === 'view' ? { once: true, amount: 0.15 } : undefined}
       variants={{
         visible: { transition: { staggerChildren: reduceMotion ? 0 : stagger, delayChildren: reduceMotion ? 0 : delay } },
         hidden: {}
       }}
+      data-reveal=""
       className={className}
     >
       {children}

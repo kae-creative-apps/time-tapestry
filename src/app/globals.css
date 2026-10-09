@@ -220,6 +220,13 @@ a {
   }
 }
 
+@media (scripting: none) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* Brand fields carry the expressive identity; content sits on quiet surfaces. */
 .brand-gradient-chocolate {
   background-color: #432e23;

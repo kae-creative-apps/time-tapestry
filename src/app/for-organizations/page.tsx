@@ -4,6 +4,7 @@ import { BrandPattern } from "@/components/BrandPattern";
 import { AppIcon } from "@/components/icons";
 import { OrganizationSetup } from "@/components/organizations/OrganizationSetup";
 import { OrganizationShell } from "@/components/organizations/shared";
+import { FadeIn } from "@/components/ui/FadeIn";
 
 const title = "Invite your donors | Time Tapestry";
 const description =
@@ -24,7 +25,7 @@ export default function ForOrganizations() {
     <OrganizationShell>
       <main className="mx-auto max-w-6xl px-5 pb-8 pt-5 sm:px-8 sm:pt-10">
         <div className="grid items-start gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
-          <div>
+          <FadeIn when="view">
             <div className="brand-gradient-chocolate relative isolate overflow-hidden rounded-[28px] px-7 py-9 text-white sm:px-9 sm:py-11">
               <BrandPattern
                 variant="ribbon"
@@ -83,8 +84,10 @@ export default function ForOrganizations() {
                 </li>
               ))}
             </ol>
-          </div>
-          <OrganizationSetup />
+          </FadeIn>
+          <FadeIn when="view" delay={0.1}>
+            <OrganizationSetup />
+          </FadeIn>
         </div>
       </main>
     </OrganizationShell>

@@ -9,6 +9,7 @@ interface FadeInProps {
   duration?: number;
   className?: string;
   direction?: 'up' | 'down' | 'left' | 'right';
+  when?: 'mount' | 'view';
 }
 
 export function FadeIn({
@@ -16,7 +17,8 @@ export function FadeIn({
   delay = 0,
   duration = 0.6,
   className = '',
-  direction = 'up'
+  direction = 'up',
+  when = 'mount'
 }: FadeInProps) {
   const reduceMotion = useReducedMotion();
   const offset = {
@@ -25,12 +27,22 @@ export function FadeIn({
     left: { x: 24, y: 0 },
     right: { x: -24, y: 0 }
   }[direction];
+  const shown = { opacity: 1, x: 0, y: 0 };
+  const hidden = reduceMotion ? false : { opacity: 0, ...offset };
+  const transition = {
+    duration: reduceMotion ? 0 : duration,
+    delay: reduceMotion ? 0 : delay,
+    ease: 'easeOut' as const
+  };
 
   return (
     <motion.div
-      initial={reduceMotion ? false : { opacity: 0, ...offset }}
-      animate={{ opacity: 1, x: 0, y: 0 }}
-      transition={{ duration: reduceMotion ? 0 : duration, delay: reduceMotion ? 0 : delay, ease: 'easeOut' }}
+      initial={hidden}
+      animate={when === 'mount' ? shown : undefined}
+      whileInView={when === 'view' ? shown : undefined}
+      viewport={when === 'view' ? { once: true, amount: 0.18 } : undefined}
+      transition={transition}
+      data-reveal=""
       className={className}
     >
       {children}

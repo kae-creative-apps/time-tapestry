@@ -8,6 +8,8 @@ import { SiriOrb } from "@/components/ui/siri-orb";
 import { InterviewPreview } from "@/components/marketing/InterviewPreview";
 import { PostcardCollection } from "@/components/marketing/PostcardCollection";
 import { FrontDoorNav } from "@/components/marketing/FrontDoorNav";
+import { FadeIn } from "@/components/ui/FadeIn";
+import { Stagger, StaggerItem } from "@/components/ui/Stagger";
 import styles from "@/components/marketing/FrontDoor.module.css";
 
 const steps = [
@@ -89,7 +91,7 @@ export default function Home() {
       <FrontDoorNav />
       <main id="main-content">
         <section className={styles.hero} aria-labelledby="hero-heading">
-          <div className={styles.heroIntro}>
+          <FadeIn when="view" className={styles.heroIntro}>
             <p className={styles.eyebrow}>
               For ministries, nonprofits, and advancement teams
             </p>
@@ -111,8 +113,8 @@ export default function Home() {
             <p className={styles.assuranceNote}>
               Donors are never asked about gift size.
             </p>
-          </div>
-          <div className={styles.showcase}>
+          </FadeIn>
+          <FadeIn when="view" delay={0.08} className={styles.showcase}>
             <figure className={styles.postcardFloat}>
               <div className={styles.postcardArtwork}>
                 <Image
@@ -152,7 +154,7 @@ export default function Home() {
                 <span>A donor’s keepsake for her granddaughter</span>
               </figcaption>
             </figure>
-          </div>
+          </FadeIn>
           <div
             className={styles.giftLine}
             aria-label="Your story collection includes"
@@ -173,33 +175,35 @@ export default function Home() {
           className={styles.howSection}
           aria-labelledby="how-heading"
         >
-          <div className={styles.sectionHeading}>
+          <FadeIn when="view" className={styles.sectionHeading}>
             <p className={styles.eyebrow}>How it works</p>
             <h2 id="how-heading">From an invitation to a family keepsake.</h2>
             <p>
               Your donors already carry the story. Time Tapestry helps them
               tell it to the people who will inherit their example.
             </p>
-          </div>
-          <div className={styles.steps}>
+          </FadeIn>
+          <Stagger when="view" className={styles.steps} stagger={0.12}>
             {steps.map((step) => (
-              <div className={styles.step} key={step.number}>
-                <div className={styles.stepTop}>
-                  <span>{step.number}</span>
-                  <AppIcon name={step.icon} size={28} />
+              <StaggerItem key={step.number}>
+                <div className={styles.step}>
+                  <div className={styles.stepTop}>
+                    <span>{step.number}</span>
+                    <AppIcon name={step.icon} size={28} />
+                  </div>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
                 </div>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </section>
         <section
           id="collection"
           className={styles.collectionSection}
           aria-labelledby="collection-heading"
         >
-          <div className={styles.collectionInner}>
+          <FadeIn when="view" className={styles.collectionInner}>
             <div className={styles.collectionVisual}>
               <div className={styles.collectionBook}>
                 <BookCover large />
@@ -249,11 +253,11 @@ export default function Home() {
                 <AppIcon name="arrowRight" size={20} />
               </Link>
             </div>
-          </div>
+          </FadeIn>
         </section>
         <PostcardCollection />
         <section className={styles.moreSection} aria-labelledby="more-heading">
-          <div className={styles.moreCopy}>
+          <FadeIn when="view" className={styles.moreCopy}>
             <p className={styles.eyebrow}>Examples</p>
             <h2 id="more-heading">
               A donor’s generosity,
@@ -279,8 +283,8 @@ export default function Home() {
               Invite your donors{" "}
               <AppIcon name="arrowRight" size={20} />
             </Link>
-          </div>
-          <div className={styles.promptDisplay}>
+          </FadeIn>
+          <FadeIn when="view" delay={0.08} className={styles.promptDisplay}>
             <div className={styles.promptDisplayHeader}>
               <AppIcon name="conversation" size={23} />
               <span>Questions a donor might hear.</span>
@@ -300,45 +304,47 @@ export default function Home() {
             <p className={styles.promptCaption}>
               Sample questions. Not a record of a real interview.
             </p>
-          </div>
+          </FadeIn>
         </section>
-        <section
-          className={styles.privacySection}
-          aria-labelledby="privacy-heading"
-        >
-          <div className={styles.privacyIcon}>
-            <AppIcon name="shield" size={32} />
-          </div>
-          <div>
-            <h2 id="privacy-heading">
-              A donor’s story stays with the family they choose.
-            </h2>
-            <p>
-              Donors invite children and grandchildren by email. Each person
-              verifies their email before opening the collection, and access can
-              be removed. Your organization does not receive the private
-              recordings.
-            </p>
-          </div>
-          <Link href="/privacy" className={styles.textLink}>
-            How stories are protected{" "}
-            <AppIcon name="arrowUpRight" size={19} />
-          </Link>
-        </section>
+        <FadeIn when="view">
+          <section
+            className={styles.privacySection}
+            aria-labelledby="privacy-heading"
+          >
+            <div className={styles.privacyIcon}>
+              <AppIcon name="shield" size={32} />
+            </div>
+            <div>
+              <h2 id="privacy-heading">
+                A donor’s story stays with the family they choose.
+              </h2>
+              <p>
+                Donors invite children and grandchildren by email. Each person
+                verifies their email before opening the collection, and access can
+                be removed. Your organization does not receive the private
+                recordings.
+              </p>
+            </div>
+            <Link href="/privacy" className={styles.textLink}>
+              How stories are protected{" "}
+              <AppIcon name="arrowUpRight" size={19} />
+            </Link>
+          </section>
+        </FadeIn>
         <section
           id="begin"
           className={styles.beginSection}
           aria-labelledby="begin-heading"
         >
-          <div className={styles.sectionHeading}>
+          <FadeIn when="view" className={styles.sectionHeading}>
             <p className={styles.eyebrow}>For your organization</p>
             <h2 id="begin-heading">Offer this to the donors you serve.</h2>
             <p>
               Invite major donors at ministries, nonprofits, foundations, and
               advancement teams to record the story of their generosity.
             </p>
-          </div>
-          <div className={styles.beginChoices}>
+          </FadeIn>
+          <FadeIn when="view" delay={0.08} className={styles.beginChoices}>
             <div className={styles.beginChoice}>
               <AppIcon name="handHeart" size={30} />
               <h3>Bring it to your donors.</h3>
@@ -350,7 +356,7 @@ export default function Home() {
                 Invite your donors <AppIcon name="arrowUpRight" size={20} />
               </Link>
             </div>
-          </div>
+          </FadeIn>
           <p className={styles.beginNote}>
             No payment details. Donors are never asked about gift size.{" "}
             <Link href="/pricing">How invitations work</Link>
