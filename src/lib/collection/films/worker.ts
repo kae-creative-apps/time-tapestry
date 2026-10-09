@@ -18,6 +18,7 @@ import {
   failFilmJob,
   getFilmJob,
   latestFilmJob,
+  publishFilmAttention,
   updateFilmJob,
   withFinishedChaptersReady,
   writeWorkerHeartbeat,
@@ -409,7 +410,7 @@ export async function processFilmJob(
       clearInterval(heartbeat);
       await heartbeatWrite;
       const everyChapter = blocked.length === finished.chapters.length;
-      return await updateFilmJob(claimed.id, token, (job) => ({
+      const failed = await updateFilmJob(claimed.id, token, (job) => ({
         ...job,
         status: "failed",
         error: everyChapter
@@ -434,6 +435,8 @@ export async function processFilmJob(
           };
         }),
       }));
+      if (failed.status === "failed") await publishFilmAttention(failed);
+      return failed;
     }
     await attachReadyFilms(finished);
     clearInterval(heartbeat);

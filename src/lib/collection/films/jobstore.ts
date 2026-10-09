@@ -787,7 +787,7 @@ export async function failFilmJob(
   return failed;
 }
 
-async function publishFilmAttention(job: StoryFilmJob) {
+export async function publishFilmAttention(job: StoryFilmJob) {
   if (!(await getCollection(job.collectionId))) return;
   await mutateCollection(job.collectionId, async (c) => {
     if (

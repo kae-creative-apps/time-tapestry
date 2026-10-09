@@ -762,6 +762,40 @@ async function completedClaim() {
   return { c, claimed };
 }
 
+test("a matcher miss queues one storyteller attention notice and does not duplicate", async () => {
+  const { c, claimed } = await completedClaim();
+  const missed = claimed.chapters[1];
+  missed.artifact = undefined;
+  missed.playback = undefined;
+  missed.status = "matching";
+  missed.sourceEdit = {
+    chapterId: missed.chapterId,
+    presentation: "video",
+    clips: [],
+  };
+  await jobs.updateFilmJob(claimed.id, claimed.lease!.token, () => claimed);
+  const { processFilmJob } = await import("../src/lib/collection/films/worker");
+  const result = await processFilmJob(claimed);
+  assert.equal(result?.status, "failed");
+  const saved = (await store.getCollection(c.id))!;
+  const notices = saved.notifications.filter(
+    (notice) => notice.kind === "preparation_attention",
+  );
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].to, c.storyteller.email);
+  assert.notEqual(notices[0].to, c.recipient.email);
+  assert.match(notices[0].subject, /needs attention/i);
+  assert.match(notices[0].text, /Nothing has been shared/);
+  assert.equal(notices[0].status, "pending");
+  await jobs.publishFilmAttention(result!);
+  assert.equal(
+    (await store.getCollection(c.id))!.notifications.filter(
+      (notice) => notice.kind === "preparation_attention",
+    ).length,
+    1,
+  );
+});
+
 test("worker completion reuses four preserved artifacts and settles ready without provider calls", async () => {
   const { c, claimed } = await completedClaim();
   process.env.ELEVENLABS_API_KEY = "synthetic-unused-no-provider-request";
