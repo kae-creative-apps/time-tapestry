@@ -94,7 +94,11 @@ export function InterviewPreview() {
               on this page, and the questions never ask about gift size.
             </p>
             <div className="my-4 flex justify-center" aria-hidden="true">
-              <SiriOrb size={144} animationDuration={10} />
+              <SiriOrb
+                size={144}
+                animationDuration={10}
+                className="!h-[6.5rem] !w-[6.5rem] sm:!h-[9rem] sm:!w-[9rem]"
+              />
             </div>
             <div className="min-h-7 text-base text-ink-600" role="status">
               Sample questions for your donors.

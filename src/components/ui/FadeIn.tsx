@@ -44,6 +44,7 @@ export function FadeIn({
       transition={transition}
       data-reveal=""
       className={className}
+      style={{ overflow: "visible" }}
     >
       {children}
     </motion.div>
