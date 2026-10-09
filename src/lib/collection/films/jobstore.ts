@@ -589,6 +589,26 @@ export async function claimNextFilmJob(
   return null;
 }
 
+/** A retry can keep finished audio while rematch sets those chapters back to
+ * preparing. Attach still requires ready chapters, so restore that status
+ * before sharing. */
+export function withFinishedChaptersReady(job: StoryFilmJob): StoryFilmJob {
+  return {
+    ...job,
+    chapters: job.chapters.map((chapter) => {
+      const finished =
+        job.outputMode === "interactive" ? chapter.playback : chapter.artifact;
+      if (!finished || chapter.status === "ready") return chapter;
+      return {
+        ...chapter,
+        status: "ready" as const,
+        progress: 1,
+        error: undefined,
+      };
+    }),
+  };
+}
+
 export async function updateFilmJob(
   id: string,
   token: string,

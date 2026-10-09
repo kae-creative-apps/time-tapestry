@@ -790,6 +790,42 @@ test("an unmatched middle chapter still uses the storyteller speech between its 
   }
 });
 
+test("a finished chapter keeps its saved film when a later match misses that chapter", async () => {
+  const f = fixture();
+  const playback = {
+    schemaVersion: 1 as const,
+    jobId: "film_saved",
+    chapterId: "q1",
+    mediaId: "playbackmedia_saved",
+    sourceTakeIds: f.job.chapters[0].sourceTakeIds,
+    sourceSha256: "source",
+    planSha256: "a".repeat(64),
+    outputSha256: "b".repeat(64),
+    durationMs: 4000,
+    words: [{ text: "grandmother", startMs: 0, endMs: 400 }],
+    createdAt: f.c.createdAt,
+  };
+  f.job.chapters[0] = {
+    ...f.job.chapters[0],
+    status: "ready",
+    progress: 1,
+    playback,
+  };
+  const q1Turn = f.c.interviews![0].turns.find((turn) => turn.chapterId === "q1")!;
+  q1Turn.text = "This wording is absent from the transcript entirely";
+  const assembled = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
+  );
+  assert.equal(assembled.chapters[0].status, "ready");
+  assert.equal(assembled.chapters[0].playback, playback);
+  assert.equal(assembled.chapters[0].error, undefined);
+  assert.equal(assembled.chapters[1].status, "preparing");
+});
+
 test("a chapter retake made only of short answers is still cut", async () => {
   const f = fixture();
   const original = f.c.interviews![0];

@@ -335,6 +335,13 @@ export async function assembleSourceEdits(
 
   const chapters = job.chapters.map((chapter) => {
     const edit = edits.get(chapter.chapterId)!;
+    if (chapter.playback || chapter.artifact)
+      return {
+        ...chapter,
+        status: "ready" as const,
+        progress: 1,
+        error: undefined,
+      };
     if (edit.clips.length > 500) {
       edit.clips = originalClips.get(chapter.chapterId) ?? [];
       edit.cleanup = {

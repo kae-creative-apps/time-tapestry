@@ -19,6 +19,7 @@ import {
   getFilmJob,
   latestFilmJob,
   updateFilmJob,
+  withFinishedChaptersReady,
   writeWorkerHeartbeat,
 } from "./jobstore";
 import { fileHash, privateJson, probeFilm } from "./render";
@@ -394,7 +395,9 @@ export async function processFilmJob(
       }));
     }
     await assertCurrent();
-    const finished = (await getFilmJob(claimed.id))!;
+    const finished = await updateFilmJob(claimed.id, token, (job) =>
+      withFinishedChaptersReady(job),
+    );
     const blocked = finished.chapters.filter(
       (chapter) =>
         chapter.status === "failed" ||
