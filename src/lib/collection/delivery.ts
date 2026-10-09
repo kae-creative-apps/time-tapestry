@@ -1000,9 +1000,10 @@ async function processPostcard(id: string, now: number, origin: string) {
 
 /** Drop notices that later work made obsolete so they cannot take the one send slot. */
 async function suppressSupersededNotifications(id: string) {
+  const now = Date.now();
   await mutateCollection(id, async (c) => {
     for (const n of c.notifications) {
-      if (!["pending", "failed"].includes(n.status)) continue;
+      if (!notificationNeedsAttempt(n, now)) continue;
       const reason = await currentNotificationSuppressionReason(c, n);
       if (!reason) continue;
       n.status = "suppressed";
