@@ -116,6 +116,48 @@ function notificationNeedsAttempt(
     canRetry(notification.dispatch, now),
   );
 }
+
+/** Recipient-facing mail goes first so a stale storyteller notice cannot take the one daily slot. */
+export function notificationDeliveryRank(n: Notification): number {
+  switch (n.kind) {
+    case "collection_ready":
+    case "recipient_invitation":
+      return 0;
+    case "address_request":
+      return 1;
+    case "invitation":
+      return 2;
+    case "living_story_request":
+    case "living_story_published":
+      return 3;
+    case "review_ready":
+      return n.id.endsWith(":owner-approved") ? 4 : 5;
+    case "postcard_ready":
+    case "postcard_attention":
+    case "postcard_mailed":
+    case "postcard_followup":
+      return 6;
+    case "reply_invitation":
+    case "reply_received":
+      return 7;
+    case "preparation_attention":
+      return 8;
+    default:
+      return 9;
+  }
+}
+
+export function notificationsInDeliveryOrder(notifications: Notification[]) {
+  return notifications
+    .map((notification, index) => ({ notification, index }))
+    .sort((a, b) => {
+      const rank =
+        notificationDeliveryRank(a.notification) -
+        notificationDeliveryRank(b.notification);
+      return rank !== 0 ? rank : a.index - b.index;
+    })
+    .map(({ notification }) => notification);
+}
 function expiredRetryWindow(dispatch: DispatchState | undefined, now: number) {
   return Boolean(
     dispatch?.firstAttemptAt &&
@@ -956,6 +998,25 @@ async function processPostcard(id: string, now: number, origin: string) {
   return true;
 }
 
+/** Drop notices that later work made obsolete so they cannot take the one send slot. */
+async function suppressSupersededNotifications(id: string) {
+  await mutateCollection(id, async (c) => {
+    for (const n of c.notifications) {
+      if (!["pending", "failed"].includes(n.status)) continue;
+      const reason = await currentNotificationSuppressionReason(c, n);
+      if (!reason) continue;
+      n.status = "suppressed";
+      n.error = reason;
+      n.dispatch = {
+        ...n.dispatch,
+        leaseId: undefined,
+        leaseExpiresAt: undefined,
+      };
+    }
+    return c;
+  });
+}
+
 /** Recheck current private film storage before claiming or sending its ready email. */
 export async function currentNotificationSuppressionReason(
   c: Collection,
@@ -1242,14 +1303,17 @@ export async function processDeliveryJobs() {
       (await processPostcard(entry.id, Date.now(), origin))
     )
       providerAttempts += 1;
-    const current = await getCollection(entry.id);
-    for (const n of emailDeliveryEnabled()
-      ? (current?.notifications ?? [])
-      : []) {
-      if (Date.now() > deadline || providerAttempts >= 3) break;
-      if (await processNotification(entry.id, n.id, Date.now(), origin)) {
-        providerAttempts += 1;
-        break;
+    if (emailDeliveryEnabled()) {
+      await suppressSupersededNotifications(entry.id);
+      const current = await getCollection(entry.id);
+      for (const n of notificationsInDeliveryOrder(
+        current?.notifications ?? [],
+      )) {
+        if (Date.now() > deadline || providerAttempts >= 3) break;
+        if (await processNotification(entry.id, n.id, Date.now(), origin)) {
+          providerAttempts += 1;
+          break;
+        }
       }
     }
     await mutateRecord<{ afterId: string }>("delivery-queue-cursor", () => ({
