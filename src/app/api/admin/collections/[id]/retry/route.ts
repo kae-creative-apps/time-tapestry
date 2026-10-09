@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { adminReadHeaders, auditAdminRead } from "@/lib/admin-collections";
+import {
+  adminReadHeaders,
+  adminRetryOverrideAvailable,
+  auditAdminRead,
+} from "@/lib/admin-collections";
 import { guardRequest } from "@/lib/security/request";
 import { readJsonBody } from "@/lib/security/http";
 import { SecurityError } from "@/lib/security/policy";
@@ -9,12 +13,18 @@ import {
   getInterviewPreparationView,
   InterviewPreparationError,
 } from "@/lib/collection/interview-preparation";
+import {
+  adminFilmRetryOverrideAllowed,
+  adminRetryOverrideReason,
+  latestFilmJob,
+  retryStoryFilms,
+} from "@/lib/collection/films/jobstore";
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin(req);
+    const { account } = await requireAdmin(req);
     const { id } = await params;
     if (!/^[a-zA-Z0-9_-]{8,80}$/.test(id))
       throw new SecurityError("Collection not found.", 404);
@@ -28,6 +38,7 @@ export async function POST(
         "Refresh the collection before retrying preparation.",
         400,
       );
+    const reason = adminRetryOverrideReason(body.reason);
     const result = await enqueueInterviewPreparation(id, {
       processingApproved: true,
       retry: true,
@@ -39,17 +50,37 @@ export async function POST(
             409,
           );
         const view = await getInterviewPreparationView(current);
-        if (
-          current.status === "approved" ||
-          !view?.processingApprovedAt ||
-          !view.canRetry
-        )
+        const film = await latestFilmJob(current.id);
+        const canRetry =
+          current.status !== "approved" &&
+          Boolean(view?.processingApprovedAt) &&
+          view?.canRetry === true;
+        const canOverride = adminRetryOverrideAvailable(current, view, film);
+        if (!canRetry && !canOverride)
           throw new SecurityError(
             "This preparation needs an operator check before it can be retried.",
             409,
           );
-        await auditAdminRead(req, "retry_preparation", id);
+        if (canOverride) {
+          if (!reason) throw new SecurityError("Say why this retry is needed.", 400);
+          if (film && adminFilmRetryOverrideAllowed(film))
+            await retryStoryFilms(current, film.id, true, "original", {
+              reason,
+              actor: { accountId: account.id, email: account.email },
+            });
+        }
+        await auditAdminRead(req, "retry_preparation", id, undefined, {
+          ...(reason ? { reason } : {}),
+        });
       },
+      ...(reason
+        ? {
+            adminOverride: {
+              reason,
+              actor: { accountId: account.id, email: account.email },
+            },
+          }
+        : {}),
     });
     return NextResponse.json(
       { ok: true, preparation: result.preparation },

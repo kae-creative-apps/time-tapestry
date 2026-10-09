@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
@@ -372,6 +372,83 @@ test("preparation retry preserves consent and originals, rejects stale or approv
     409,
   );
   assert.equal(calls, 0);
+});
+
+test("admin override retries a held film job with a logged reason and keeps originals", async () => {
+  const { syntheticRecordedFilmCollection } = await import("./film-fixture");
+  const films = await import("../src/lib/collection/films/jobstore");
+  const preparation = await import(
+    "../src/lib/collection/interview-preparation"
+  );
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  const queued = await preparation.enqueueInterviewPreparation(c.id, {
+    processingApproved: true,
+  });
+  const filmJob = await films.enqueueAutomaticOriginalFilms(c, {
+    processingApproved: true,
+  });
+  await store.writeRecord(queued.preparation.id, {
+    ...(await preparation.getInterviewPreparationJob(queued.preparation.id))!,
+    status: "films_queued",
+    filmJobId: filmJob.id,
+  });
+  await store.mutateCollection(c.id, (current) => {
+    current.interviewPreparation = {
+      ...current.interviewPreparation!,
+      status: "films_queued",
+      filmJobId: filmJob.id,
+    };
+    return current;
+  });
+  await store.mutateRecord(filmJob.id, (job) => ({
+    ...job!,
+    status: "failed",
+    attempts: 3,
+    error: "Synthetic render failure",
+  }));
+  const current = (await store.getCollection(c.id))!;
+  const originals = current.takes.map((take) => take.mediaId);
+  assert.equal(
+    (
+      await retry(
+        request("/api/admin/retry", adminCookie, {
+          action: "retry_preparation",
+          expectedUpdatedAt: current.updatedAt,
+        }),
+        params(c.id),
+      )
+    ).status,
+    400,
+  );
+  const response = await retry(
+    request("/api/admin/retry", adminCookie, {
+      action: "retry_preparation",
+      expectedUpdatedAt: current.updatedAt,
+      reason: "Worker was out of disk.",
+    }),
+    params(c.id),
+  );
+  assert.equal(response.status, 202, await response.clone().text());
+  const retried = await films.getFilmJob(filmJob.id);
+  assert.equal(retried?.status, "queued");
+  assert.equal(retried?.adminRetryOverride?.reason, "Worker was out of disk.");
+  assert.equal(retried?.adminRetryOverride?.email, "team@foronestudios.com");
+  const saved = (await store.getCollection(c.id))!;
+  assert.deepEqual(
+    saved.takes.map((take) => take.mediaId),
+    originals,
+  );
+  const events = (
+    await Promise.all(
+      (await readdir(path.join(directory, "audit"))).map((name) =>
+        readFile(path.join(directory, "audit", name), "utf8"),
+      ),
+    )
+  ).join("");
+  assert.ok(events.includes("Worker was out of disk."));
+  assert.ok(events.includes("team@foronestudios.com"));
+  assert.equal(events.includes(c.storyteller.email), false);
 });
 
 test("admin HTTP email verification issues only a browser-bound request until confirmation and sign-out revokes access", async (t) => {

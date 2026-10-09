@@ -395,6 +395,7 @@ function RecordingRow({
 export function CollectionAdminDetail({ id }: { id: string }) {
   const [retrying, setRetrying] = useState(false);
   const [retryMessage, setRetryMessage] = useState("");
+  const [retryReason, setRetryReason] = useState("");
   const { data, loading, error, reload } = useAdminData<Detail>(
     `/api/admin/collections/${id}`,
     `/admin/collections/${id}`,
@@ -410,6 +411,9 @@ export function CollectionAdminDetail({ id }: { id: string }) {
         body: JSON.stringify({
           action: "retry_preparation",
           expectedUpdatedAt: data.collection.updatedAt,
+          ...(data.operations.overrideAvailable
+            ? { reason: retryReason }
+            : {}),
         }),
       });
       const result = await response.json();
@@ -491,21 +495,39 @@ export function CollectionAdminDetail({ id }: { id: string }) {
                   {data.operations.preparation.error}
                 </p>
               )}
-              {data.operations.retryAvailable && (
+              {(data.operations.retryAvailable ||
+                data.operations.overrideAvailable) && (
                 <div className="mt-4">
                   <p className="mb-3 text-sm leading-6 text-ink-600">
-                    Retry only after checking the reported cause. This queues
-                    the existing approved processing request and preserves the
-                    original files.
+                    {data.operations.overrideAvailable
+                      ? "This retry is logged. Original recordings stay saved."
+                      : "Retry only after checking the reported cause. Original recordings stay saved."}
                   </p>
+                  {data.operations.overrideAvailable && (
+                    <label className="mb-3 block text-sm leading-6">
+                      Why this retry is needed
+                      <textarea
+                        className="mt-2 min-h-24 w-full rounded-xl border border-warmgray-300 bg-white p-3 text-base"
+                        value={retryReason}
+                        onChange={(event) => setRetryReason(event.target.value)}
+                        maxLength={200}
+                      />
+                    </label>
+                  )}
                   <button
                     className={button}
-                    disabled={retrying}
+                    disabled={
+                      retrying ||
+                      (data.operations.overrideAvailable &&
+                        !retryReason.trim())
+                    }
                     onClick={retryPreparation}
                   >
                     {retrying
                       ? "Queueing…"
-                      : "Retry saved interview preparation"}
+                      : data.operations.overrideAvailable
+                        ? "Retry anyway"
+                        : "Retry saved interview preparation"}
                   </button>
                 </div>
               )}

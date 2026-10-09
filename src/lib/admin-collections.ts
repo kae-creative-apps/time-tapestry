@@ -14,11 +14,13 @@ import {
 } from "./collection/store";
 import { getCollectionUsage } from "./collection/usage";
 import {
+  adminFilmRetryOverrideAllowed,
   filmJobMatches,
   filmJobView,
   latestFilmJob,
   filmWorkerHealthy,
 } from "./collection/films/jobstore";
+import type { StoryFilmJob } from "./collection/films/types";
 import { accountEmailAvailable } from "./accounts/mail";
 import { postcardDeliveryReadiness } from "./collection/postcard-proofs";
 import { getSecurityHealth } from "./security/health";
@@ -51,6 +53,7 @@ export async function auditAdminRead(
     | "retry_preparation",
   collectionId?: string,
   mediaId?: string,
+  detail?: { reason?: string },
 ) {
   const { account } = await requireAdmin(req);
   const entry = {
@@ -59,6 +62,7 @@ export async function auditAdminRead(
     collectionId,
     mediaId,
     actor: { accountId: account.id, email: account.email },
+    ...(detail?.reason ? { reason: detail.reason } : {}),
     session: createHash("sha256")
       .update(`admin-audit:${req.cookies.get(ACCOUNT_COOKIE)!.value}`)
       .digest("hex")
@@ -183,9 +187,26 @@ export function redactAdminSecrets<T>(value: T, privateKeys: string[] = []): T {
   }
   return visit(value) as T;
 }
+export function adminRetryOverrideAvailable(
+  c: Collection,
+  preparation: Awaited<ReturnType<typeof getInterviewPreparationView>>,
+  job: StoryFilmJob | null,
+) {
+  if (c.status === "approved" || !preparation?.processingApprovedAt)
+    return false;
+  if (preparation.ready || preparation.canRetry) return false;
+  if (preparation.missingAreas?.length) return false;
+  if (job && adminFilmRetryOverrideAllowed(job)) return true;
+  return (
+    preparation.status === "needs_attention" &&
+    /three attempts/i.test(preparation.error || "")
+  );
+}
+
 function operationsView(
   c: Collection,
   preparation: Awaited<ReturnType<typeof getInterviewPreparationView>>,
+  job: StoryFilmJob | null,
 ) {
   let book: { status: "ready" | "draft" | "unavailable"; reason?: string };
   try {
@@ -211,6 +232,7 @@ function operationsView(
       c.status !== "approved" &&
       preparation?.canRetry === true &&
       Boolean(preparation.processingApprovedAt),
+    overrideAvailable: adminRetryOverrideAvailable(c, preparation, job),
     delivery: postcardDeliveryReadiness(),
     recovery: [
       ...(preparation?.status === "needs_attention"
@@ -384,11 +406,12 @@ export async function adminCollectionList(offset = 0, limit = 50) {
 export async function adminCollectionDetail(id: string) {
   const c = await getCollection(id);
   if (!c) return null;
-  const [allMedia, usage, filmJob, preparation] = await Promise.all([
+  const [allMedia, usage, filmJob, preparation, latestJob] = await Promise.all([
     listStoredMedia(),
     getCollectionUsage(id),
     jobView(c),
     getInterviewPreparationView(c),
+    latestFilmJob(c.id),
   ]);
   const filmIds = new Set([
     ...c.chapters.flatMap((ch) =>
@@ -411,7 +434,7 @@ export async function adminCollectionDetail(id: string) {
       media,
       usage,
       filmJob,
-      operations: operationsView(c, preparation),
+      operations: operationsView(c, preparation, latestJob),
     },
     [c.ownerKey, c.recipientKey, c.requesterKey],
   );

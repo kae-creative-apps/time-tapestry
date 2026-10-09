@@ -125,6 +125,22 @@ export function filmRetryEligibility(job: StoryFilmJob): {
   return { retryAllowed: true };
 }
 
+/** Owner retry stays blocked. Admin may retry these two holds with a logged reason. */
+export function adminFilmRetryOverrideAllowed(job: StoryFilmJob) {
+  const eligibility = filmRetryEligibility(job);
+  return Boolean(!eligibility.retryAllowed && eligibility.retryBlockedReason);
+}
+
+export type FilmRetryOverride = {
+  reason: string;
+  actor: { accountId: string; email: string };
+};
+
+export function adminRetryOverrideReason(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
 export function filmJobView(job: StoryFilmJob): FilmJobView {
   if (job.mode !== "original" && job.status !== "ready") {
     job = retiredNarrationJob(job);
@@ -418,6 +434,7 @@ export async function retryStoryFilms(
   id: string,
   scriptsApproved: boolean,
   expectedMode: "ai_narration" | "original" = "original",
+  override?: FilmRetryOverride,
 ) {
   if (expectedMode !== "original")
     throw new Error(RECORDING_ONLY_FILMS_MESSAGE);
@@ -445,11 +462,18 @@ export async function retryStoryFilms(
     if (job.status !== "failed")
       throw new Error("Only a failed film job can be retried.");
     const eligibility = filmRetryEligibility(job);
-    if (!eligibility.retryAllowed)
+    const reason = adminRetryOverrideReason(override?.reason);
+    const useOverride =
+      !eligibility.retryAllowed &&
+      Boolean(override) &&
+      adminFilmRetryOverrideAllowed(job);
+    if (!eligibility.retryAllowed && !useOverride)
       throw new Error(
         eligibility.retryBlockedReason ||
           "This film job needs an operator check before another attempt.",
       );
+    if (useOverride && !reason)
+      throw new Error("Say why this retry is needed.");
     return {
       ...job,
       status: "queued",
@@ -457,6 +481,16 @@ export async function retryStoryFilms(
       nextAttemptAt: undefined,
       lease: undefined,
       updatedAt: nowIso(),
+      ...(useOverride
+        ? {
+            adminRetryOverride: {
+              at: nowIso(),
+              accountId: override!.actor.accountId,
+              email: override!.actor.email,
+              reason,
+            },
+          }
+        : {}),
       chapters: job.chapters.map((chapter) =>
         chapter.status === "ready"
           ? chapter

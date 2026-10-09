@@ -209,6 +209,7 @@ export async function enqueueInterviewPreparation(
   options: {
     processingApproved: true;
     retry?: boolean;
+    adminOverride?: { reason: string; actor: { accountId: string; email: string } };
     authorize?: (c: Collection) => Promise<void>;
   },
 ) {
@@ -280,7 +281,8 @@ export async function enqueueInterviewPreparation(
             existing.status === "needs_attention" &&
             existing.attempts >= MAX_ATTEMPTS &&
             !staleAutomaticFilm &&
-            !reopenRetake
+            !reopenRetake &&
+            !options.adminOverride
           )
             throw new InterviewPreparationError(
               "Preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Your recordings and completed work are saved.",
@@ -303,7 +305,7 @@ export async function enqueueInterviewPreparation(
             automaticFilmTemplateCurrent(failedFilms)
           ) {
             const eligibility = filmRetryEligibility(failedFilms);
-            if (!eligibility.retryAllowed)
+            if (!eligibility.retryAllowed && !options.adminOverride)
               throw new InterviewPreparationError(
                 eligibility.retryBlockedReason ||
                   "Film preparation needs a check. Completed films and recordings are saved.",
@@ -313,13 +315,13 @@ export async function enqueueInterviewPreparation(
           if (
             options.retry &&
             ((existing.status === "needs_attention" &&
-              existing.attempts < MAX_ATTEMPTS) ||
+              (existing.attempts < MAX_ATTEMPTS || options.adminOverride)) ||
               retryFilms)
           )
             return {
               ...existing,
               status: "queued",
-              ...(retryFilms ? { attempts: 0 } : {}),
+              ...(retryFilms || options.adminOverride ? { attempts: 0 } : {}),
               ...(existing.missingAreas?.length
                 ? {
                     recoveredInterviews: undefined,
