@@ -136,7 +136,7 @@ export default function Home() {
             <div className={styles.conversationPanel}>
               <p className={styles.panelEyebrow}>A question for your donors</p>
               <div className={styles.heroOrb}>
-                <SiriOrb size="144px" />
+                <SiriOrb size="144px" className={styles.heroOrbGraphic} />
               </div>
               <p className={styles.previewQuestion}>
                 “What made you become so generous?”

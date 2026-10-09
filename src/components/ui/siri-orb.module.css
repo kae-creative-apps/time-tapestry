@@ -13,6 +13,11 @@
   position: relative;
   isolation: isolate;
   flex: 0 0 auto;
+  /* Safari/iOS: overflow + radius does not clip filter/backdrop-filter layers,
+     so the dotted overlay reads as a square. Mask and clip-path keep a circle. */
+  clip-path: circle(50%);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
 }
 
 .orb::before,
@@ -80,10 +85,18 @@
   backdrop-filter: blur(calc(var(--tt-orb-blur) * 2))
     contrast(calc(var(--tt-orb-contrast) * 2));
   mix-blend-mode: overlay;
-  mask-image: radial-gradient(black var(--tt-orb-mask-radius), transparent 75%);
+  -webkit-mask-image: radial-gradient(
+    black var(--tt-orb-mask-radius),
+    transparent 70%
+  );
+  mask-image: radial-gradient(
+    black var(--tt-orb-mask-radius),
+    transparent 70%
+  );
 }
 
 .orb[data-mask="none"]::after {
+  -webkit-mask-image: none;
   mask-image: none;
 }
 
