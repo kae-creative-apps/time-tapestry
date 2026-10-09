@@ -1044,6 +1044,15 @@ test("exhausted original film work queues owner attention and rejects another pr
       error instanceof preparation.InterviewPreparationError &&
       error.status === 409,
   );
+  const overridden = await films.retryStoryFilms(saved, id, true, "original", {
+    reason: "Retry after the third attempt.",
+    actor: { accountId: "acct_admin", email: "team@foronestudios.com" },
+  });
+  assert.equal(overridden.status, "queued");
+  assert.deepEqual(
+    (await store.getCollection(c.id))!.takes.map((take) => take.mediaId),
+    saved.takes.map((take) => take.mediaId),
+  );
 });
 
 test("a timing-match film failure is not offered as try again", async () => {

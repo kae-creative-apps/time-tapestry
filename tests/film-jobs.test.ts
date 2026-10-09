@@ -230,6 +230,49 @@ test("recoverable film failures retain retry while an exhausted job exposes an e
     jobs.filmJobView(exhausted).retryBlockedReason!,
     /three attempts/,
   );
+  await assert.rejects(jobs.retryStoryFilms(c, queued.id, true), /three attempts/);
+  const overridden = await jobs.retryStoryFilms(c, queued.id, true, "original", {
+    reason: "Matcher updated after the third attempt.",
+    actor: { accountId: "acct_admin", email: "team@foronestudios.com" },
+  });
+  assert.equal(overridden.status, "queued");
+  assert.equal(overridden.adminRetryOverride?.email, "team@foronestudios.com");
+  assert.match(overridden.adminRetryOverride?.reason ?? "", /Matcher updated/);
+  assert.equal(
+    overridden.chapters.length,
+    exhausted.chapters.length,
+    "override must not drop original chapter records",
+  );
+});
+
+test("a timing failure stays blocked for owners and retries only with a logged admin override", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  await store.putCollection(c);
+  const queued = await jobs.enqueueAutomaticOriginalFilms(c, original);
+  const failed = await store.mutateRecord<StoryFilmJob>(queued.id, (job) => ({
+    ...job!,
+    status: "failed",
+    attempts: 1,
+    sourceMatchRevision: SOURCE_MATCH_REVISION,
+    error:
+      "A selected source word has no verified positive duration. Its original is preserved for review; no automatic cut or caption was made.",
+  }));
+  assert.equal(jobs.adminFilmRetryOverrideAllowed(failed), true);
+  await assert.rejects(jobs.retryStoryFilms(c, queued.id, true), /editor check/);
+  await assert.rejects(
+    jobs.retryStoryFilms(c, queued.id, true, "original", {
+      reason: "   ",
+      actor: { accountId: "acct_admin", email: "team@foronestudios.com" },
+    }),
+    /why this retry/,
+  );
+  const overridden = await jobs.retryStoryFilms(c, queued.id, true, "original", {
+    reason: "Source timing was repaired.",
+    actor: { accountId: "acct_admin", email: "team@foronestudios.com" },
+  });
+  assert.equal(overridden.status, "queued");
+  assert.equal(overridden.adminRetryOverride?.reason, "Source timing was repaired.");
+  assert.ok(overridden.originalSources?.length);
 });
 
 async function legacyNarrationFixture(ready = false, attached = false) {

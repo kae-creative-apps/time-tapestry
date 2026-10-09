@@ -156,6 +156,13 @@ export type StoryFilmJob = {
   nextAttemptAt?: string;
   error?: string;
   lease?: { token: string; expiresAt: number };
+  /** Internal admin retry after three attempts or a timing failure. Originals stay. */
+  adminRetryOverride?: {
+    at: string;
+    accountId: string;
+    email: string;
+    reason: string;
+  };
 };
 
 export type NarratedFilmPlan = {
