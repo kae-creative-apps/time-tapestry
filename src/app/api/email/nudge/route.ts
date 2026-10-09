@@ -24,7 +24,7 @@ async function legacyPOST(req: NextRequest) {
       );
     }
 
-    const { subject, html } = nudgeEmail(
+    const { subject, html, text } = nudgeEmail(
       session.grandchild.name,
       session.grandparent.name,
       `${appUrl}/keepsake/${session.id}`,
@@ -34,6 +34,7 @@ async function legacyPOST(req: NextRequest) {
       to: session.grandchild.email,
       subject,
       html,
+      text,
     });
 
     console.log("[email/nudge] nudge email result:", emailResult);

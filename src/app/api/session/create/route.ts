@@ -46,7 +46,7 @@ async function legacyPOST(req: NextRequest) {
     // deliberate: email failure must not block session creation
     if (session.initiationPath === "request" && session.grandparent.email) {
       try {
-        const { subject, html } = invitationEmail(
+        const { subject, html, text } = invitationEmail(
           session.grandparent.name,
           session.grandchild.name,
           `${appUrl}/interview/${session.id}`,
@@ -55,6 +55,7 @@ async function legacyPOST(req: NextRequest) {
           to: session.grandparent.email,
           subject,
           html,
+          text,
         });
         console.log("[session/create] invitation email result:", emailResult);
       } catch (emailErr) {

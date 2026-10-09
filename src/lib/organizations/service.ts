@@ -252,13 +252,13 @@ async function deliverDonorInvitation(
   ).href;
   let delivery: InvitationDelivery;
   try {
-    const { subject, html } = donorInvitationEmail(
+    const { subject, html, text } = donorInvitationEmail(
       gift.name,
       organization.organizationName,
       interviewUrl,
       gift.designatedRecipient?.name,
     );
-    const result = await sendEmail({ to: gift.email, subject, html });
+    const result = await sendEmail({ to: gift.email, subject, html, text });
     const at = new Date().toISOString();
     delivery = result.success
       ? { status: "sent", at }

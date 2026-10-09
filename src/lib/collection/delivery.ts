@@ -4,7 +4,7 @@ import {
 } from "../observability/pipeline-logger";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { livingStoryNotificationSuppressionReason } from "./living-story-notifications";
-import { BRAND_COLORS } from "../brand-art";
+import { brandedEmail, emailLogoSrc } from "../email-layout";
 import { CHAPTERS } from "../interview-state";
 import {
   assertReleasedPostcardProof,
@@ -697,29 +697,27 @@ function notificationRequest(c: Collection, n: Notification) {
     n.kind === "invitation" && !n.text.includes(INTERVIEW_PACING_COPY)
       ? `${n.text}\n\n${INTERVIEW_PACING_COPY}\n\nYou can choose video with sound or audio only. You review your stories before anything is shared.`
       : n.text;
+  const htmlParagraphs = [
+    ...n.text
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .slice(0, 2),
+    preference.trim(),
+  ].filter(Boolean);
   const text = message + "\n\n" + actionLabel + ": " + n.url + preference;
+  const { html } = brandedEmail({
+    title: n.subject,
+    logoSrc: emailLogoSrc(url.origin),
+    paragraphs: htmlParagraphs,
+    action: { href: n.url, label: actionLabel },
+  });
   return JSON.stringify({
     from: process.env.RESEND_FROM_EMAIL,
     to: [n.to],
     subject: n.subject,
     text,
-    html:
-      `<!doctype html><html><body style="font-family:Arial,sans-serif;background:${BRAND_COLORS.paper};color:${BRAND_COLORS.espresso};max-width:600px;margin:32px auto;padding:24px;line-height:1.6"><img alt="Time Tapestry" width="190" height="57" style="display:block;width:190px;max-width:100%;height:auto;margin:0 0 32px" src="` +
-      escapeHtml(url.origin + "/brand/time-tapestry-lockup.png") +
-      '"><h1 style="font-family:Arial Rounded MT Bold,Arial,sans-serif;font-size:26px;line-height:1.3">' +
-      escapeHtml(n.subject) +
-      "</h1>" +
-      message
-        .split("\n")
-        .map((p) => "<p>" + escapeHtml(p) + "</p>")
-        .join("") +
-      `<p><a style="display:inline-block;background:${BRAND_COLORS.espresso};color:${BRAND_COLORS.paper};padding:14px 22px;border-radius:12px;text-decoration:none" href="` +
-      escapeHtml(n.url) +
-      '">' +
-      escapeHtml(actionLabel) +
-      '</a></p><p style="font-size:13px">' +
-      escapeHtml(preference.trim()) +
-      `</p><p style="font-size:13px;color:${BRAND_COLORS.taupe};margin-top:32px">Time Tapestry · Stories woven together</p></body></html>`,
+    html,
   });
 }
 class ProviderError extends Error {
