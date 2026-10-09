@@ -21,6 +21,7 @@ import {
   replyAcknowledgement,
 } from "./reply-submission";
 import { getTextDraft, saveTextDraft } from "@/lib/collection/local-takes";
+import { QUESTION_CARD_SECONDS } from "@/lib/video-plan";
 import type { ChapterPackage, CollectionView } from "@/lib/collection/types";
 const primary =
   "brand-button-primary inline-flex min-h-12 items-center justify-center px-5 py-3 disabled:opacity-50";
@@ -611,11 +612,11 @@ export default function CollectionHome({
         </aside>
       )}
       <header className="overflow-hidden rounded-[28px] border border-warmgray-200 bg-paper-100 lg:grid lg:grid-cols-[.8fr_1.2fr]">
-        <div className="relative flex min-h-64 items-center justify-center overflow-hidden bg-clay-50 p-8 text-center">
+        <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden bg-clay-50 p-8 text-center sm:aspect-[4/5]">
           {coverFilm?.videoMediaId ? (
             <video
               className="absolute inset-0 h-full w-full object-cover"
-              src={`${url(coverFilm.videoMediaId)}#t=0.1`}
+              src={`${url(coverFilm.videoMediaId)}#t=${QUESTION_CARD_SECONDS + 1}`}
               muted
               playsInline
               preload="metadata"
