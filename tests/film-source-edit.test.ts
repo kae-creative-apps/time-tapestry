@@ -767,6 +767,29 @@ test("a chapter fails alone when its own answers are missing from the recording"
   assert.equal(logged.includes("orchard"), false);
 });
 
+test("an unmatched middle chapter still uses the storyteller speech between its neighbors", async () => {
+  const f = fixture();
+  const q2Turn = f.c.interviews![0].turns.find((turn) => turn.chapterId === "q2")!;
+  q2Turn.text =
+    "The orchard was a very different place entirely yesterday afternoon";
+  const assembled = await assembleSourceEdits(
+    f.c,
+    f.job,
+    new Map([[f.words[0].mediaId, f.words]]),
+    f.durations,
+    [],
+  );
+  const q2 = assembled.chapters[1];
+  assert.equal(q2.status, "preparing");
+  assert.equal(q2.error, undefined);
+  assert.ok(q2.sourceEdit!.clips.length >= 1);
+  assert.match(JSON.stringify(q2.sourceEdit!.clips), /patience/);
+  for (const chapter of assembled.chapters.filter((item) => item.chapterId !== "q2")) {
+    assert.equal(chapter.status, "preparing");
+    assert.equal(chapter.error, undefined);
+  }
+});
+
 test("a chapter retake made only of short answers is still cut", async () => {
   const f = fixture();
   const original = f.c.interviews![0];

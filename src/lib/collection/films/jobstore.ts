@@ -87,18 +87,14 @@ function deterministicSourceFailure(job: StoryFilmJob) {
   return DETERMINISTIC_SOURCE_FAILURE.test(sourceFailureErrors(job));
 }
 
-/** An older confident-match failure can be retried once after the matcher changes.
- * The same failure from the current matcher stays blocked. */
-function confidentMatchAwaitingCurrentMatcher(job: StoryFilmJob) {
+const MATCHER_RETRYABLE =
+  /saved answer could not be matched confidently|chapter's saved answers could not be matched|source-word match did not preserve enough/i;
+
+/** An older wording-match failure can be retried after the matcher changes.
+ * Timestamp and uniqueness failures stay blocked. */
+function matchingFailureAwaitingCurrentMatcher(job: StoryFilmJob) {
   if ((job.sourceMatchRevision ?? 0) >= SOURCE_MATCH_REVISION) return false;
-  const errors = sourceFailureErrors(job);
-  if (!/saved answer could not be matched confidently/i.test(errors))
-    return false;
-  const remainder = errors.replace(
-    /the saved answer could not be matched confidently to its original recording\. no automatic cut was made\./gi,
-    "",
-  );
-  return !DETERMINISTIC_SOURCE_FAILURE.test(remainder);
+  return MATCHER_RETRYABLE.test(sourceFailureErrors(job));
 }
 
 export function filmRetryEligibility(job: StoryFilmJob): {
@@ -111,7 +107,7 @@ export function filmRetryEligibility(job: StoryFilmJob): {
     !filmTemplateCurrent(job)
   )
     return { retryAllowed: false };
-  if (job.attempts >= 3 && !confidentMatchAwaitingCurrentMatcher(job))
+  if (job.attempts >= 3 && !matchingFailureAwaitingCurrentMatcher(job))
     return {
       retryAllowed: false,
       retryBlockedReason:
@@ -119,7 +115,7 @@ export function filmRetryEligibility(job: StoryFilmJob): {
     };
   if (
     deterministicSourceFailure(job) &&
-    !confidentMatchAwaitingCurrentMatcher(job)
+    !matchingFailureAwaitingCurrentMatcher(job)
   )
     return {
       retryAllowed: false,

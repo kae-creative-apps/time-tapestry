@@ -156,6 +156,19 @@ test("cached deterministic alignment failures cannot be retried or consume anoth
     partial.chapters.filter((chapter) => chapter.error === chapterMiss).length,
     1,
   );
+  const olderChapterMiss = {
+    ...failed,
+    attempts: 1,
+    error:
+      "Some chapters could not be matched to their original recordings. Completed films are saved.",
+    chapters: failed.chapters.map((chapter, index) =>
+      index === 3
+        ? { ...chapter, status: "failed" as const, error: chapterMiss }
+        : { ...chapter, status: "ready" as const, error: undefined },
+    ),
+  };
+  delete olderChapterMiss.sourceMatchRevision;
+  assert.equal(jobs.filmJobView(olderChapterMiss).retryAllowed, true);
 });
 
 test("recoverable film failures retain retry while an exhausted job exposes an explicit hold", async () => {

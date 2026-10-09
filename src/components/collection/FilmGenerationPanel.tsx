@@ -244,9 +244,11 @@ function PreparationPanel({
           )}
           {failed && (
             <p className="mt-3 text-base leading-7">
-              {job.retryBlockedReason ||
-                job.error ||
-                "These stories need checking. Your original recordings remain saved."}
+              {job.retryAllowed === true
+                ? "We'll prepare the missing chapter from your saved recording. Your original interview is kept."
+                : job.retryBlockedReason ||
+                  job.error ||
+                  "These stories need checking. Your original recordings remain saved."}
             </p>
           )}
         </div>
@@ -275,7 +277,7 @@ function PreparationPanel({
               onClick={() => void request()}
             >
               {failed
-                ? "Try preparation again"
+                ? "Try this chapter again"
                 : exportOnly
                   ? "Create downloadable films (MP4)"
                   : "Prepare my four stories"}
