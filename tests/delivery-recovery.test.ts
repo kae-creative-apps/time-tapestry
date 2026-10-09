@@ -104,3 +104,95 @@ test("recurring bounded delivery shares work fairly and retries a temporary emai
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("one daily slot sends the recipient invite instead of a superseded storyteller notice", async (t) => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "delivery-recipient-first-"),
+  );
+  for (const key of [
+    "KV_REST_API_URL",
+    "KV_REST_API_TOKEN",
+    "VERCEL",
+    "LOB_API_KEY",
+  ])
+    delete process.env[key];
+  Object.assign(process.env, {
+    COLLECTION_DATA_DIR: directory,
+    NEXT_PUBLIC_APP_URL: "https://delivery.example.test",
+    COLLECTION_EMAIL_ENABLED: "true",
+    COLLECTION_DELIVERY_ENABLED: "false",
+    RESEND_API_KEY: "synthetic-never-sent",
+    RESEND_FROM_EMAIL: "fixture@example.test",
+  });
+  const store = await import("../src/lib/collection/store");
+  const { processDeliveryJobs } =
+    await import("../src/lib/collection/delivery");
+  const subjects: string[] = [];
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), "https://api.resend.com/emails");
+      subjects.push(JSON.parse(String(init?.body)).subject);
+      return Response.json({ id: `synthetic-email-${subjects.length}` });
+    },
+  );
+  try {
+    const c = syntheticFilmCollection();
+    c.id = "qa-recipient-first";
+    c.status = "approved";
+    c.storyteller.email = "storyteller@example.test";
+    c.recipient.email = "recipient@example.test";
+    c.notifications = [
+      {
+        id: `${c.id}:preparation-attention:prep_stale`,
+        kind: "preparation_attention",
+        to: c.storyteller.email,
+        subject: "Your Time Tapestry preparation needs attention",
+        text: "Fixture",
+        url: `https://delivery.example.test/collection/${c.id}/review?key=${c.ownerKey}`,
+        dueAt: c.createdAt,
+        status: "pending",
+      },
+      {
+        id: `${c.id}:export-ready:film_${"a".repeat(64)}`,
+        kind: "review_ready",
+        to: c.storyteller.email,
+        subject: "Your downloadable Time Tapestry videos are ready",
+        text: "Fixture",
+        url: `https://delivery.example.test/collection/${c.id}/review?key=${c.ownerKey}`,
+        dueAt: c.createdAt,
+        status: "pending",
+      },
+      {
+        id: `${c.id}:digital-ready`,
+        kind: "collection_ready",
+        to: c.recipient.email,
+        subject: "A story for you from Storyteller",
+        text: "Fixture",
+        url: `https://delivery.example.test/collection/${c.id}`,
+        dueAt: c.createdAt,
+        status: "pending",
+      },
+    ];
+    await store.putCollection(c);
+    assert.equal((await processDeliveryJobs()).providerAttempts, 1);
+    assert.deepEqual(subjects, ["A story for you from Storyteller"]);
+    const saved = (await store.getCollection(c.id))!;
+    assert.equal(
+      saved.notifications.find((n) => n.kind === "collection_ready")?.status,
+      "sent",
+    );
+    assert.equal(
+      saved.notifications.find((n) => n.kind === "preparation_attention")
+        ?.status,
+      "suppressed",
+    );
+    assert.notEqual(
+      saved.notifications.find((n) => n.id.includes("export-ready"))?.status,
+      "sent",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

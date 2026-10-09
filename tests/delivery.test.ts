@@ -8,6 +8,7 @@ import {
   applyLobEvent,
   nextDuePostcard,
   notificationSuppressionReason,
+  notificationsInDeliveryOrder,
   parseLobEvent,
   postcardArtwork,
   postcardFollowup,
@@ -274,6 +275,61 @@ test("recipient preference and existing reply suppress the reminder; viewed copy
   assert.match(
     notificationSuppressionReason(c, notification)!,
     /already replied/,
+  );
+});
+
+test("recipient invitation is delivered before stale storyteller notices", () => {
+  const c = collection();
+  const ordered = notificationsInDeliveryOrder([
+    {
+      id: `${c.id}:preparation-attention:prep_old`,
+      kind: "preparation_attention",
+      to: c.storyteller.email,
+      subject: "Preparation needs attention",
+      text: "Fixture",
+      url: "https://example.test/review",
+      dueAt: start,
+      status: "pending",
+    },
+    {
+      id: `${c.id}:export-ready:film_old`,
+      kind: "review_ready",
+      to: c.storyteller.email,
+      subject: "Downloadable videos are ready",
+      text: "Fixture",
+      url: "https://example.test/review",
+      dueAt: start,
+      status: "pending",
+    },
+    {
+      id: `${c.id}:digital-ready`,
+      kind: "collection_ready",
+      to: c.recipient.email,
+      subject: "A story for you",
+      text: "Fixture",
+      url: "https://example.test/collection",
+      dueAt: start,
+      status: "pending",
+    },
+    {
+      id: `${c.id}:owner-approved`,
+      kind: "review_ready",
+      to: c.storyteller.email,
+      subject: "Collection is approved",
+      text: "Fixture",
+      url: "https://example.test/review",
+      dueAt: start,
+      status: "pending",
+    },
+  ]);
+  assert.deepEqual(
+    ordered.map((n) => n.id),
+    [
+      `${c.id}:digital-ready`,
+      `${c.id}:owner-approved`,
+      `${c.id}:export-ready:film_old`,
+      `${c.id}:preparation-attention:prep_old`,
+    ],
   );
 });
 
