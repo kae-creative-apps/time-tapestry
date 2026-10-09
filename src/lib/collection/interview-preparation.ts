@@ -24,6 +24,7 @@ import {
   enqueueAutomaticOriginalFilms,
   automaticFilmTemplateCurrent,
   filmJobInputsCurrent,
+  filmRetryEligibility,
   getFilmJob,
   latestFilmJob,
   retryStoryFilms,
@@ -299,13 +300,16 @@ export async function enqueueInterviewPreparation(
           if (
             retryFilms &&
             failedFilms?.status === "failed" &&
-            failedFilms.attempts >= MAX_ATTEMPTS &&
             automaticFilmTemplateCurrent(failedFilms)
-          )
-            throw new InterviewPreparationError(
-              "Film preparation stopped after three attempts. Please contact the Time Tapestry team using your private collection link. Completed films and recordings are saved.",
-              409,
-            );
+          ) {
+            const eligibility = filmRetryEligibility(failedFilms);
+            if (!eligibility.retryAllowed)
+              throw new InterviewPreparationError(
+                eligibility.retryBlockedReason ||
+                  "Film preparation needs a check. Completed films and recordings are saved.",
+                409,
+              );
+          }
           if (
             options.retry &&
             ((existing.status === "needs_attention" &&
@@ -937,15 +941,20 @@ export async function getInterviewPreparationView(c: Collection) {
         : "The recorded film version is out of date. Submit your latest recordings to prepare a new version.",
     };
   }
-  if (linked.status === "failed" || linked.status === "stale")
+  if (linked.status === "failed" || linked.status === "stale") {
+    const eligibility =
+      linked.status === "failed"
+        ? filmRetryEligibility(linked)
+        : { retryAllowed: false, retryBlockedReason: undefined };
     return {
       ...view,
       status: "needs_attention" as const,
-      canRetry: linked.status === "failed" && linked.attempts < MAX_ATTEMPTS,
-      error:
-        linked.attempts >= MAX_ATTEMPTS
-          ? "Films stopped. Contact us with your private link. Your stories are saved."
-          : "Films need attention. Your stories and recordings are saved.",
+      canRetry: eligibility.retryAllowed,
+      error: eligibility.retryAllowed
+        ? "Films need attention. Your stories and recordings are saved."
+        : eligibility.retryBlockedReason ||
+          "Films stopped. See your stories, or contact us with your private link. Your stories are saved.",
     };
+  }
   return view;
 }

@@ -83,6 +83,22 @@ test("continue stays available only when another answer is required or nothing i
   );
 });
 
+test("a blocked film retry offers see your stories instead of try again", () => {
+  assert.deepEqual(
+    completePageAction({
+      loading: false,
+      ready: false,
+      accepted: true,
+      needsAttention: true,
+      canRetry: false,
+      canUseFullInterview: false,
+      preparationStatus: "needs_attention",
+      ...hrefs,
+    }),
+    { kind: "link", label: "See your stories", href: hrefs.reviewHref },
+  );
+});
+
 test("needs attention does not send the storyteller back to the complete page", () => {
   const base = {
     role: "owner",

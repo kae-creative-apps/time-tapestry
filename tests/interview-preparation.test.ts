@@ -1046,6 +1046,44 @@ test("exhausted original film work queues owner attention and rejects another pr
   );
 });
 
+test("a timing-match film failure is not offered as try again", async () => {
+  const c = await syntheticRecordedFilmCollection();
+  const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
+  const result = await preparation.runInterviewPreparationOnce(
+    "preparation-worker",
+    {
+      onlyId: queued.preparation.id,
+      reconcile: async (current) => current,
+      draft,
+      enqueueFilms: (current, options) =>
+        films.enqueueAutomaticOriginalFilms(current, options),
+    },
+  );
+  const id = result!.filmJobId!;
+  const claimed = await films.claimNextFilmJob(
+    "timing-film-worker",
+    Date.now(),
+    id,
+  );
+  await films.failFilmJob(
+    id,
+    claimed!.lease!.token,
+    "The saved answer could not be matched confidently to its original recording. No automatic cut was made.",
+    false,
+    true,
+  );
+  const saved = (await store.getCollection(c.id))!;
+  const view = await preparation.getInterviewPreparationView(saved);
+  assert.equal(view?.canRetry, false);
+  assert.match(view?.error ?? "", /editor check|word timing/i);
+  await assert.rejects(
+    preparation.enqueueInterviewPreparation(c.id, { ...consent, retry: true }),
+    (error: unknown) =>
+      error instanceof preparation.InterviewPreparationError &&
+      error.status === 409,
+  );
+});
+
 test("an older automatic film template can be prepared again after three preparation attempts", async () => {
   const c = await syntheticRecordedFilmCollection();
   const queued = await preparation.enqueueInterviewPreparation(c.id, consent);
